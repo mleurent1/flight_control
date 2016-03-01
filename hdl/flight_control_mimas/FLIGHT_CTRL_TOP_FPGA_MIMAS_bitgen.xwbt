@@ -1,0 +1,8 @@
+INTSTYLE=ise
+INFILE=C:\Users\mleurent\Documents\perso\modelisme\flight_control\hdl\flight_control_mimas\FLIGHT_CTRL_TOP_FPGA_MIMAS.ncd
+OUTFILE=C:\Users\mleurent\Documents\perso\modelisme\flight_control\hdl\flight_control_mimas\FLIGHT_CTRL_TOP_FPGA_MIMAS.bit
+FAMILY=Spartan6
+PART=xc6slx9-3tqg144
+WORKINGDIR=C:\Users\mleurent\Documents\perso\modelisme\flight_control\hdl\flight_control_mimas
+LICENSE=WebPack
+USER_INFO=211041188_0_0_932
