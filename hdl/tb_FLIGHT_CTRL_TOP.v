@@ -39,8 +39,11 @@ initial begin
 	@ (posedge FLIGHT_CTRL_TOP_inst.mpu_init_done);
 	
 	// Read
-	spi_read(4,1);
-	spi_read(20,1);
+	spi_read(5,1);
+	spi_read(26,1);
+	
+	// Read burst
+	spi_read(0,5);
 	
 	// Write (motor test)
 	spi_data[0] = 70;
@@ -49,8 +52,18 @@ initial begin
 	spi_write(8,1);
 	
 	// Read back
-	spi_read(7,1);
-	spi_read(8,1);
+	spi_read(7,2);
+	
+	// Write burst (sensor test)
+	spi_data[0] = 90;
+	spi_data[1] = 100;
+	spi_data[2] = 110;
+	spi_data[3] = 120;
+	spi_data[4] = 130;
+	spi_write(19,5);
+	
+	// Read back
+	spi_read(19,5);
 	
 	#1000
 	
@@ -59,23 +72,23 @@ initial begin
 	spi_write(1,1); // addr
 	spi_data[0] = 207;
 	spi_write(2,1); // data to write
-	spi_data[0] = 8+2;
+	spi_data[0] = 16+8+2;
 	spi_write(5,1); // WEN
 	
 	i2c_slave(0);
 	
-	spi_data[0] = 8+0;
+	spi_data[0] = 16+8;
 	spi_write(5,1); // unset WEN
 	
 	// I2C read
 	spi_data[0] = 78;
 	spi_write(1,1); // addr
-	spi_data[0] = 8+4;
+	spi_data[0] = 16+8+4;
 	spi_write(5,1); // REN
 	
 	i2c_slave(202);
 	
-	spi_data[0] = 8+0;
+	spi_data[0] = 16+8;
 	spi_write(5,1); // unset REN
 	
 	// I2C read burst
@@ -83,41 +96,41 @@ initial begin
 	spi_write(1,1); // addr
 	spi_data[0] = 3;
 	spi_write(3,1); // read size
-	spi_data[0] = 8+4;
+	spi_data[0] = 16+8+4;
 	spi_write(5,1); // REN
 	
 	i2c_slave(143);
 	
-	spi_data[0] = 8+0;
+	spi_data[0] = 16+8;
 	spi_write(5,1); // unset REN
 	
 	// I2C test ack_en
 	for (j=0; j<3; j=j+1) begin
 		ack_en = 15;
 		ack_en[j] = 0;
-		spi_data[0] = 8+2;
+		spi_data[0] = 16+8+2;
 		spi_write(5,1); // WEN
 		
 		i2c_slave(0);
 		
-		spi_data[0] = 8+0;
+		spi_data[0] = 16+8;
 		spi_write(5,1); // unset WEN
 	end
 	ack_en = 15;
 	ack_en[3] = 0;
-	spi_data[0] = 8+4;
+	spi_data[0] = 16+8+4;
 	spi_write(5,1); // REN
 	
 	i2c_slave(0);
 	
-	spi_data[0] = 8+0;
+	spi_data[0] = 16+8;
 	spi_write(5,1); // unset REN
 	
 	#1000
 	
 	// sensor collect test
 	ack_en = 15;
-	spi_data[0] = 0;
+	spi_data[0] = 16;
 	spi_write(5,1); // release SPI host control of I2C
 	mpu_int = 1;
 	i2c_slave(74);
@@ -128,10 +141,6 @@ initial begin
 	mpu_int = 1;
 	i2c_slave(119);
 	
-	// Read burst of sensor collected data
-	for (j=0; j<6; j=j+1) begin
-		spi_read(22+j,3);
-	end
 end
 
 always begin

@@ -18,14 +18,12 @@ always @ (posedge CLK, posedge RST) begin
 		SERVO_dl <= 0;
 	end else begin
 		SERVO_dl <= {SERVO_dl[2:0],SERVO};
-		if (SERVO_dl[3]) begin
+		if (SERVO_dl[3])
 			cnt <= cnt + 16'd1;
-		end else begin
+		else
 			cnt <= 0;
-		end
-		if (SERVO_dl[3] && ~SERVO_dl[2]) begin
+		if (SERVO_dl[3] && ~SERVO_dl[2])
 			COMMAND <= x[9:0];
-		end
 	end
 end
 

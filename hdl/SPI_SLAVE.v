@@ -9,20 +9,23 @@ module SPI_SLAVE
 	output reg       REN,
 	output reg [7:0] WD,
 	input      [7:0] RD,
+	input            AUTO_INC_EN,
 	output     [1:0] DBG
 );
 
-reg [3:0] b_cnt; // bit counter
+reg [2:0] bit_cnt; // bit counter
+reg [7:0] byte_cnt; // byte counter
 reg [7:0] sr_in;
 reg rnw; // read not write
 reg [7:0] sr_out;
 
-assign DBG[0] = b_cnt[0];
+assign DBG[0] = bit_cnt[0];
 assign DBG[1] = rnw;
 
 always @ (posedge CLK, posedge CSN) begin
 	if (CSN) begin
-		b_cnt <= 0;
+		bit_cnt <= 0;
+		byte_cnt <= 0;
 		sr_in <= 0;
 		rnw <= 0;
 		ADDR <= 0;
@@ -31,44 +34,42 @@ always @ (posedge CLK, posedge CSN) begin
 		WD <= 0;
 	end else begin
 		// Bit counter
-		if (b_cnt == 15) begin
-			b_cnt <= 8;
-		end else begin
-			b_cnt <= b_cnt + 4'd1;
-		end
+		bit_cnt <= bit_cnt + 3'd1;
+		
+		// Byte counter
+		if ((bit_cnt == 7) && (byte_cnt < 255))
+			byte_cnt <= byte_cnt + 8'd1;
 		
 		// Input shift register
 		sr_in <= {sr_in[6:0], MOSI};
 		
 		// Address
-		if (b_cnt == 7) begin
-			ADDR <= {sr_in[5:0], MOSI};
-		end
+		if (byte_cnt == 0) begin
+			if (bit_cnt == 7)
+				ADDR <= {sr_in[5:0], MOSI};
+		end else if (AUTO_INC_EN && ((rnw && (bit_cnt == 7)) || (~rnw && (bit_cnt == 0) && (byte_cnt > 1))))
+			ADDR <= ADDR + 7'd1;
 		
 		// Read/Write state
-		if ((b_cnt == 1) && ~sr_in[0]) begin
+		if ((bit_cnt == 1) && (byte_cnt == 0) && ~sr_in[0])
 			rnw <= 1;
-		end
 		
 		// Read pulse
-		if (((b_cnt == 7) || (b_cnt == 15)) && rnw) begin
+		//if ((bit_cnt == 7) && rnw)
+		if ((bit_cnt == 6) && rnw) // make it happen 1 clock cycle before
 			REN <= 1;
-		end else begin
+		else
 			REN <= 0;
-		end
 		
 		// Write pulse
-		if ((b_cnt == 15) && ~rnw) begin
+		if ((bit_cnt == 7) && (byte_cnt > 0) && ~rnw)
 			WEN <= 1;
-			WD <= sr_in;
-		end else begin
+		else
 			WEN <= 0;
-		end
 		
 		// Latch write data
-		if ((b_cnt == 15) && ~rnw) begin
+		if ((bit_cnt == 7) && (byte_cnt > 0) && ~rnw)
 			WD <= {sr_in[6:0], MOSI};
-		end
 	end
 end
 
@@ -78,17 +79,17 @@ always @ (negedge CLK, posedge CSN) begin
 		sr_out <= 0;
 	end else begin
 		// Output shift register
-		if (b_cnt == 8) begin
+		if ((bit_cnt == 0) && (byte_cnt > 0)) 
 			sr_out <= {RD[6:0],1'b0};
-		end else begin
+		else
 			sr_out <= {sr_out[6:0],1'b0};
-		end
 		
 		// MISO
-		if (b_cnt == 8) begin
-			MISO <= RD[7];
-		end else if (b_cnt > 8) begin
-			MISO <= sr_out[7];
+		if (byte_cnt > 0) begin
+			if (bit_cnt == 0) 
+				MISO <= RD[7];
+			else
+				MISO <= sr_out[7];
 		end
 	end
 end

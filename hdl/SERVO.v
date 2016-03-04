@@ -15,11 +15,10 @@ always @ (posedge CLK, posedge RST) begin
 		cnt <= 0;
 	end else begin
 		cnt <= cnt + 16'd1;
-		if (cnt == 0) begin
+		if (cnt == 0)
 			SERVO <= 1;
-		end else if (cnt[15:5] == ({1'b0,COMMAND}+{1'b0,OFFSET})) begin
+		else if (cnt[15:5] == ({1'b0,COMMAND}+{1'b0,OFFSET}))
 			SERVO <= 0;
-		end
 	end
 end
 

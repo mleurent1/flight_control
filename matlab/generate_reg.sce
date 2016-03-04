@@ -9,7 +9,8 @@ mclose(f);
 reg = []; // Matlab reg structure
 b = 0; // bit cursor
 rst = 0; // reset value per 8 bits
-sw = ''; // string containing write registers declaration and assignement
+sw0 = ''; // string containing write registers declaration and assignement
+sw1 = ''; // string containing write pulses assignements
 sr0 = ''; // string containing read registers declaration
 sr1 = ''; // string containing read registers assignement
 sr2 = ''; // string containing read pulses assignement
@@ -55,17 +56,17 @@ for n = 2:size(v,1)
 			end
 		end
 		
-		// update sw
+		// update sw0
 		if ~isnan(dflt)
 			s0 = '';
-			for m = 1:15-length(name)
+			for m = 1:20-length(name)
 				s0 = strcat([s0 ' ']);
 			end
 			if size(addr,2) == 1
 				if len == 1
-					sw = [sw msprintf('wire        %s_out%s =  regw[%d][%d];', name, s0, addr, bits(1))];
+					sw0 = [sw0 msprintf('wire        %s_out%s =  regw[%d][%d];', name, s0, addr, bits(1))];
 				else
-					sw = [sw msprintf('wire [%2d:0] %s_out%s =  regw[%d][%d:%d];', len-1, name,s0, addr, bits(2), bits(1))];
+					sw0 = [sw0 msprintf('wire [%2d:0] %s_out%s =  regw[%d][%d:%d];', len-1, name,s0, addr, bits(2), bits(1))];
 				end
 			else
 				len0 = len;
@@ -73,7 +74,11 @@ for n = 2:size(v,1)
 				s = '';
 				for m = 1:size(addr,2)
 					i = min(8-b0,len0);
-					s(m) = msprintf('regw[%d][%d:%d]', addr(m), b0+i-1, b0);
+					if i == 1
+						s(m) = msprintf('regw[%d][%d]', addr(m), b0);
+					else
+						s(m) = msprintf('regw[%d][%d:%d]', addr(m), b0+i-1, b0);
+					end
 					len0 = len0-i;
 					b0 = 0;
 				end
@@ -85,11 +90,21 @@ for n = 2:size(v,1)
 					end
 				end
 				s1 = strcat([s1 '};']);
-				sw = [sw s1];
+				sw0 = [sw0 s1];
 			end
+			if ~isnan(wpulse)
+				s0 = '';
+				for m = 1:14-length(name)
+					s0 = strcat([s0 ' ']);
+				end
+				sw1 = [sw1 msprintf('wire %s_wpulse%s= (spi_addr == 7''d%d) ? spi_wen : 1''b0;', name, s0, addr(size(addr,2)))]
+				end
 		end
 		
-		// update sr0
+		// update sw1
+		
+		
+		// update sr0 and sr2
 		if isnan(dflt)
 			if len == 1
 				sr0 = [sr0 msprintf('wire        %s_in;', name)];
@@ -98,10 +113,10 @@ for n = 2:size(v,1)
 			end
 			if ~isnan(rpulse)
 				s0 = '';
-				for m = 1:8-length(name)
+				for m = 1:18-length(name)
 					s0 = strcat([s0 ' ']);
 				end
-				sr2 = [sr2 msprintf('wire %s_rpulse%s= (spi_addr == 7''d%d) ? spi_ren : 1''b0;', name, s0, addr(size(addr,2))+addr1)]
+				sr2 = [sr2 msprintf('wire %s_rpulse%s= (spi_addr == 7''d%d) ? spi_ren : 1''b0;', name, s0, addr(1)+addr1)]
 			end
 		end
 		
@@ -136,7 +151,11 @@ for n = 2:size(v,1)
 end
 
 if isnan(dflt) & (b2<7)
-	sr1 = [sr1 msprintf('assign regr[%d][7:%d] = 0;', addr0, b2+1)];
+	if (b2+1) == 7
+		sr1 = [sr1 msprintf('assign regr[%2d][7]   = 0;', addr0(size(addr0,2)))];
+	else
+		sr1 = [sr1 msprintf('assign regr[%2d][7:%d] = 0;', addr0(size(addr0,2)), b2+1)];
+	end
 end
 
 save reg.dat reg
@@ -153,7 +172,10 @@ for n = 1:nb_addr_w
 end
 
 mprintf('\n//Write registers declaration and assignement')
-mprintf('%s\n',sw(:));
+mprintf('%s\n',sw0(:));
+
+mprintf('\n//Write pulses assignement')
+mprintf('%s\n',sw1(:));
 
 mprintf('\n//Read registers declaration')
 mprintf('%s\n',sr0(:));

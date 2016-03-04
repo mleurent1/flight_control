@@ -7,7 +7,6 @@ module COLLECT_SENSOR
 	input             I2C_READ_VALID,
 	input             I2C_BUSY,
 	output reg        I2C_READ_EN,
-	output reg [ 7:0] SAMPLE_INDEX,
 	output reg [15:0] GYRO_X,
 	output reg [15:0] GYRO_Y,
 	output reg [15:0] GYRO_Z,
@@ -33,7 +32,6 @@ always @ (posedge CLK, posedge RST) begin
 		I2C_READ_VALID_dl <= 0;
 		I2C_BUSY_dl <= 0;
 		I2C_READ_EN <= 0;
-		SAMPLE_INDEX <= 255;
 		bytes <= 0;
 		ACCEL_X <= 0;
 		ACCEL_Y <= 0;
@@ -47,23 +45,16 @@ always @ (posedge CLK, posedge RST) begin
 		I2C_BUSY_dl <= I2C_BUSY;
 		
 		// I2C_READ_EN
-		if (~ICU_INT_dl[3] && ICU_INT_dl[2]) begin
+		if (~ICU_INT_dl[3] && ICU_INT_dl[2])
 			I2C_READ_EN <= 1;
-		end else if (I2C_BUSY_dl && ~I2C_BUSY) begin
+		else if (I2C_BUSY_dl && ~I2C_BUSY)
 			I2C_READ_EN <= 0;
-		end
-		
-		// SAMPLE_INDEX
-		if (~ICU_INT_dl[3] && ICU_INT_dl[2]) begin
-			SAMPLE_INDEX <= SAMPLE_INDEX + 8'd1;
-		end
 		
 		// bytes
-		if (~ICU_INT_dl[3] && ICU_INT_dl[2]) begin
+		if (~ICU_INT_dl[3] && ICU_INT_dl[2])
 			bytes <= 0;
-		end else if (~I2C_READ_VALID_dl && I2C_READ_VALID) begin
+		else if (~I2C_READ_VALID_dl && I2C_READ_VALID)
 			bytes <= bytes + 4'd1;
-		end
 		
 		// GYRO and ACCEL values
 		if (~I2C_READ_VALID_dl && I2C_READ_VALID) begin
@@ -84,36 +75,30 @@ always @ (posedge CLK, posedge RST) begin
 		end
 		
 		// GYRO and ACCEL valid
-		if ((~I2C_READ_VALID_dl && I2C_READ_VALID) && (bytes == 4'd1)) begin
+		if ((~I2C_READ_VALID_dl && I2C_READ_VALID) && (bytes == 4'd1))
 			ACCEL_X_VALID <= 1;
-		end else begin
+		else
 			ACCEL_X_VALID <= 0;
-		end
-		if ((~I2C_READ_VALID_dl && I2C_READ_VALID) && (bytes == 4'd3)) begin
+		if ((~I2C_READ_VALID_dl && I2C_READ_VALID) && (bytes == 4'd3))
 			ACCEL_Y_VALID <= 1;
-		end else begin
+		else
 			ACCEL_Y_VALID <= 0;
-		end
-		if ((~I2C_READ_VALID_dl && I2C_READ_VALID) && (bytes == 4'd5)) begin
+		if ((~I2C_READ_VALID_dl && I2C_READ_VALID) && (bytes == 4'd5))
 			ACCEL_Z_VALID <= 1;
-		end else begin
+		else
 			ACCEL_Z_VALID <= 0;
-		end
-		if ((~I2C_READ_VALID_dl && I2C_READ_VALID) && (bytes == 4'd9)) begin
+		if ((~I2C_READ_VALID_dl && I2C_READ_VALID) && (bytes == 4'd9))
 			GYRO_X_VALID <= 1;
-		end else begin
+		else
 			GYRO_X_VALID <= 0;
-		end
-		if ((~I2C_READ_VALID_dl && I2C_READ_VALID) && (bytes == 4'd11)) begin
+		if ((~I2C_READ_VALID_dl && I2C_READ_VALID) && (bytes == 4'd11))
 			GYRO_Y_VALID <= 1;
-		end else begin
+		else
 			GYRO_Y_VALID <= 0;
-		end
-		if ((~I2C_READ_VALID_dl && I2C_READ_VALID) && (bytes == 4'd13)) begin
+		if ((~I2C_READ_VALID_dl && I2C_READ_VALID) && (bytes == 4'd13))
 			GYRO_Z_VALID <= 1;
-		end else begin
+		else
 			GYRO_Z_VALID <= 0;
-		end
 	end
 end
 

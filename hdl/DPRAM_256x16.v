@@ -11,42 +11,7 @@ module DPRAM_256x16(
     output     [15:0] DATA_OUT_B
 );
 
-`define SIM_
-
-`ifdef SIM
-
-reg [15:0] mem [0:255];
-reg [15:0] doa;
-reg [15:0] dob;
-integer i;
-
-assign DATA_OUT_A = doa;
-assign DATA_OUT_B = dob;
-
-initial begin
-    doa = 16'd0;
-    dob = 16'd0;
-    for (i=0; i<256; i=i+1) begin
-        mem[i] = 16'd65535;
-    end
-end
-
-always @ (posedge CLK_A) begin
-    if (WEN_A) begin
-        mem[ADDR_A] <= DATA_IN_A;
-    end
-    doa <= mem[ADDR_A];
-end
-
-always @ (posedge CLK_B) begin
-    if (WEN_B) begin
-        mem[ADDR_B] <= DATA_IN_B;
-    end
-    dob <= mem[ADDR_B];
-end
-
-
-`else
+`ifdef FPGA
 
 // BRAM_TDP_MACRO: True Dual Port RAM
 //                 Spartan-6
@@ -101,6 +66,35 @@ BRAM_TDP_MACRO_inst
 	.WEA    ({WEN_A,WEN_A}),       // Input port-A write enable, width defined by Port A depth
 	.WEB    ({WEN_B,WEN_B})        // Input port-B write enable, width defined by Port B depth
 );
+
+`else
+
+reg [15:0] mem [0:255];
+reg [15:0] doa;
+reg [15:0] dob;
+integer i;
+
+assign DATA_OUT_A = doa;
+assign DATA_OUT_B = dob;
+
+initial begin
+    doa = 16'd0;
+    dob = 16'd0;
+    for (i=0; i<256; i=i+1)
+        mem[i] = 16'd65535;
+end
+
+always @ (posedge CLK_A) begin
+    if (WEN_A)
+        mem[ADDR_A] <= DATA_IN_A;
+    doa <= mem[ADDR_A];
+end
+
+always @ (posedge CLK_B) begin
+    if (WEN_B)
+        mem[ADDR_B] <= DATA_IN_B;
+    dob <= mem[ADDR_B];
+end
 
 `endif
 

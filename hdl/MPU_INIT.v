@@ -8,7 +8,11 @@ module MPU_INIT
 	output reg       DONE
 );
 
+`ifdef FPGA
 localparam [15:0] PAUSE = 16'd65535;
+`else
+localparam [15:0] PAUSE = 16'd512;
+`endif
 
 reg [7:0] write_cnt;
 reg [15:0] pause_cnt;
@@ -23,17 +27,13 @@ always @ (posedge CLK, posedge RST) begin
 		DONE <= 0;
 	end else begin
 		
-		if (pause_cnt == PAUSE) begin
+		if (pause_cnt == PAUSE)
 			pause_cnt <= 0;
-		end else begin
+		else
 			pause_cnt <= pause_cnt + 15'd1;
-		end
 		
-		if (pause_cnt == PAUSE) begin
-			if (write_cnt <= 8'd5) begin
-				write_cnt <= write_cnt + 8'd1;
-			end
-		end
+		if ((pause_cnt == PAUSE) && (write_cnt <= 8'd5))
+			write_cnt <= write_cnt + 8'd1;
 		
 		if (pause_cnt == 0) begin
 			case (write_cnt)
@@ -46,17 +46,15 @@ always @ (posedge CLK, posedge RST) begin
 			endcase
 		end
 		
-		if (pause_cnt == 0) begin
+		if (pause_cnt == 0)
 			I2C_WRITE_EN <= 0;
-		end else begin
+		else
 			I2C_WRITE_EN <= 1;
-		end
 		
-		if (write_cnt <= 8'd4) begin
+		if (write_cnt <= 8'd4)
 			DONE <= 0;
-		end else begin
+		else
 			DONE <= 1;
-		end
 	end
 end
 
