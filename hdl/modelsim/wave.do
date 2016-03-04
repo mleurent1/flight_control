@@ -20,8 +20,6 @@ add wave -noupdate -radix unsigned /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/SPI_
 add wave -noupdate /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/SPI_SLAVE_inst/WEN
 add wave -noupdate -radix unsigned /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/SPI_SLAVE_inst/WD
 add wave -noupdate /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/SPI_SLAVE_inst/AUTO_INC_EN
-add wave -noupdate /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/MOTOR1_TEST_wpulse
-add wave -noupdate -radix unsigned /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/MOTOR1_TEST_latch
 add wave -noupdate -radix unsigned /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/I2C_MASTER_inst/CLK_DIV
 add wave -noupdate -radix unsigned /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/I2C_MASTER_inst/DEVICE_ADDR
 add wave -noupdate -radix unsigned /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/I2C_MASTER_inst/REG_ADDR
