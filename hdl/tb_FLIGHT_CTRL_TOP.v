@@ -1,9 +1,11 @@
 `timescale 1ns/1ps
 
 module tb_FLIGHT_CTRL_TOP();
-
-parameter SPI_CLK_HALF_PERIOD_NS = 50;
-parameter I2C_CLK_QUARTER_PERIOD_NS = 200;
+ 
+localparam SPI_CLK_HALF_PERIOD_NS = 50;
+localparam I2C_CLK_QUARTER_PERIOD_NS = 200;
+localparam VERSION_REG = 44;
+localparam I2C_REG = 41;
 
 reg clk_25;
 reg rst;
@@ -40,7 +42,7 @@ initial begin
 	
 	// Read
 	spi_read(5,1);
-	spi_read(24,1);
+	spi_read(VERSION_REG,1);
 	
 	// Read burst
 	spi_read(0,5);
@@ -73,23 +75,23 @@ initial begin
 	spi_data[0] = 207;
 	spi_write(2,1); // data to write
 	spi_data[0] = 16+8+2;
-	spi_write(21,1); // WEN
+	spi_write(I2C_REG,1); // WEN
 	
 	i2c_slave(0);
 	
 	spi_data[0] = 16+8;
-	spi_write(21,1); // unset WEN
+	spi_write(I2C_REG,1); // unset WEN
 	
 	// I2C read
 	spi_data[0] = 78;
 	spi_write(1,1); // addr
 	spi_data[0] = 16+8+4;
-	spi_write(21,1); // REN
+	spi_write(I2C_REG,1); // REN
 	
 	i2c_slave(202);
 	
 	spi_data[0] = 16+8;
-	spi_write(21,1); // unset REN
+	spi_write(I2C_REG,1); // unset REN
 	
 	// I2C read burst
 	spi_data[0] = 98;
@@ -97,41 +99,41 @@ initial begin
 	spi_data[0] = 3;
 	spi_write(3,1); // read size
 	spi_data[0] = 16+8+4;
-	spi_write(21,1); // REN
+	spi_write(I2C_REG,1); // REN
 	
 	i2c_slave(143);
 	
 	spi_data[0] = 16+8;
-	spi_write(21,1); // unset REN
+	spi_write(I2C_REG,1); // unset REN
 	
 	// I2C test ack_en
 	for (j=0; j<3; j=j+1) begin
 		ack_en = 15;
 		ack_en[j] = 0;
 		spi_data[0] = 16+8+2;
-		spi_write(21,1); // WEN
+		spi_write(I2C_REG,1); // WEN
 		
 		i2c_slave(0);
 		
 		spi_data[0] = 16+8;
-		spi_write(21,1); // unset WEN
+		spi_write(I2C_REG,1); // unset WEN
 	end
 	ack_en = 15;
 	ack_en[3] = 0;
 	spi_data[0] = 16+8+4;
-	spi_write(21,1); // REN
+	spi_write(I2C_REG,1); // REN
 	
 	i2c_slave(0);
 	
 	spi_data[0] = 16+8;
-	spi_write(21,1); // unset REN
+	spi_write(I2C_REG,1); // unset REN
 	
 	#1000
 	
 	// sensor collect test
 	ack_en = 15;
 	spi_data[0] = 16;
-	spi_write(21,1); // release SPI host control of I2C
+	spi_write(I2C_REG,1); // release SPI host control of I2C
 	mpu_int = 1;
 	i2c_slave(74);
 	mpu_int = 0;

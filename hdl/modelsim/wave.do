@@ -65,8 +65,10 @@ add wave -noupdate /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/COLLECT_SENSOR_inst/
 add wave -noupdate /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/COLLECT_SENSOR_inst/ACCEL_X_VALID
 add wave -noupdate /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/COLLECT_SENSOR_inst/ACCEL_Y_VALID
 add wave -noupdate /tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/COLLECT_SENSOR_inst/ACCEL_Z_VALID
+add wave -noupdate {/tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/gen_motor[0]/CODE2PPM_inst/VALID}
+add wave -noupdate -radix unsigned {/tb_FLIGHT_CTRL_TOP/FLIGHT_CTRL_TOP_inst/gen_motor[0]/CODE2PPM_inst/cnt}
 TreeUpdate [SetDefaultTree]
-WaveRestoreCursors {{Cursor 1} {114867901 ps} 0}
+WaveRestoreCursors {{Cursor 1} {2627460000 ps} 0}
 quietly wave cursor active 1
 configure wave -namecolwidth 195
 configure wave -valuecolwidth 74
@@ -82,4 +84,4 @@ configure wave -griddelta 40
 configure wave -timeline 0
 configure wave -timelineunits ps
 update
-WaveRestoreZoom {110295403 ps} {126701653 ps}
+WaveRestoreZoom {1971209120 ps} {3283710880 ps}

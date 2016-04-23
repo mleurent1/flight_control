@@ -1,9 +1,9 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <report-views version="2.0" >
  <header>
-  <DateModified>2016-03-04T20:33:36</DateModified>
+  <DateModified>2016-04-23T11:56:21</DateModified>
   <ModuleName>FLIGHT_CTRL_TOP_FPGA_MIMAS</ModuleName>
-  <SummaryTimeStamp>2016-03-04T20:15:28</SummaryTimeStamp>
+  <SummaryTimeStamp>2016-03-08T07:55:53</SummaryTimeStamp>
   <SavedFilePath>C:/Users/mleurent/Documents/perso/modelisme/flight_control/hdl/flight_control_mimas/iseconfig/FLIGHT_CTRL_TOP_FPGA_MIMAS.xreport</SavedFilePath>
   <ImplementationReportsDirectory>C:/Users/mleurent/Documents/perso/modelisme/flight_control/hdl/flight_control_mimas\</ImplementationReportsDirectory>
   <DateInitialized>2016-01-19T08:42:40</DateInitialized>
@@ -19,7 +19,7 @@
     <toc-item title="Detailed Reports" target="Detailed Reports" />
    </view>
    <view inputState="Unknown" program="implementation" contextTags="FPGA_ONLY" hidden="true" type="HTML" file="FLIGHT_CTRL_TOP_FPGA_MIMAS_envsettings.html" label="System Settings" />
-   <view inputState="Translated" program="map" locator="MAP_IOB_TABLE" contextTags="FPGA_ONLY" type="IOBProperties" file="FLIGHT_CTRL_TOP_FPGA_MIMAS_map.xrpt" label="IOB Properties" />
+   <view inputState="Translated" program="map" locator="MAP_IOB_TABLE" contextTags="FPGA_ONLY" type="IOBProperties" file="FLIGHT_CTRL_TOP_FPGA_MIMAS_map.xrpt" showConstraints="0" label="IOB Properties" />
    <view inputState="Translated" program="map" contextTags="FPGA_ONLY" hidden="true" type="Control_Sets" file="FLIGHT_CTRL_TOP_FPGA_MIMAS_map.xrpt" label="Control Set Information" />
    <view inputState="Translated" program="map" locator="MAP_MODULE_HIERARCHY" contextTags="FPGA_ONLY" type="Module_Utilization" file="FLIGHT_CTRL_TOP_FPGA_MIMAS_map.xrpt" label="Module Level Utilization" />
    <view inputState="Mapped" program="par" locator="CONSTRAINT_TABLE" contextTags="FPGA_ONLY" type="ConstraintsData" file="FLIGHT_CTRL_TOP_FPGA_MIMAS.ptwx" label="Timing Constraints" translator="ptwxToTableXML.xslt" />

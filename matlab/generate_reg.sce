@@ -171,19 +171,19 @@ for n = 1:nb_addr_w
 	mprintf('regw[%d] <= %d;\n',n-1,rst(n));
 end
 
-mprintf('\n//Write registers declaration and assignement')
+mprintf('\n// Write registers declaration and assignement')
 mprintf('%s\n',sw0(:));
 
-mprintf('\n//Write pulses assignement')
+mprintf('\n// Write pulses assignement')
 mprintf('%s\n',sw1(:));
 
-mprintf('\n//Read registers declaration')
+mprintf('\n// Read registers declaration')
 mprintf('%s\n',sr0(:));
 
-mprintf('\n//Read registers assignement')
+mprintf('\n// Read registers assignement')
 mprintf('%s\n',sr1(:));
 
-mprintf('\n//Read pulses assignement')
+mprintf('\n// Read pulses assignement')
 mprintf('%s\n',sr2(:));
 
 
