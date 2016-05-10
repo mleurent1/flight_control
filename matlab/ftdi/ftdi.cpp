@@ -361,7 +361,55 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 		plhs[0] = mxCreateDoubleScalar((double)DEVICE_INDEX);
 		return;
 	}
+	
+	//------ Send bytes ------//
+	
+	else if (strcmp(CommandName, "write") == 0)
+	{
+		// Argument parsing: command, [bytes to write]
+		ERROR_IF(nrhs < 2, "Missing data to write", NULL)
+		ERROR_IF(mxGetM(prhs[1]) > 1 , "Data to write must be a line vector", NULL)
+		NumBytesToSend1 = (unsigned int) mxGetN(prhs[1]);
+		ERROR_IF(SpiNumBytesToSend > DATA_TRANSFER_SIZE_MPSSE, "Write size must not exceed %d bytes", DATA_TRANSFER_SIZE_MPSSE)
+		DataArray = mxGetPr(prhs[1]);
 		
+		NumBytesToSend = 0;
+		for (i = 0; i < NumBytesToSend1; i++)
+			OutputBuffer[NumBytesToSend++] = (BYTE)(DataArray[i]);
+		
+		ftStatus = FT_Write(ftHandle[DEVICE_INDEX], OutputBuffer, NumBytesToSend, &NumBytesSent);
+		ERROR_IF(NumBytesSent != NumBytesToSend, "Write timeout", NULL)
+	}
+	
+	//------ Read bytes ------//
+	
+	else if (strcmp(CommandName, "read") == 0)
+	{
+		ftStatus  = FT_GetQueueStatus(ftHandle[DEVICE_INDEX], &NumBytesToRead);
+		ftStatus |= FT_Read(ftHandle[DEVICE_INDEX], InputBuffer, NumBytesToRead, &NumBytesRead);
+		ERROR_IF(NumBytesRead != NumBytesToRead, "Read timeout", NULL)
+		
+		// Mex output
+		plhs[0] = mxCreateDoubleMatrix(1, NumBytesRead, mxREAL);
+		DataArray = mxGetPr(plhs[0]);
+		for (i = 0; i < NumBytesRead; i++)
+			DataArray[i] = (double)InputBuffer[i];
+		return;
+	}
+	
+	//------ Serial initialisation ------//
+	
+	else if (strcmp(CommandName, "set_serial") == 0)
+	{
+		ftStatus  = FT_SetBitMode(ftHandle[DEVICE_INDEX], 0, 0); // Reset mode to setting in EEPROM
+		ftStatus |= FT_SetUSBParameters(ftHandle[DEVICE_INDEX], USB_TRANSFER_SIZE_BITBANG, USB_TRANSFER_SIZE_BITBANG); // USB request transfer sizes
+		ftStatus |= FT_SetLatencyTimer(ftHandle[DEVICE_INDEX], USB_LATENCY_TIMER_BITBANG); // Latency timer
+		ftStatus |= FT_SetBaudRate(ftHandle[DEVICE_INDEX], 115200);
+		ftStatus |= FT_SetDataCharacteristics(ftHandle[DEVICE_INDEX], FT_BITS_8, FT_STOP_BITS_1, FT_PARITY_NONE);
+		ftStatus |= FT_SetFlowControl(ftHandle[DEVICE_INDEX], FT_FLOW_NONE, NULL, NULL);
+		ERROR_IF(ftStatus != FT_OK, "Failed to initialize Serial mode", NULL)
+	}
+	
 	//------ Synchronous Bit Bang initialisation ------//
 
 	else if (strcmp(CommandName, "set_SyncBB") == 0)
@@ -647,7 +695,7 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 		SpiNumBytesToSend = (unsigned int) mxGetN(prhs[1]);
 		ERROR_IF(SpiNumBytesToSend > DATA_TRANSFER_SIZE_MPSSE, "Write size must not exceed %d bytes", DATA_TRANSFER_SIZE_MPSSE)
 		DataArray = mxGetPr(prhs[1]);
-				
+		
 		NumBytesToSend = 0;
 		
 		// Program CSN = 0

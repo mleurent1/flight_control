@@ -6,8 +6,9 @@ try
 catch
 end
 exec ftdi/loader.sce;
-load reg.dat
-global reg
+//load reg.dat
+//global reg
 ftdi('open',0);
-ftdi('set_MPSSE');
-ftdi('clock',15e6);
+//ftdi('set_MPSSE');
+//ftdi('clock',15e6);
+ftdi('set_serial');

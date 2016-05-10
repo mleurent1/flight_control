@@ -332,7 +332,7 @@
               <MiscControls></MiscControls>
               <Define></Define>
               <Undefine></Undefine>
-              <IncludePath>..\cmsis\inc</IncludePath>
+              <IncludePath>..\cmsis\inc;..\inc</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
