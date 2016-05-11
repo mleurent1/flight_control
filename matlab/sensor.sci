@@ -1,5 +1,7 @@
 function sensor(t)
 
+global R
+
 n = 1024;
 tmax = 15000;
 
@@ -36,7 +38,7 @@ xpoly([],[]);
 line_az = gce();
 line_az.foreground = 5;
 
-reg(1,1);
+reg(R.DEBUG_MUX,1);
 
 t0 = 0;
 tic;
@@ -75,6 +77,6 @@ while toc() < t
 	
 end
 
-reg(1,0);
+reg(R.DEBUG_MUX,0);
 
 endfunction
