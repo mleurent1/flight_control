@@ -3,7 +3,7 @@ function sensor(t)
 global R
 
 n = 1024;
-tmax = 15000;
+tmax = 12000;
 
 ts = zeros(n,1);
 gx = zeros(n,1);
@@ -54,7 +54,7 @@ while toc() < t
 	az(1:n-1) = az(2:n);
 	
 	ftdi('write',[4,0,0,0]);
-	sleep(10);
+	sleep(7);
 	b = ftdi('read');
 	
 	if b(1) < (ts(n-1)-t0)

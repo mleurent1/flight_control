@@ -3,7 +3,7 @@ function command(t)
 global R
 
 n = 1024;
-tmax = 1300;
+tmax = 1400;
 
 ts = zeros(n,1);
 th = zeros(n,1);
@@ -41,7 +41,7 @@ while toc() < t
 	ru(1:n-1) = ru(2:n);
 	
 	ftdi('write',[4,0,0,0]);
-	sleep(10);
+	sleep(11);
 	b = ftdi('read');
 	
 	if b(1) < (ts(n-1)-t0)

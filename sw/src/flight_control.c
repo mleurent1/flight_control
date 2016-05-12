@@ -210,9 +210,9 @@ void DMA1_Channel3_IRQHandler()
 	
 	if (reg[LED_MUX] == 3)
 	{
-		if (command_frame_count == 0)
+		if ((command_frame_count & 0x3F) == 0)
 			GPIOB->BSRR = GPIO_BSRR_BR3;
-		else if (command_frame_count == 128)
+		else if ((command_frame_count & 0x3F) == 32)
 			GPIOB->BSRR = GPIO_BSRR_BS3;
 	}
 	
@@ -356,8 +356,8 @@ int main()
 	
 	//######## CLOCK ##########
 	
-	RCC->APB1ENR = RCC_APB1ENR_USART3EN;
-	RCC->APB2ENR = RCC_APB2ENR_SPI1EN | RCC_APB2ENR_USART1EN | RCC_APB2ENR_IOPBEN | RCC_APB2ENR_IOPAEN | RCC_APB2ENR_AFIOEN;
+	RCC->APB1ENR = RCC_APB1ENR_USART3EN | RCC_APB1ENR_TIM4EN;
+	RCC->APB2ENR = RCC_APB2ENR_IOPBEN | RCC_APB2ENR_IOPAEN | RCC_APB2ENR_AFIOEN | RCC_APB2ENR_SPI1EN | RCC_APB2ENR_USART1EN | RCC_APB2ENR_TIM1EN;
 	RCC->AHBENR |= RCC_AHBENR_DMA1EN;
 	SystemCoreClockUpdate();
 	SysTick_Config(SystemCoreClock/1000); // 1 ms
@@ -418,8 +418,8 @@ int main()
 	// PB10: UART3 Tx
 	// PB11: UART3 Rx
 	GPIOB->CRH &= 0xFFFF0000;
-	GPIOB->CRH |= GPIO_CRH_CNF9_1  | GPIO_CRH_MODE9  |
-	              GPIO_CRH_CNF8_1  | GPIO_CRH_MODE8  |
+	GPIOB->CRH |= GPIO_CRH_CNF8_1  | GPIO_CRH_MODE8  |
+	              GPIO_CRH_CNF9_1  | GPIO_CRH_MODE9  |
 	              GPIO_CRH_CNF10_1 | GPIO_CRH_MODE10 | 
 	              GPIO_CRH_CNF11_0;
 	
@@ -463,6 +463,29 @@ int main()
 	
 	//####### TIM ########
 	
+	TIM4->CR1 = TIM_CR1_ARPE;
+	TIM4->PSC = 3; // 8MHz/4 = 2MHz = 0.5 us
+	TIM4->ARR = 44000; // 0.5us * 44000 = 22ms
+	TIM4->CCR2 = 1806; // 0.5us * 1806 = 903us
+	TIM4->CCR3 = 1806;
+	TIM4->CCR4 = 1806;
+	TIM4->CCMR1 = TIM_CCMR1_OC2PE | TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1;
+	TIM4->CCMR2 = TIM_CCMR2_OC3PE | TIM_CCMR2_OC4PE | TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1;
+	TIM4->CCER = TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
+	
+	TIM1->CR1 = TIM_CR1_ARPE;
+	TIM1->PSC = 3;
+	TIM1->ARR = 44000;
+	TIM1->CCR1 = 1806;
+	TIM1->CCMR1 = TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1;
+	TIM1->CCER = TIM_CCER_CC1E;
+	TIM1->BDTR = TIM_BDTR_MOE;
+	
+	TIM4->EGR = TIM_EGR_UG;
+	TIM1->EGR = TIM_EGR_UG;
+	TIM4->CR1 |= TIM_CR1_CEN;
+	TIM1->CR1 |= TIM_CR1_CEN;
+	
 	//####### MPU INIT #########
 	
 	SpiWrite(107, 0x80); // Reset MPU
@@ -483,6 +506,18 @@ int main()
 			GPIOB->BSRR = GPIO_BSRR_BR3;
 		else if (reg[LED_MUX] == 1)
 			GPIOB->BSRR = GPIO_BSRR_BS3;
+		
+		if (reg[MOTOR1_TEST])
+			TIM4->CCR4 = reg[MOTOR1_TEST];
+		if (reg[MOTOR2_TEST])
+			TIM4->CCR3 = reg[MOTOR2_TEST];
+		if (reg[MOTOR3_TEST])
+			TIM4->CCR2 = reg[MOTOR3_TEST];
+		if (reg[MOTOR4_TEST])
+			TIM1->CCR1 = reg[MOTOR4_TEST];
+		
+		
+		
 		__WFE();
 	}
 }
