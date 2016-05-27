@@ -12,12 +12,12 @@ volatile uint8_t spi_byte_count;
 volatile uint8_t uart3_rx_buffer[16];
 
 volatile uint8_t sensor_sample_count;
-volatile int16_t gyro_x;
-volatile int16_t gyro_y;
-volatile int16_t gyro_z;
-volatile int16_t accel_x;
-volatile int16_t accel_y;
-volatile int16_t accel_z;
+volatile int32_t gyro_x;
+volatile int32_t gyro_y;
+volatile int32_t gyro_z;
+volatile int32_t accel_x;
+volatile int32_t accel_y;
+volatile int32_t accel_z;
 
 volatile uint8_t command_frame_count;
 volatile uint8_t command_fades;
@@ -26,6 +26,8 @@ volatile uint16_t command_throttle;
 volatile uint16_t command_aileron;
 volatile uint16_t command_elevator;
 volatile uint16_t command_rudder;
+
+volatile uint8_t servo_count;
 
 void SetDmaForUartRx(uint8_t size)
 {
@@ -114,7 +116,7 @@ void Wait(uint32_t ticks)
 	current_tick = tick;
 	next_tick = current_tick + ticks;
 	while (tick != next_tick)
-		__WFE();
+		__WFI();
 }
 
 //######## System Interrupts ########
@@ -147,37 +149,19 @@ void EXTI2_IRQHandler          (void) {}
 */
 void EXTI3_IRQHandler()
 {
-	int i;
-	
 	sensor_sample_count++;
-	
-	if (reg[LED_MUX] == 2)
-	{
-		if (sensor_sample_count == 0)
-			GPIOB->BSRR = GPIO_BSRR_BR3;
-		else if (sensor_sample_count == 128)
-			GPIOB->BSRR = GPIO_BSRR_BS3;
-	}
-	
-	accel_x = ((int16_t)spi_rx_buffer[0]  << 8) + (int16_t)spi_rx_buffer[1];
-	accel_y = ((int16_t)spi_rx_buffer[2]  << 8) + (int16_t)spi_rx_buffer[3];
-	accel_z = ((int16_t)spi_rx_buffer[4]  << 8) + (int16_t)spi_rx_buffer[5];
-	gyro_x  = ((int16_t)spi_rx_buffer[8]  << 8) + (int16_t)spi_rx_buffer[9];
-	gyro_y  = ((int16_t)spi_rx_buffer[10] << 8) + (int16_t)spi_rx_buffer[11];
-	gyro_z  = ((int16_t)spi_rx_buffer[12] << 8) + (int16_t)spi_rx_buffer[13];
-	
-	if (reg[DEBUG_MUX] == 1)
-	{
-		uart_tx_buffer[0] = sensor_sample_count;
-		for(i=0; i<6; i++)
-		{
-			uart_tx_buffer[1+i] = spi_rx_buffer[1+i];
-			uart_tx_buffer[7+i] = spi_rx_buffer[9+i];
-		}
-	}
 	
 	if (reg[GET_SENSOR])
 	{
+		accel_x = ((int32_t)spi_rx_buffer[0]  << 8) + (int32_t)spi_rx_buffer[1];
+		accel_y = ((int32_t)spi_rx_buffer[2]  << 8) + (int32_t)spi_rx_buffer[3];
+		accel_z = ((int32_t)spi_rx_buffer[4]  << 8) + (int32_t)spi_rx_buffer[5];
+		gyro_x  = ((int32_t)spi_rx_buffer[8]  << 8) + (int32_t)spi_rx_buffer[9];
+		gyro_y  = ((int32_t)spi_rx_buffer[10] << 8) + (int32_t)spi_rx_buffer[11];
+		gyro_z  = ((int32_t)spi_rx_buffer[12] << 8) + (int32_t)spi_rx_buffer[13];
+		
+		FLAG |= FLAG_SENSOR;
+		
 		spi_byte_count = 15;
 		spi_tx_buffer[14] = 59 | 0x80;
 		SetDmaForSpi(15);
@@ -208,14 +192,6 @@ void DMA1_Channel3_IRQHandler()
 	
 	command_frame_count++;
 	
-	if (reg[LED_MUX] == 3)
-	{
-		if ((command_frame_count & 0x3F) == 0)
-			GPIOB->BSRR = GPIO_BSRR_BR3;
-		else if ((command_frame_count & 0x3F) == 32)
-			GPIOB->BSRR = GPIO_BSRR_BS3;
-	}
-	
 	command_fades = uart3_rx_buffer[0];
 	command_system = uart3_rx_buffer[1];
 	for (i=0; i<7; i++)
@@ -240,20 +216,7 @@ void DMA1_Channel3_IRQHandler()
 		command_system = uart3_rx_buffer[1];
 	}
 	
-	if (reg[DEBUG_MUX] == 2)
-	{
-		uart_tx_buffer[0] = command_frame_count;
-		uart_tx_buffer[1] = command_fades;
-		uart_tx_buffer[2] = command_system;
-		uart_tx_buffer[3] = (uint8_t)(command_throttle & 0x00FF);
-		uart_tx_buffer[4] = (uint8_t)((command_throttle & 0xFF00) >> 8);
-		uart_tx_buffer[5] = (uint8_t)(command_aileron & 0x00FF);
-		uart_tx_buffer[6] = (uint8_t)((command_aileron & 0xFF00) >> 8);
-		uart_tx_buffer[7] = (uint8_t)(command_elevator & 0x00FF);
-		uart_tx_buffer[8] = (uint8_t)((command_elevator & 0xFF00) >> 8);
-		uart_tx_buffer[9] = (uint8_t)(command_rudder & 0x00FF);
-		uart_tx_buffer[10] = (uint8_t)((command_rudder & 0xFF00) >> 8);
-	}
+	FLAG |= FLAG_COMMAND;
 	
 	DMA1->IFCR = DMA_IFCR_CTCIF3; // clear flag
 	DMA1->IFCR = 0;
@@ -300,7 +263,11 @@ void DMA1_Channel5_IRQHandler()
 			if (reg[DEBUG_MUX] == 1)
 				SetDmaForUartTx(13);
 			else if (reg[DEBUG_MUX] == 2)
-				SetDmaForUartTx(11);
+				SetDmaForUartTx(10);
+			else if (reg[DEBUG_MUX] == 3)
+				SetDmaForUartTx(7);
+			else if (reg[DEBUG_MUX] == 4)
+				SetDmaForUartTx(9);
 			break;
 	}
 	
@@ -324,7 +291,16 @@ void TIM1_TRG_COM_IRQHandler   (void) {}
 void TIM1_CC_IRQHandler        (void) {}
 void TIM2_IRQHandler           (void) {}
 void TIM3_IRQHandler           (void) {}
-void TIM4_IRQHandler           (void) {}
+*/
+void TIM4_IRQHandler()
+{
+	servo_count++;
+	
+	FLAG |= FLAG_SERVO;
+	
+	TIM4->SR &= ~TIM_SR_CC4IF;
+}
+/*
 void I2C1_EV_IRQHandler        (void) {}
 void I2C1_ER_IRQHandler        (void) {}
 void I2C2_EV_IRQHandler        (void) {}
@@ -354,6 +330,33 @@ int main()
 {
 	int i;
 	
+	int32_t throttle;
+	int32_t aileron;
+	int32_t elevator;
+	int32_t rudder;
+	
+	int32_t error_pitch;
+	int32_t error_roll;
+	int32_t error_yaw;
+	int32_t error_pitch_z;
+	int32_t error_roll_z;
+	int32_t error_yaw_z;
+	int32_t error_pitch_int;
+	int32_t error_roll_int;
+	int32_t error_yaw_int;
+	int32_t pitch;
+	int32_t roll;
+	int32_t yaw;
+	
+	int32_t motor_1_sign;
+	int32_t motor_2_sign;
+	int32_t motor_3_sign;
+	int32_t motor_4_sign;
+	uint16_t motor_1;
+	uint16_t motor_2;
+	uint16_t motor_3;
+	uint16_t motor_4;
+	
 	//######## CLOCK ##########
 	
 	RCC->APB1ENR = RCC_APB1ENR_USART3EN | RCC_APB1ENR_TIM4EN;
@@ -361,6 +364,33 @@ int main()
 	RCC->AHBENR |= RCC_AHBENR_DMA1EN;
 	SystemCoreClockUpdate();
 	SysTick_Config(SystemCoreClock/1000); // 1 ms
+	
+	//####### VAR AND REG INIT #######
+	
+	FLAG = 0;
+	for(i=0; i<REG_NB; i++)
+		reg[i] = reg_init[i];
+	throttle = 0;
+	aileron = 0;
+	elevator = 0;
+	rudder = 0;
+	error_pitch = 0;
+	error_roll = 0;
+	error_yaw = 0;
+	error_pitch_int = 0;
+	error_roll_int = 0;
+	error_yaw_int = 0;
+	pitch = 0;
+	roll = 0;
+	yaw = 0;
+	motor_1_sign = 0;
+	motor_2_sign = 0;
+	motor_3_sign = 0;
+	motor_4_sign = 0;
+	motor_1 = 0;
+	motor_2 = 0;
+	motor_3 = 0;
+	motor_4 = 0;
 	
 	//####### BIND ########
 	
@@ -376,12 +406,7 @@ int main()
 		GPIOB->BSRR = GPIO_BSRR_BS11;
 		Wait(1);
 	}
-	
-	//####### REG INIT #######
-	
-	for(i=0; i<REG_NB; i++)
-		reg[i] = reg_init[i];
-	
+		
 	//####### GPIO ##########
 	
 	AFIO->MAPR = AFIO_MAPR_SWJ_CFG_JTAGDISABLE; // Free PB3
@@ -435,6 +460,7 @@ int main()
 	NVIC_EnableIRQ(DMA1_Channel4_IRQn);
 	NVIC_EnableIRQ(DMA1_Channel5_IRQn);
 	NVIC_EnableIRQ(SPI1_IRQn);
+	NVIC_EnableIRQ(TIM4_IRQn);
 	
 	NVIC_SetPriority(SPI1_IRQn,1);
 	NVIC_SetPriority(EXTI3_IRQn,2);
@@ -442,6 +468,7 @@ int main()
 	NVIC_SetPriority(DMA1_Channel3_IRQn,4);
 	NVIC_SetPriority(DMA1_Channel5_IRQn,5);
 	NVIC_SetPriority(DMA1_Channel4_IRQn,6);
+	NVIC_SetPriority(TIM4_IRQn,7);
 	
 	//######## UART ##########
 	
@@ -464,11 +491,12 @@ int main()
 	//####### TIM ########
 	
 	TIM4->CR1 = TIM_CR1_ARPE;
+	TIM4->DIER = TIM_DIER_CC4IE;
 	TIM4->PSC = 3; // 8MHz/4 = 2MHz = 0.5 us
 	TIM4->ARR = 44000; // 0.5us * 44000 = 22ms
-	TIM4->CCR2 = 1806; // 0.5us * 1806 = 903us
-	TIM4->CCR3 = 1806;
-	TIM4->CCR4 = 1806;
+	TIM4->CCR2 = SERVO_MIN; // 0.5us * 1806 = 903us
+	TIM4->CCR3 = SERVO_MIN;
+	TIM4->CCR4 = SERVO_MIN;
 	TIM4->CCMR1 = TIM_CCMR1_OC2PE | TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1;
 	TIM4->CCMR2 = TIM_CCMR2_OC3PE | TIM_CCMR2_OC4PE | TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1;
 	TIM4->CCER = TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
@@ -476,7 +504,7 @@ int main()
 	TIM1->CR1 = TIM_CR1_ARPE;
 	TIM1->PSC = 3;
 	TIM1->ARR = 44000;
-	TIM1->CCR1 = 1806;
+	TIM1->CCR1 = SERVO_MIN;
 	TIM1->CCMR1 = TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1;
 	TIM1->CCER = TIM_CCER_CC1E;
 	TIM1->BDTR = TIM_BDTR_MOE;
@@ -493,8 +521,8 @@ int main()
 	SpiWrite(107, 0); //Get MPU out of sleep
 	Wait(100);
 	SpiWrite(106, 16); // Disable I2C
-	//SpiWrite(104, 7); // Reset signal path
-	//Wait(100);
+	SpiWrite(104, 7); // Reset signal path
+	Wait(100);
 	SpiWrite(26, 1); // Filter ON (=> Fs=1kHz)
 	SpiWrite(56, 1); // Enable interrupt
 	
@@ -502,23 +530,149 @@ int main()
 	
 	while (1)
 	{
-		if (reg[LED_MUX] == 0)
-			GPIOB->BSRR = GPIO_BSRR_BR3;
-		else if (reg[LED_MUX] == 1)
-			GPIOB->BSRR = GPIO_BSRR_BS3;
+		// Process commands
+		if (FLAG & FLAG_COMMAND)
+		{
+			throttle = ((int32_t)command_throttle - (int32_t)reg[THROTTLE_OFFSET]) * (int32_t)reg[THROTTLE_SCALE];
+			aileron = ((int32_t)command_aileron - (int32_t)reg[AILERON_OFFSET]) * (int32_t)reg[AILERON_SCALE];
+			elevator = ((int32_t)command_elevator - (int32_t)reg[ELEVATOR_OFFSET]) * (int32_t)reg[ELEVATOR_SCALE];
+			rudder = ((int32_t)command_rudder - (int32_t)reg[RUDDER_OFFSET]) * (int32_t)reg[RUDDER_SCALE];
+			
+			// Debug
+			if (reg[DEBUG_MUX] == 2)
+			{
+				uart_tx_buffer[0] = command_frame_count;
+				uart_tx_buffer[1] = command_fades;
+				uart_tx_buffer[2] = (uint8_t)(throttle & 0xFF);
+				uart_tx_buffer[3] = (uint8_t)((throttle & 0xFF00) >> 8);
+				uart_tx_buffer[4] = (uint8_t)(aileron & 0xFF);
+				uart_tx_buffer[5] = (uint8_t)((aileron & 0xFF00) >> 8);
+				uart_tx_buffer[6] = (uint8_t)(elevator & 0xFF);
+				uart_tx_buffer[7] = (uint8_t)((elevator & 0xFF00) >> 8);
+				uart_tx_buffer[8] = (uint8_t)(rudder & 0xFF);
+				uart_tx_buffer[9] = (uint8_t)((rudder & 0xFF00) >> 8);
+			}
+			
+			FLAG &= ~FLAG_COMMAND;
+		}
 		
-		if (reg[MOTOR1_TEST])
-			TIM4->CCR4 = reg[MOTOR1_TEST];
-		if (reg[MOTOR2_TEST])
-			TIM4->CCR3 = reg[MOTOR2_TEST];
-		if (reg[MOTOR3_TEST])
-			TIM4->CCR2 = reg[MOTOR3_TEST];
-		if (reg[MOTOR4_TEST])
-			TIM1->CCR1 = reg[MOTOR4_TEST];
+		// Process sensors
+		if (FLAG & FLAG_SENSOR)
+		{			
+			if (reg[DEBUG_MUX] == 1)
+			{
+				uart_tx_buffer[0] = sensor_sample_count;
+				uart_tx_buffer[1] = (uint8_t)(gyro_x & 0xFF);
+				uart_tx_buffer[2] = (uint8_t)((gyro_x & 0xFF00) >> 8);
+				uart_tx_buffer[3] = (uint8_t)(gyro_y & 0xFF);
+				uart_tx_buffer[4] = (uint8_t)((gyro_y & 0xFF00) >> 8);
+				uart_tx_buffer[5] = (uint8_t)(gyro_z & 0xFF);
+				uart_tx_buffer[6] = (uint8_t)((gyro_z & 0xFF00) >> 8);
+				uart_tx_buffer[7] = (uint8_t)(accel_x & 0xFF);
+				uart_tx_buffer[8] = (uint8_t)((accel_x & 0xFF00) >> 8);
+				uart_tx_buffer[9] = (uint8_t)(accel_y & 0xFF);
+				uart_tx_buffer[10] = (uint8_t)((accel_y & 0xFF00) >> 8);
+				uart_tx_buffer[11] = (uint8_t)(accel_z & 0xFF);
+				uart_tx_buffer[12] = (uint8_t)((accel_z & 0xFF00) >> 8);
+			}
+			
+			error_pitch_z = error_pitch;
+			error_roll_z = error_roll;
+			error_yaw_z = error_yaw;
+			
+			error_pitch = elevator - gyro_x;
+			error_roll = aileron - gyro_y;
+			error_yaw = rudder - gyro_z;
+			
+			error_pitch_int += error_pitch;
+			error_roll_int += error_pitch;
+			error_pitch_int += error_pitch;
+			
+			pitch = (error_pitch * reg[PITCH_P] + error_pitch_int * reg[PITCH_I] + (error_pitch - error_pitch_z) * reg[PITCH_D]) >> 16;
+			roll = (error_roll * reg[ROLL_P] + error_roll_int * reg[ROLL_I] + (error_roll - error_roll_z) * reg[ROLL_D]) >> 16;
+			yaw = (error_yaw * reg[YAW_P] + error_yaw_int * reg[YAW_I] + (error_yaw - error_yaw_z) * reg[YAW_D]) >> 16;
+			
+			if (reg[DEBUG_MUX] == 3)
+			{
+				uart_tx_buffer[0] = sensor_sample_count;
+				uart_tx_buffer[1] = (uint8_t)(pitch & 0xFF);
+				uart_tx_buffer[2] = (uint8_t)((pitch & 0xFF00) >> 8);
+				uart_tx_buffer[3] = (uint8_t)(roll & 0xFF);
+				uart_tx_buffer[4] = (uint8_t)((roll & 0xFF00) >> 8);
+				uart_tx_buffer[5] = (uint8_t)(yaw & 0xFF);
+				uart_tx_buffer[6] = (uint8_t)((yaw & 0xFF00) >> 8);
+			}
+			
+			FLAG &= ~FLAG_SENSOR;
+		}
 		
+		// 4 1
+		// 3 2
+		if (FLAG & FLAG_SERVO)
+		{
+			if (reg[THROTTLE_TEST])
+				throttle = reg[THROTTLE_TEST];
+			motor_1_sign = throttle + roll + pitch + rudder;
+			motor_2_sign = throttle + roll - pitch - rudder;
+			motor_3_sign = throttle - roll - pitch + rudder;
+			motor_4_sign = throttle - roll + pitch - rudder;
+			
+			motor_1 = ((uint16_t)motor_1_sign  + reg[SERVO_OFFSET]);
+			motor_2 = ((uint16_t)motor_2_sign  + reg[SERVO_OFFSET]);
+			motor_3 = ((uint16_t)motor_3_sign  + reg[SERVO_OFFSET]);
+			motor_4 = ((uint16_t)motor_4_sign  + reg[SERVO_OFFSET]);
+			
+			TIM4->CCR4 = (reg[MOTOR_SELECT] & 1) ? reg[MOTOR_TEST] : motor_1;
+			TIM4->CCR3 = (reg[MOTOR_SELECT] & 2) ? reg[MOTOR_TEST] : motor_2;
+			TIM4->CCR2 = (reg[MOTOR_SELECT] & 4) ? reg[MOTOR_TEST] : motor_3;
+			TIM1->CCR1 = (reg[MOTOR_SELECT] & 8) ? reg[MOTOR_TEST] : motor_4;
+			
+			if (reg[DEBUG_MUX] == 4)
+			{
+				uart_tx_buffer[0] = servo_count;
+				uart_tx_buffer[1] = (uint8_t)(motor_1 & 0xFF);
+				uart_tx_buffer[2] = (uint8_t)((motor_1 & 0xFF00) >> 8);
+				uart_tx_buffer[3] = (uint8_t)(motor_2 & 0xFF);
+				uart_tx_buffer[4] = (uint8_t)((motor_2 & 0xFF00) >> 8);
+				uart_tx_buffer[5] = (uint8_t)(motor_3 & 0xFF);
+				uart_tx_buffer[6] = (uint8_t)((motor_3 & 0xFF00) >> 8);
+				uart_tx_buffer[7] = (uint8_t)(motor_4 & 0xFF);
+				uart_tx_buffer[8] = (uint8_t)((motor_4 & 0xFF00) >> 8);
+			}
+			
+			FLAG &= ~FLAG_SERVO;
+		}
 		
+		// LED
+		switch(reg[LED_MUX])
+		{
+			case 0:
+				GPIOB->BSRR = GPIO_BSRR_BR3;
+				break;
+			case 1:
+				GPIOB->BSRR = GPIO_BSRR_BS3;
+				break;
+			case 2:
+				if ((sensor_sample_count & 0xFF) == 0)
+					GPIOB->BSRR = GPIO_BSRR_BR3;
+				else if ((sensor_sample_count & 0xFF) == 128)
+					GPIOB->BSRR = GPIO_BSRR_BS3;
+				break;
+			case 3:
+				if ((command_frame_count & 0x3F) == 0)
+					GPIOB->BSRR = GPIO_BSRR_BR3;
+				else if ((command_frame_count & 0x3F) == 32)
+					GPIOB->BSRR = GPIO_BSRR_BS3;
+				break;
+			case 4:
+				if ((servo_count & 0x1F) == 0)
+					GPIOB->BSRR = GPIO_BSRR_BR3;
+				else if ((servo_count & 0x1F) == 16)
+					GPIOB->BSRR = GPIO_BSRR_BS3;
+				break;
+		}
 		
-		__WFE();
+		__WFI();
 	}
 }
 

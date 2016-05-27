@@ -3,7 +3,7 @@ function sensor(t)
 global R
 
 n = 1024;
-tmax = 12000;
+tmax = 21000;
 
 ts = zeros(n,1);
 gx = zeros(n,1);
@@ -54,19 +54,19 @@ while toc() < t
 	az(1:n-1) = az(2:n);
 	
 	ftdi('write',[4,0,0,0]);
-	sleep(7);
+	sleep(15);
 	b = ftdi('read');
 	
 	if b(1) < (ts(n-1)-t0)
 		t0 = t0 + 256;
 	end
 	ts(n) = t0 + b(1);
-	ax(n) = c2s(2^8 * b(2) + b(3), 16);
-	ay(n) = c2s(2^8 * b(4) + b(5), 16);
-	az(n) = c2s(2^8 * b(6) + b(7), 16);
-	gx(n) = c2s(2^8 * b(8) + b(9), 16);
-	gy(n) = c2s(2^8 * b(10) + b(11), 16);
-	gz(n) = c2s(2^8 * b(12) + b(13), 16);
+	gx(n) = c2s(2^8 * b(2) + b(3), 16);
+	gy(n) = c2s(2^8 * b(4) + b(5), 16);
+	gz(n) = c2s(2^8 * b(6) + b(7), 16);
+	ax(n) = c2s(2^8 * b(8) + b(9), 16);
+	ay(n) = c2s(2^8 * b(10) + b(11), 16);
+	az(n) = c2s(2^8 * b(12) + b(13), 16);
 	
 	line_gx.data = [ts-ts(1),gx];
 	line_gy.data = [ts-ts(1),gy];

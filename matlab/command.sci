@@ -2,6 +2,18 @@ function command(t)
 
 global R
 
+//reg(R.THROTTLE_OFFSET,341);
+//reg(R.THROTTLE_SCALE,47);
+
+//reg(R.AILERON_OFFSET,1024);
+//reg(R.AILERON_SCALE,47);
+
+//reg(R.ELEVATOR_OFFSET,1024);
+//reg(R.ELEVATOR_SCALE,47);
+
+//reg(R.RUDDER_OFFSET,1024);
+//reg(R.RUDDER_SCALE,47);
+
 n = 1024;
 tmax = 1400;
 
@@ -13,19 +25,22 @@ ru = zeros(n,1);
 
 figure(2);
 clf()
-plot2d([],rect=[0,0,tmax,2048])
+subplot(211)
+plot2d([],rect=[0,0,tmax,2^16])
 xpoly([],[]);
 line_th = gce();
 line_th.foreground = 2;
+subplot(212)
+plot2d([],rect=[0,-2^15,tmax,2^15])
 xpoly([],[]);
 line_ai = gce();
-line_ai.foreground = 3;
+line_ai.foreground = 2;
 xpoly([],[]);
 line_el = gce();
-line_el.foreground = 5;
+line_el.foreground = 3;
 xpoly([],[]);
 line_ru = gce();
-line_ru.foreground = 0;
+line_ru.foreground = 5;
 
 reg(R.DEBUG_MUX,2);
 
@@ -48,10 +63,10 @@ while toc() < t
 		t0 = t0 + 256;
 	end
 	ts(n) = t0 + b(1);
-	th(n) = 2^8 * b(5) + b(4);
-	ai(n) = 2^8 * b(7) + b(6);
-	el(n) = 2^8 * b(9) + b(8);
-	ru(n) = 2^8 * b(11) + b(10);
+	th(n) = 2^8 * b(4) + b(3);
+	ai(n) = c2s(2^8 * b(6) + b(5), 16);
+	el(n) = c2s(2^8 * b(8) + b(7), 16);
+	ru(n) = c2s(2^8 * b(10) + b(9), 16);
 	
 	line_th.data = [ts-ts(1),th];
 	line_ai.data = [ts-ts(1),ai];
