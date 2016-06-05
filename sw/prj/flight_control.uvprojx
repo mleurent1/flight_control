@@ -376,11 +376,6 @@
           <GroupName>Group 1</GroupName>
           <Files>
             <File>
-              <FileName>flight_control.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\src\flight_control.c</FilePath>
-            </File>
-            <File>
               <FileName>system_stm32f1xx.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\cmsis\src\system_stm32f1xx.c</FilePath>
@@ -389,6 +384,11 @@
               <FileName>startup_stm32f103xb.s</FileName>
               <FileType>2</FileType>
               <FilePath>..\cmsis\startup_stm32f103xb.s</FilePath>
+            </File>
+            <File>
+              <FileName>fc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\src\fc.c</FilePath>
             </File>
           </Files>
         </Group>
