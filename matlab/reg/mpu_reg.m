@@ -1,10 +1,12 @@
 classdef mpu_reg
 	methods
 		function data = read(obj,addr)
-			% WRAP YOUR READ FUNCTION HERE
+			ftdi('write',[2,addr,0,0,0,0]);
+			sleep(10)
+			data = ftdi('read');
 		end
 		function write(obj,addr,data)
-			% WRAP YOUR WRITE FUNCTION HERE
+			ftdi('write',[3,addr,0,0,0,data]);
 		end
 		function y = SELF_TST_X(obj,x)
 			if nargin <= 1
@@ -113,6 +115,13 @@ classdef mpu_reg
 			else
 				w = bitand(bitshift(x, 4), 48) + bitand(r, 207);
 				obj.write(16,w);
+			end
+		end
+		function y = SMPLRT_DIV(obj,x)
+			if nargin <= 1
+				y = obj.read(25);
+			else
+				obj.write(25,x);
 			end
 		end
 		function y = CFG(obj,x)
@@ -432,6 +441,7 @@ classdef mpu_reg
 		SELF_TST_Y_addr = 14;
 		SELF_TST_Z_addr = 15;
 		SELF_TST_A_addr = 16;
+		SMPLRT_DIV_addr = 25;
 		CFG_addr = 26;
 		INT_EN_addr = 56;
 		ACCEL_X_H_addr = 59;

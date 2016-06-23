@@ -19,6 +19,8 @@
 #define SELF_TST_A__YA_TST_LSB(x) (((x) & 0x3) << 2)
 #define SELF_TST_A__ZA_TST_LSB(x) (((x) & 0x3) << 4)
 
+#define SMPLRT_DIV 25
+
 #define CFG 26
 
 #define CFG__DLPF_CFG(x) (((x) & 0x7) << 0)

@@ -8,6 +8,8 @@ catch
 end
 clear
 global fc
+global mpu
 fc = fc_reg;
+mpu = mpu_reg;
 ftdi('open',0);
 ftdi('set_serial');

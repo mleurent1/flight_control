@@ -1,5 +1,5 @@
-n = 1024;
-t = 25000;
+n = 256;
+t = 3000;
 
 ts = zeros(n,1);
 gx = zeros(n,1);
@@ -32,11 +32,10 @@ lay.Color = 'r';
 laz = line(zeros(1,n),zeros(1,n));
 laz.Color = 'g';
 
-fc.DEBUG_MUX(1);
-
 t0 = 0;
+tic
 
-while 1
+while toc < 30
 	
 	ts(1:n-1) = ts(2:n);
 	gx(1:n-1) = gx(2:n);
@@ -46,21 +45,30 @@ while 1
 	ay(1:n-1) = ay(2:n);
 	az(1:n-1) = az(2:n);
 	
-	ftdi('write',[4,0,0,0]);
-	sleep(8);
+	fc.DEBUG(1);
+	sleep(15);
 	b = ftdi('read');
 	
 	if b(1) < (ts(n-1)-t0)
 		t0 = t0 + 256;
 	end
 	ts(n) = t0 + b(1);
-	gx(n) = c2s(2^8 * b(2) + b(3), 16);
-	gy(n) = c2s(2^8 * b(4) + b(5), 16);
-	gz(n) = c2s(2^8 * b(6) + b(7), 16);
-	ax(n) = c2s(2^8 * b(8) + b(9), 16);
-	ay(n) = c2s(2^8 * b(10) + b(11), 16);
-	az(n) = c2s(2^8 * b(12) + b(13), 16);
-	
+	gx(n) = c2s(2^8 * b(3) + b(2), 16);
+	gy(n) = c2s(2^8 * b(5) + b(4), 16);
+	gz(n) = c2s(2^8 * b(7) + b(6), 16);
+	ax(n) = c2s(2^8 * b(9) + b(8), 16);
+	ay(n) = c2s(2^8 * b(11) + b(10), 16);
+	az(n) = c2s(2^8 * b(13) + b(12), 16);
+
+% 	t0 = t0 + 1;
+% 	ts(n) = t0;
+% 	gx(n) = c2s(2^8 * mpu.GYRO_X_H + mpu.GYRO_X_L, 16);
+% 	gy(n) = c2s(2^8 * mpu.GYRO_Y_H + mpu.GYRO_Y_L, 16);
+% 	gz(n) = c2s(2^8 * mpu.GYRO_Z_H + mpu.GYRO_Z_L, 16);
+% 	ax(n) = c2s(2^8 * mpu.ACCEL_X_H + mpu.ACCEL_X_L, 16);
+% 	ay(n) = c2s(2^8 * mpu.ACCEL_Y_H + mpu.ACCEL_Y_L, 16);
+% 	az(n) = c2s(2^8 * mpu.ACCEL_Z_H + mpu.ACCEL_Z_L, 16);
+
 	lgx.XData = ts-ts(1);
 	lgx.YData = gx;
 	lgy.XData = ts-ts(1);
@@ -76,6 +84,4 @@ while 1
 	
 	drawnow
 end
-
-% fc.DEBUG_MUX(0);
 

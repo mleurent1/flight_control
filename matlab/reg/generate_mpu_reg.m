@@ -131,7 +131,6 @@ for n = 1:length(reg)
 			fprintf(f1,'				obj.write(%d,w);\n', addr);
 			fprintf(f1,'			end\n');
 			fprintf(f1,'		end\n');
-			
 		end
 	end
 end
