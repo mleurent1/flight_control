@@ -1,9 +1,17 @@
 classdef mpu_reg
 	methods
 		function data = read(obj,addr)
+			global TIMEOUT
 			ftdi('write',[2,addr,0,0,0,0]);
-			sleep(10)
-			data = ftdi('read');
+			data = [];
+			tic
+			while isempty(data) && (toc < TIMEOUT)
+				sleep(1)
+				data = ftdi('read');
+			end
+			if isempty(data)
+				warning('read timeout!')
+			end
 		end
 		function write(obj,addr,data)
 			ftdi('write',[3,addr,0,0,0,data]);

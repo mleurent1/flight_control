@@ -1,10 +1,20 @@
 classdef fc_reg
 	methods
 		function data = read(obj,addr)
+			global TIMEOUT
 			ftdi('write',[0,addr,0,0,0,0]);
-			sleep(10)
-			r = ftdi('read');
-			data = sum(r.*2.^(24:-8:0));
+			r = [];
+			tic
+			while (length(r) < 4) && (toc < TIMEOUT)
+				sleep(1)
+				r = [r, ftdi('read')];
+			end
+			if length(r) < 4
+				data = 0;
+				warning('read timeout!')
+			else
+				data = sum(r.*2.^(24:-8:0));
+			end
 		end
 		function write(obj,addr,data)
 			ftdi('write',[1,addr,mod(data.*2.^(-24:8:0),2^8)]);
@@ -32,30 +42,39 @@ classdef fc_reg
 				obj.write(1,w);
 			end
 		end
+		function y = CTRL__RESET_INT(obj,x)
+			r = obj.read(1);
+			if nargin <= 1
+				y = bitshift(bitand(r, 2), -1);
+			else
+				w = bitand(bitshift(x, 1), 2) + bitand(r, 4294967293);
+				obj.write(1,w);
+			end
+		end
 		function y = CTRL__LED(obj,x)
 			r = obj.read(1);
 			if nargin <= 1
-				y = bitshift(bitand(r, 30), -1);
+				y = bitshift(bitand(r, 60), -2);
 			else
-				w = bitand(bitshift(x, 1), 30) + bitand(r, 4294967265);
+				w = bitand(bitshift(x, 2), 60) + bitand(r, 4294967235);
 				obj.write(1,w);
 			end
 		end
 		function y = CTRL__MOTOR_SEL(obj,x)
 			r = obj.read(1);
 			if nargin <= 1
-				y = bitshift(bitand(r, 480), -5);
+				y = bitshift(bitand(r, 960), -6);
 			else
-				w = bitand(bitshift(x, 5), 480) + bitand(r, 4294966815);
+				w = bitand(bitshift(x, 6), 960) + bitand(r, 4294966335);
 				obj.write(1,w);
 			end
 		end
 		function y = CTRL__MOTOR_TEST(obj,x)
 			r = obj.read(1);
 			if nargin <= 1
-				y = bitshift(bitand(r, 33553920), -9);
+				y = bitshift(bitand(r, 67107840), -10);
 			else
-				w = bitand(bitshift(x, 9), 33553920) + bitand(r, 4261413375);
+				w = bitand(bitshift(x, 10), 67107840) + bitand(r, 4227859455);
 				obj.write(1,w);
 			end
 		end
@@ -91,14 +110,14 @@ classdef fc_reg
 				obj.write(3,w);
 			end
 		end
-		function y = CMD_OFFSETS(obj,x)
+		function y = THROTTLE(obj,x)
 			if nargin < 2
 				y = obj.read(4);
 			else
 				obj.write(4,x);
 			end
 		end
-		function y = CMD_OFFSETS__THROTTLE(obj,x)
+		function y = THROTTLE__OFFSET(obj,x)
 			r = obj.read(4);
 			if nargin <= 1
 				y = bitshift(bitand(r, 65535), 0);
@@ -107,7 +126,7 @@ classdef fc_reg
 				obj.write(4,w);
 			end
 		end
-		function y = CMD_OFFSETS__AIL_ELEV_RUD(obj,x)
+		function y = THROTTLE__ARMED(obj,x)
 			r = obj.read(4);
 			if nargin <= 1
 				y = bitshift(bitand(r, 4294901760), -16);
@@ -213,7 +232,7 @@ classdef fc_reg
 		CTRL_addr = 1;
 		DEBUG_addr = 2;
 		MOTOR_addr = 3;
-		CMD_OFFSETS_addr = 4;
+		THROTTLE_addr = 4;
 		THROTTLE_SCALE_addr = 5;
 		AILERON_SCALE_addr = 6;
 		ELEVATOR_SCALE_addr = 7;

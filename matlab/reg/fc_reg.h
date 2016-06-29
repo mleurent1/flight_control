@@ -5,16 +5,17 @@ volatile uint32_t reg[REG_NB_ADDR];
 #define REG_VERSION reg[0]
 #define REG_CTRL reg[1]
 #define REG_CTRL__MPU ((reg[1] & 1U) >> 0)
-#define REG_CTRL__LED ((reg[1] & 30U) >> 1)
-#define REG_CTRL__MOTOR_SEL ((reg[1] & 480U) >> 5)
-#define REG_CTRL__MOTOR_TEST ((reg[1] & 33553920U) >> 9)
+#define REG_CTRL__RESET_INT ((reg[1] & 2U) >> 1)
+#define REG_CTRL__LED ((reg[1] & 60U) >> 2)
+#define REG_CTRL__MOTOR_SEL ((reg[1] & 960U) >> 6)
+#define REG_CTRL__MOTOR_TEST ((reg[1] & 67107840U) >> 10)
 #define REG_DEBUG reg[2]
 #define REG_MOTOR reg[3]
 #define REG_MOTOR__MIN ((reg[3] & 65535U) >> 0)
 #define REG_MOTOR__MAX ((reg[3] & 4294901760U) >> 16)
-#define REG_CMD_OFFSETS reg[4]
-#define REG_CMD_OFFSETS__THROTTLE ((reg[4] & 65535U) >> 0)
-#define REG_CMD_OFFSETS__AIL_ELEV_RUD ((reg[4] & 4294901760U) >> 16)
+#define REG_THROTTLE reg[4]
+#define REG_THROTTLE__OFFSET ((reg[4] & 65535U) >> 0)
+#define REG_THROTTLE__ARMED ((reg[4] & 4294901760U) >> 16)
 #define REG_THROTTLE_SCALE reg[5]
 #define REG_AILERON_SCALE reg[6]
 #define REG_ELEVATOR_SCALE reg[7]
@@ -31,11 +32,11 @@ volatile uint32_t reg[REG_NB_ADDR];
 
 const uint32_t reg_init[REG_NB_ADDR] = 
 {
-	5, // VERSION
-	512004, // CTRL
+	6, // VERSION
+	1024010, // CTRL
 	0, // DEBUG
 	137429895, // MOTOR
-	67109205, // CMD_OFFSETS
+	78643541, // THROTTLE
 	1058416009, // THROTTLE_SCALE
 	1044098796, // AILERON_SCALE
 	1044098796, // ELEVATOR_SCALE
