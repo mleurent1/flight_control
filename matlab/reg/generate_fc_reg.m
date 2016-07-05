@@ -105,6 +105,7 @@ fprintf(f1,'		function write(obj,addr,data)\n');
 fprintf(f1,'			%% WRAP YOUR WRITE FUNCTION HERE\n');
 fprintf(f1,'		end\n');
 
+fprintf(f2,'#include <stdint.h>\n\n');
 fprintf(f2,'#define REG_NB_ADDR %d\n\n', max([reg.addr])+1);
 fprintf(f2,'volatile uint32_t reg[REG_NB_ADDR];\n\n');
 

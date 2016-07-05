@@ -6,7 +6,7 @@
 #define FLAG_SENSOR 0x01
 #define FLAG_COMMAND 0x02
 #define FLAG_I2C_RD_WRN 0x04
-#define FLAG_I2C_RETURN 0x08
+#define FLAG_I2C_RETURN_ON_UART 0x08
 #define FLAG_UPDATE_REG 0x10
 
 #define FPU_CPACR ((uint32_t *) 0xE000ED88)
@@ -29,9 +29,10 @@ volatile int16_t accel_x_raw;
 volatile int16_t accel_y_raw;
 volatile int16_t accel_z_raw;
 //volatile int16_t temp_raw;
+volatile uint16_t sensor_error_count;
 
 volatile uint16_t command_frame_count;
-//volatile uint8_t command_fades;
+volatile uint8_t command_fades;
 //volatile uint8_t command_system;
 volatile uint16_t throttle_raw;
 volatile uint16_t aileron_raw;
@@ -60,21 +61,22 @@ void SetDmaUart3Rx()
 void SetDmaI2c2Tx(uint8_t size)
 {
 	I2C2->CR1 &= ~I2C_CR1_PE;
-	I2C2->CR2 &= ~(I2C_CR2_RD_WRN | I2C_CR2_NBYTES_Msk);
+	while (I2C2->CR1 & I2C_CR1_PE) {}
 	
-	DMA1_Channel4->CCR = DMA_CCR_MINC | DMA_CCR_DIR;
+	DMA1_Channel4->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL_0;
 	DMA1_Channel4->CMAR = (uint32_t)i2c2_tx_buffer;
 	DMA1_Channel4->CPAR = (uint32_t)&(I2C2->TXDR);
 	DMA1_Channel4->CNDTR = size;
 	DMA1_Channel4->CCR |= DMA_CCR_EN;
 	
 	I2C2->CR1 |= I2C_CR1_PE;
+	I2C2->CR2 &= ~(I2C_CR2_RD_WRN | I2C_CR2_NBYTES_Msk);
 	I2C2->CR2 |= (I2C_CR2_NBYTES_Msk & (size << I2C_CR2_NBYTES_Pos)) | I2C_CR2_START;
 }
 
 void SetDmaI2c2Rx(uint8_t size)
 {
-	DMA1_Channel5->CCR = DMA_CCR_MINC;
+	DMA1_Channel5->CCR = DMA_CCR_MINC | DMA_CCR_PL;
 	DMA1_Channel5->CMAR = (uint32_t)i2c2_rx_buffer;
 	DMA1_Channel5->CPAR = (uint32_t)&(I2C2->RXDR);
 	DMA1_Channel5->CNDTR = size;
@@ -83,7 +85,7 @@ void SetDmaI2c2Rx(uint8_t size)
 
 void SetDmaUart2Rx()
 {
-	DMA1_Channel6->CCR = DMA_CCR_TCIE | DMA_CCR_MINC;
+	DMA1_Channel6->CCR = DMA_CCR_TCIE | DMA_CCR_MINC | DMA_CCR_PL_1;
 	DMA1_Channel6->CMAR = (uint32_t)uart2_rx_buffer;
 	DMA1_Channel6->CPAR = (uint32_t)&(USART2->RDR);
 	DMA1_Channel6->CNDTR = 16;
@@ -92,10 +94,8 @@ void SetDmaUart2Rx()
 
 void Wait(uint32_t ticks)
 {
-	uint32_t current_tick;
 	uint32_t next_tick;
-	current_tick = tick;
-	next_tick = current_tick + ticks;
+	next_tick = tick + ticks;
 	while (tick != next_tick)
 		__WFI();
 }
@@ -108,14 +108,14 @@ void I2cWrite(uint8_t addr, uint8_t data)
 	Wait(1);
 }
 
-void I2cRead(uint8_t addr, uint8_t * data)
+uint8_t I2cRead(uint8_t addr)
 {
 	FLAG |= FLAG_I2C_RD_WRN;
 	SetDmaI2c2Rx(1);
 	i2c2_tx_buffer[0] = addr;
 	SetDmaI2c2Tx(1);
 	Wait(1);
-	*data = i2c2_rx_buffer[0];
+	return i2c2_rx_buffer[0];
 }
 
 void bytes_to_float(volatile uint32_t * b, float * f)
@@ -154,19 +154,13 @@ void EXTI15_10_IRQHandler()
 {
 	EXTI->PR = EXTI_PR_PIF15; // Clear pending request
 	
-	if (REG_CTRL__MPU == 0)
+	sensor_sample_count++;
+	
+	if (REG_CTRL__READ_SENSOR)
 	{
-		sensor_sample_count++;
-		
-		if (REG_CTRL__LED == 2)
-		{
-			if ((sensor_sample_count & 0xFF) == 0)
-				GPIOB->BSRR = GPIO_BSRR_BR_5;
-			else if ((sensor_sample_count & 0xFF) == 128)
-				GPIOB->BSRR = GPIO_BSRR_BS_5;
-		}
-		
-		if ((I2C2->ISR & (I2C_ISR_BERR | I2C_ISR_NACKF)) == 0)
+		if (((I2C2->ISR & (I2C_ISR_BERR | I2C_ISR_NACKF)) == 0)
+			&& ((DMA1->ISR & DMA_ISR_TEIF5) == 0)
+			&& (DMA1->ISR & DMA_ISR_TCIF5))
 		{
 			accel_x_raw = ((int16_t)i2c2_rx_buffer[0]  << 8) | (int16_t)i2c2_rx_buffer[1];
 			accel_y_raw = ((int16_t)i2c2_rx_buffer[2]  << 8) | (int16_t)i2c2_rx_buffer[3];
@@ -175,6 +169,10 @@ void EXTI15_10_IRQHandler()
 			gyro_x_raw  = ((int16_t)i2c2_rx_buffer[8]  << 8) | (int16_t)i2c2_rx_buffer[9];
 			gyro_y_raw  = ((int16_t)i2c2_rx_buffer[10] << 8) | (int16_t)i2c2_rx_buffer[11];
 			gyro_z_raw  = ((int16_t)i2c2_rx_buffer[12] << 8) | (int16_t)i2c2_rx_buffer[13];
+		}
+		else
+		{
+			sensor_error_count++;
 		}
 		
 		FLAG |= (FLAG_I2C_RD_WRN | FLAG_SENSOR);
@@ -195,9 +193,9 @@ void I2C2_EV_IRQHandler()
 	else
 	{
 		I2C2->CR2 |= I2C_CR2_STOP;
-		if (FLAG & FLAG_I2C_RETURN)
+		if (FLAG & FLAG_I2C_RETURN_ON_UART)
 		{
-			FLAG &= ~FLAG_I2C_RETURN;
+			FLAG &= ~FLAG_I2C_RETURN_ON_UART;
 			uart3_tx_buffer[0] = i2c2_rx_buffer[0];
 			SetDmaUart3Tx(1);
 		}
@@ -229,7 +227,7 @@ void DMA1_Channel3_IRQHandler()
 	}
 	else if (cmd == 2)
 	{
-		FLAG |= FLAG_I2C_RD_WRN | FLAG_I2C_RETURN;
+		FLAG |= FLAG_I2C_RD_WRN | FLAG_I2C_RETURN_ON_UART;
 		SetDmaI2c2Rx(1);
 		i2c2_tx_buffer[0] = addr;
 		SetDmaI2c2Tx(1);
@@ -252,17 +250,11 @@ void DMA1_Channel6_IRQHandler()
 	
 	DMA1->IFCR = DMA_IFCR_CTCIF6; // clear flag
 	
+	TIM6->EGR = TIM_EGR_UG; // Reset timer
+	
 	command_frame_count++;
 	
-	if (REG_CTRL__LED == 3)
-	{
-		if ((command_frame_count & 0x3F) == 0)
-			GPIOB->BSRR = GPIO_BSRR_BR_5;
-		else if ((command_frame_count & 0x3F) == 32)
-			GPIOB->BSRR = GPIO_BSRR_BS_5;
-	}
-	
-	//command_fades = uart2_rx_buffer[0];
+	command_fades = uart2_rx_buffer[0];
 	//command_system = uart2_rx_buffer[1];
 	for (i=0; i<7; i++)
 	{
@@ -351,7 +343,7 @@ int main()
 	
 	//######## CLOCK ##########
 	
-	RCC->APB1ENR = RCC_APB1ENR_USART2EN | RCC_APB1ENR_USART3EN | RCC_APB1ENR_I2C2EN | RCC_APB1ENR_TIM3EN;
+	RCC->APB1ENR = RCC_APB1ENR_USART2EN | RCC_APB1ENR_USART3EN | RCC_APB1ENR_I2C2EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN;
 	RCC->APB2ENR = RCC_APB2ENR_SYSCFGEN;
 	RCC->AHBENR |= RCC_AHBENR_DMA1EN | RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOBEN;
 	SystemCoreClockUpdate();
@@ -359,19 +351,36 @@ int main()
 	
 	//####### VAR AND REG INIT #######
 	
-	FLAG = FLAG_UPDATE_REG;
 	for(i=0; i<REG_NB_ADDR; i++)
 		reg[i] = reg_init[i];
+	
+	FLAG = FLAG_UPDATE_REG;
+	
 	command_frame_count = 0;
+	throttle_raw = 0;
+	aileron_raw = 0;
+	elevator_raw = 0;
+	rudder_raw = 0;
+	armed_raw = 0;
+	
+	sensor_sample_count = 0;
+	sensor_error_count = 0;
+	gyro_x_raw = 0;
+	gyro_y_raw = 0;
+	gyro_z_raw = 0;
+	accel_x_raw = 0;
+	accel_y_raw = 0;
+	accel_z_raw = 0;
+	
 	throttle = 0;
 	aileron = 0;
 	elevator = 0;
 	rudder = 0;
-	armed_raw = 0;
-	sensor_sample_count = 0;
+	
 	error_pitch_int = 0;
 	error_roll_int = 0;
 	error_yaw_int = 0;
+	
 	pitch = 0;
 	roll = 0;
 	yaw = 0;
@@ -443,7 +452,7 @@ int main()
 	
 	//####### I2C #########
 	
-	I2C2->CR1 = I2C_CR1_PE | I2C_CR1_TCIE | I2C_CR1_TXDMAEN | I2C_CR1_RXDMAEN;
+	I2C2->CR1 = I2C_CR1_TCIE | I2C_CR1_TXDMAEN | I2C_CR1_RXDMAEN;
 	I2C2->CR2 = I2C_CR2_SADD_Msk & (104 << (1+I2C_CR2_SADD_Pos));
 	I2C2->TIMINGR = (I2C_TIMINGR_SCLL_Msk & (9 << I2C_TIMINGR_SCLL_Pos)) | (I2C_TIMINGR_SCLH_Msk & (3 << I2C_TIMINGR_SCLH_Pos)) | (I2C_TIMINGR_SDADEL_Msk & (1 << I2C_TIMINGR_SDADEL_Pos)) | (I2C_TIMINGR_SCLDEL_Msk & (3 << I2C_TIMINGR_SCLDEL_Pos));
 	
@@ -455,12 +464,19 @@ int main()
 	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
 	TIM3->CCMR1 = TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1M_0 | TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2M_0;
 	TIM3->CCMR2 = TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3M_0 | TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1 | TIM_CCMR2_OC4M_0;
-		
+	
+	TIM6->PSC = 7999; // ms
+	TIM6->ARR = 65535;
+	TIM6->CR1 = TIM_CR1_CEN;
+	TIM7->PSC = 7; // us
+	TIM7->ARR = 65535;
+	TIM7->CR1 = TIM_CR1_CEN;
+	
 	//####### INTERRUPT #######
 	
 	SYSCFG->EXTICR[3] = SYSCFG_EXTICR4_EXTI15_PA;
 	EXTI->RTSR |= EXTI_RTSR_TR15;
-	EXTI->IMR = EXTI_IMR_MR15;
+	//EXTI->IMR = EXTI_IMR_MR15; // To be enabled after MPU init
 	
 	NVIC_EnableIRQ(EXTI15_10_IRQn);
 	NVIC_EnableIRQ(I2C2_EV_IRQn);
@@ -476,15 +492,19 @@ int main()
 	
 	I2cWrite(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__DEVICE_RST);
 	Wait(100);
-	I2cWrite(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1)); //Get MPU out of sleep and set CLK = gyro clock
+	I2cWrite(MPU_PWR_MGMT_1, 0); // Get MPU out of sleep
 	Wait(100);
-	I2cWrite(MPU_CFG, MPU_CFG__DLPF_CFG(2)); // Filter ON (=> Fs=1kHz)
-	I2cWrite(MPU_SMPLRT_DIV, 0); // Sample rate = Fs/(x+1)
-	I2cWrite(MPU_SIGNAL_PATH_RST, MPU_SIGNAL_PATH_RST__ACCEL_RST | MPU_SIGNAL_PATH_RST__GYRO_RST | MPU_SIGNAL_PATH_RST__TEMP_RST);
+	I2cWrite(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1)); // Set CLK = gyro X clock
 	Wait(100);
+	I2cWrite(MPU_CFG, MPU_CFG__DLPF_CFG(2)); // Filter ON => Fs=1kHz
+	//I2cWrite(MPU_SMPLRT_DIV, 0); // Sample rate = Fs/(x+1)
 	I2cWrite(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
+	//I2cWrite(MPU_SIGNAL_PATH_RST, MPU_SIGNAL_PATH_RST__ACCEL_RST | MPU_SIGNAL_PATH_RST__GYRO_RST | MPU_SIGNAL_PATH_RST__TEMP_RST);
+	//I2cWrite(MPU_USER_CTRL, MPU_USER_CTRL__SIG_COND_RST);
 	
-	// Calibrate gyro
+	EXTI->IMR = EXTI_IMR_MR15;
+	
+	// Gyro calibration
 	gyro_x_dc = 0.0f;
 	gyro_y_dc = 0.0f;
 	gyro_z_dc = 0.0f;
@@ -545,10 +565,23 @@ int main()
 			bytes_to_float(&REG_YAW_D, &yaw_d);
 		}
 		
+		TIM7->EGR = TIM_EGR_UG;
+		
 		// Process commands
 		if (FLAG & FLAG_COMMAND)
 		{
 			FLAG &= ~FLAG_COMMAND;
+			
+			if (REG_CTRL__LED == 3)
+			{
+				if ((command_frame_count & 0x3F) == 0)
+					GPIOB->BSRR = GPIO_BSRR_BR_5;
+				else if ((command_frame_count & 0x3F) == 32)
+					GPIOB->BSRR = GPIO_BSRR_BS_5;
+			}
+			
+			REG_ERROR &= 0x0000FFFF;
+			REG_ERROR |= (uint32_t)command_fades << 16; 
 			
 			if (REG_DEBUG == 3)
 			{
@@ -584,10 +617,24 @@ int main()
 			}
 		}
 		
+		if (TIM6->CNT > 200)
+			armed_raw = 0;
+		
 		// Process sensors
 		if (FLAG & FLAG_SENSOR)
 		{
 			FLAG &= ~FLAG_SENSOR;
+			
+			if (REG_CTRL__LED == 2)
+			{
+				if ((sensor_sample_count & 0xFF) == 0)
+					GPIOB->BSRR = GPIO_BSRR_BR_5;
+				else if ((sensor_sample_count & 0xFF) == 128)
+					GPIOB->BSRR = GPIO_BSRR_BS_5;
+			}
+			
+			REG_ERROR &= 0xFFFF0000;
+			REG_ERROR |= (uint32_t)sensor_error_count & 0x0000FFFF;; 
 			
 			if (REG_DEBUG == 1)
 			{
@@ -638,7 +685,7 @@ int main()
 			error_roll = aileron - gyro_x;
 			error_yaw = rudder - gyro_z;
 			
-			if ((armed_raw < 1024) && REG_CTRL__RESET_INT)
+			if ((armed_raw < 1024) && REG_CTRL__RESET_INT_ON_ARMED)
 			{
 				error_pitch_int = 0.0f;
 				error_roll_int = 0.0f;
@@ -719,6 +766,8 @@ int main()
 			}
 			TIM3->CR1 |= TIM_CR1_CEN;
 		}
+		
+		REG_TIME = TIM7->CNT;
 		
 		__WFI();
 	}
