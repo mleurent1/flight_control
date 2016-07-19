@@ -53,10 +53,10 @@ switch DebugCase
 		a{2}.XLim = [0,TimeWindowSize];
 		a{1}.YLim = [-125,125];
 		a{2}.YLim = [0,1000];
-		for n = 1:3
+      l{1} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(1));
+		for n = 2:4
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
-		end
-		l{4} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
+      end
 	case 5 % pitch, roll, yaw
 		d1 = 3;
 		dtype = 'float';

@@ -1,4 +1,4 @@
-#define VERSION 7
+#define VERSION 8
 
 #define CTRL 1024011
 
@@ -26,7 +26,7 @@
 #define MOTOR__MIN(x) (((x) & 0xFFFF) << 0)
 #define MOTOR__MAX(x) (((x) & 0xFFFF) << 16)
 
-#define THROTTLE 78643541
+#define THROTTLE 72089941
 
 #define THROTTLE__OFFSET(x) (((x) & 0xFFFF) << 0)
 #define THROTTLE__ARMED(x) (((x) & 0xFFFF) << 16)
@@ -44,6 +44,6 @@
 #define ROLL_I 1017370378
 #define ROLL_D 1101004800
 
-#define YAW_P 1073741824
-#define YAW_I 1017370378
+#define YAW_P 1082130432
+#define YAW_I 1025758986
 #define YAW_D 0

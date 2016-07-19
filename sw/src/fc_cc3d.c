@@ -533,7 +533,8 @@ int main()
 	SpiWrite(MPU_USER_CTRL, MPU_USER_CTRL__I2C_IF_DIS);
 	SpiWrite(MPU_SIGNAL_PATH_RST, MPU_SIGNAL_PATH_RST__ACCEL_RST | MPU_SIGNAL_PATH_RST__GYRO_RST | MPU_SIGNAL_PATH_RST__TEMP_RST);
 	Wait(100);
-	SpiWrite(MPU_CFG, MPU_CFG__DLPF_CFG(1)); // Filter ON (=> Fs=1kHz)
+	SpiWrite(MPU_CFG, MPU_CFG__DLPF_CFG(1)); // Filter ON(=> Fs=1kHz
+	Wait(100); // wait for filter to settle
 	Wait(100); // wait for filter to settle
 	SpiWrite(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
 	
