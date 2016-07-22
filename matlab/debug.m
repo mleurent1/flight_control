@@ -11,7 +11,7 @@ figure(DebugCase);
 clf
 l = {};
 a = {};
-c = 'brgcm';
+c = 'brgcmk';
 
 switch DebugCase
 	case 1 % raw sensors
@@ -36,12 +36,12 @@ switch DebugCase
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end
 	case 3 % raw commands
-		d1 = 5;
+		d1 = 6;
 		a{1} = axes;
 		a{1}.XLim = [0,TimeWindowSize];
 		a{1}.YLim = [0,2048];
 		dtype = 'int16';
-		for n = 1:5
+		for n = 1:6
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end
 	case 4 % commands
@@ -51,8 +51,8 @@ switch DebugCase
 		a{2} = subplot(212);
 		a{1}.XLim = [0,TimeWindowSize];
 		a{2}.XLim = [0,TimeWindowSize];
-		a{1}.YLim = [-125,125];
-		a{2}.YLim = [0,1000];
+		a{1}.YLim = [-1,1];
+		a{2}.YLim = [0,1];
       l{1} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(1));
 		for n = 2:4
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));

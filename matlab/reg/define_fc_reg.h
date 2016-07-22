@@ -1,12 +1,13 @@
-#define VERSION 8
+#define VERSION 9
 
-#define CTRL 1024011
+#define CTRL 2048019
 
 #define CTRL__READ_SENSOR (1 << 0)
 #define CTRL__RESET_INT_ON_ARMED (1 << 1)
-#define CTRL__LED(x) (((x) & 0xF) << 2)
-#define CTRL__MOTOR_SEL(x) (((x) & 0xF) << 6)
-#define CTRL__MOTOR_TEST(x) (((x) & 0xFFFF) << 10)
+#define CTRL__BEEP (1 << 2)
+#define CTRL__LED(x) (((x) & 0xF) << 3)
+#define CTRL__MOTOR_SEL(x) (((x) & 0xF) << 7)
+#define CTRL__MOTOR_TEST(x) (((x) & 0xFFFF) << 11)
 
 #define DEBUG 0
 
@@ -17,24 +18,37 @@
 #define ERROR__SENSOR(x) (((x) & 0xFFFF) << 0)
 #define ERROR__COMMAND(x) (((x) & 0xFFFF) << 16)
 
-#define TIME 0
+#define LOOP_TIME 0
 
-#define TIME__LOOP(x) (((x) & 0xFFFF) << 0)
+#define VBAT 0
+
+#define VBAT_MIN 1093874483
 
 #define MOTOR 131073000
 
 #define MOTOR__MIN(x) (((x) & 0xFFFF) << 0)
 #define MOTOR__MAX(x) (((x) & 0xFFFF) << 16)
 
-#define THROTTLE 72089941
+#define CMD_OFFSET 67108864
 
-#define THROTTLE__OFFSET(x) (((x) & 0xFFFF) << 0)
+#define CMD_OFFSET__THROTTLE(x) (((x) & 0xFFFF) << 0)
+#define CMD_OFFSET__AIL_ELE_RUD(x) (((x) & 0xFFFF) << 16)
+
+#define CMD_RANGE 67110912
+
+#define CMD_RANGE__THROTTLE(x) (((x) & 0xFFFF) << 0)
+#define CMD_RANGE__AIL_ELE_RUD(x) (((x) & 0xFFFF) << 16)
+
+#define THROTTLE 72090400
+
+#define THROTTLE__RANGE(x) (((x) & 0xFFFF) << 0)
 #define THROTTLE__ARMED(x) (((x) & 0xFFFF) << 16)
 
-#define THROTTLE_SCALE 1058416009
-#define AILERON_SCALE 1044098796
-#define ELEVATOR_SCALE 1044098796
-#define RUDDER_SCALE 1044098796
+#define RATE 8224125
+
+#define RATE__PITCH(x) (((x) & 0xFF) << 0)
+#define RATE__ROLL(x) (((x) & 0xFF) << 8)
+#define RATE__YAW(x) (((x) & 0xFF) << 16)
 
 #define PITCH_P 1073741824
 #define PITCH_I 1017370378
