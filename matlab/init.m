@@ -15,3 +15,7 @@ mpu = mpu_reg;
 ftdi('open',0);
 ftdi('set_serial');
 TIMEOUT = 1;
+
+%%
+% fc.VBAT_MIN(0);
+% fc.CTRL__BEEP_TEST(0);

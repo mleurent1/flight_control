@@ -51,7 +51,7 @@ classdef fc_reg
 				obj.write(1,w);
 			end
 		end
-		function y = CTRL__BEEP(obj,x)
+		function y = CTRL__BEEP_TEST(obj,x)
 			r = obj.read(1);
 			if nargin <= 1
 				y = bitshift(bitand(r, 4), -2);
@@ -147,39 +147,21 @@ classdef fc_reg
 				obj.write(7,x);
 			end
 		end
-		function y = MOTOR(obj,x)
+		function y = EXPO(obj,x)
 			if nargin < 2
 				y = obj.read(8);
 			else
 				obj.write(8,x);
 			end
 		end
-		function y = MOTOR__MIN(obj,x)
-			r = obj.read(8);
-			if nargin <= 1
-				y = bitshift(bitand(r, 65535), 0);
-			else
-				w = bitand(bitshift(x, 0), 65535) + bitand(r, 4294901760);
-				obj.write(8,w);
-			end
-		end
-		function y = MOTOR__MAX(obj,x)
-			r = obj.read(8);
-			if nargin <= 1
-				y = bitshift(bitand(r, 4294901760), -16);
-			else
-				w = bitand(bitshift(x, 16), 4294901760) + bitand(r, 65535);
-				obj.write(8,w);
-			end
-		end
-		function y = CMD_OFFSET(obj,x)
+		function y = MOTOR(obj,x)
 			if nargin < 2
 				y = obj.read(9);
 			else
 				obj.write(9,x);
 			end
 		end
-		function y = CMD_OFFSET__THROTTLE(obj,x)
+		function y = MOTOR__MIN(obj,x)
 			r = obj.read(9);
 			if nargin <= 1
 				y = bitshift(bitand(r, 65535), 0);
@@ -188,7 +170,7 @@ classdef fc_reg
 				obj.write(9,w);
 			end
 		end
-		function y = CMD_OFFSET__AIL_ELE_RUD(obj,x)
+		function y = MOTOR__MAX(obj,x)
 			r = obj.read(9);
 			if nargin <= 1
 				y = bitshift(bitand(r, 4294901760), -16);
@@ -197,14 +179,14 @@ classdef fc_reg
 				obj.write(9,w);
 			end
 		end
-		function y = CMD_RANGE(obj,x)
+		function y = CMD_OFFSET(obj,x)
 			if nargin < 2
 				y = obj.read(10);
 			else
 				obj.write(10,x);
 			end
 		end
-		function y = CMD_RANGE__THROTTLE(obj,x)
+		function y = CMD_OFFSET__THROTTLE(obj,x)
 			r = obj.read(10);
 			if nargin <= 1
 				y = bitshift(bitand(r, 65535), 0);
@@ -213,7 +195,7 @@ classdef fc_reg
 				obj.write(10,w);
 			end
 		end
-		function y = CMD_RANGE__AIL_ELE_RUD(obj,x)
+		function y = CMD_OFFSET__AIL_ELE_RUD(obj,x)
 			r = obj.read(10);
 			if nargin <= 1
 				y = bitshift(bitand(r, 4294901760), -16);
@@ -222,14 +204,14 @@ classdef fc_reg
 				obj.write(10,w);
 			end
 		end
-		function y = THROTTLE(obj,x)
+		function y = CMD_RANGE(obj,x)
 			if nargin < 2
 				y = obj.read(11);
 			else
 				obj.write(11,x);
 			end
 		end
-		function y = THROTTLE__RANGE(obj,x)
+		function y = CMD_RANGE__THROTTLE(obj,x)
 			r = obj.read(11);
 			if nargin <= 1
 				y = bitshift(bitand(r, 65535), 0);
@@ -238,7 +220,7 @@ classdef fc_reg
 				obj.write(11,w);
 			end
 		end
-		function y = THROTTLE__ARMED(obj,x)
+		function y = CMD_RANGE__AIL_ELE_RUD(obj,x)
 			r = obj.read(11);
 			if nargin <= 1
 				y = bitshift(bitand(r, 4294901760), -16);
@@ -247,101 +229,117 @@ classdef fc_reg
 				obj.write(11,w);
 			end
 		end
-		function y = RATE(obj,x)
+		function y = THROTTLE(obj,x)
 			if nargin < 2
 				y = obj.read(12);
 			else
 				obj.write(12,x);
 			end
 		end
-		function y = RATE__PITCH(obj,x)
+		function y = THROTTLE__RANGE(obj,x)
 			r = obj.read(12);
 			if nargin <= 1
-				y = bitshift(bitand(r, 255), 0);
+				y = bitshift(bitand(r, 65535), 0);
 			else
-				w = bitand(bitshift(x, 0), 255) + bitand(r, 4294967040);
+				w = bitand(bitshift(x, 0), 65535) + bitand(r, 4294901760);
 				obj.write(12,w);
 			end
 		end
-		function y = RATE__ROLL(obj,x)
+		function y = THROTTLE__ARMED(obj,x)
 			r = obj.read(12);
 			if nargin <= 1
-				y = bitshift(bitand(r, 65280), -8);
+				y = bitshift(bitand(r, 4294901760), -16);
 			else
-				w = bitand(bitshift(x, 8), 65280) + bitand(r, 4294902015);
+				w = bitand(bitshift(x, 16), 4294901760) + bitand(r, 65535);
 				obj.write(12,w);
 			end
 		end
-		function y = RATE__YAW(obj,x)
-			r = obj.read(12);
-			if nargin <= 1
-				y = bitshift(bitand(r, 16711680), -16);
-			else
-				w = bitand(bitshift(x, 16), 16711680) + bitand(r, 4278255615);
-				obj.write(12,w);
-			end
-		end
-		function y = PITCH_P(obj,x)
+		function y = RATE(obj,x)
 			if nargin < 2
 				y = obj.read(13);
 			else
 				obj.write(13,x);
 			end
 		end
-		function y = PITCH_I(obj,x)
+		function y = RATE__PITCH_ROLL(obj,x)
+			r = obj.read(13);
+			if nargin <= 1
+				y = bitshift(bitand(r, 65535), 0);
+			else
+				w = bitand(bitshift(x, 0), 65535) + bitand(r, 4294901760);
+				obj.write(13,w);
+			end
+		end
+		function y = RATE__YAW(obj,x)
+			r = obj.read(13);
+			if nargin <= 1
+				y = bitshift(bitand(r, 4294901760), -16);
+			else
+				w = bitand(bitshift(x, 16), 4294901760) + bitand(r, 65535);
+				obj.write(13,w);
+			end
+		end
+		function y = PITCH_P(obj,x)
 			if nargin < 2
 				y = obj.read(14);
 			else
 				obj.write(14,x);
 			end
 		end
-		function y = PITCH_D(obj,x)
+		function y = PITCH_I(obj,x)
 			if nargin < 2
 				y = obj.read(15);
 			else
 				obj.write(15,x);
 			end
 		end
-		function y = ROLL_P(obj,x)
+		function y = PITCH_D(obj,x)
 			if nargin < 2
 				y = obj.read(16);
 			else
 				obj.write(16,x);
 			end
 		end
-		function y = ROLL_I(obj,x)
+		function y = ROLL_P(obj,x)
 			if nargin < 2
 				y = obj.read(17);
 			else
 				obj.write(17,x);
 			end
 		end
-		function y = ROLL_D(obj,x)
+		function y = ROLL_I(obj,x)
 			if nargin < 2
 				y = obj.read(18);
 			else
 				obj.write(18,x);
 			end
 		end
-		function y = YAW_P(obj,x)
+		function y = ROLL_D(obj,x)
 			if nargin < 2
 				y = obj.read(19);
 			else
 				obj.write(19,x);
 			end
 		end
-		function y = YAW_I(obj,x)
+		function y = YAW_P(obj,x)
 			if nargin < 2
 				y = obj.read(20);
 			else
 				obj.write(20,x);
 			end
 		end
-		function y = YAW_D(obj,x)
+		function y = YAW_I(obj,x)
 			if nargin < 2
 				y = obj.read(21);
 			else
 				obj.write(21,x);
+			end
+		end
+		function y = YAW_D(obj,x)
+			if nargin < 2
+				y = obj.read(22);
+			else
+				obj.write(22,x);
 			end
 		end
 	end
@@ -354,19 +352,20 @@ classdef fc_reg
 		LOOP_TIME_addr = 5;
 		VBAT_addr = 6;
 		VBAT_MIN_addr = 7;
-		MOTOR_addr = 8;
-		CMD_OFFSET_addr = 9;
-		CMD_RANGE_addr = 10;
-		THROTTLE_addr = 11;
-		RATE_addr = 12;
-		PITCH_P_addr = 13;
-		PITCH_I_addr = 14;
-		PITCH_D_addr = 15;
-		ROLL_P_addr = 16;
-		ROLL_I_addr = 17;
-		ROLL_D_addr = 18;
-		YAW_P_addr = 19;
-		YAW_I_addr = 20;
-		YAW_D_addr = 21;
+		EXPO_addr = 8;
+		MOTOR_addr = 9;
+		CMD_OFFSET_addr = 10;
+		CMD_RANGE_addr = 11;
+		THROTTLE_addr = 12;
+		RATE_addr = 13;
+		PITCH_P_addr = 14;
+		PITCH_I_addr = 15;
+		PITCH_D_addr = 16;
+		ROLL_P_addr = 17;
+		ROLL_I_addr = 18;
+		ROLL_D_addr = 19;
+		YAW_P_addr = 20;
+		YAW_I_addr = 21;
+		YAW_D_addr = 22;
 	end
 end

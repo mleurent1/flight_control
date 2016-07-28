@@ -1,10 +1,10 @@
-#define VERSION 9
+#define VERSION 10
 
 #define CTRL 2048019
 
 #define CTRL__READ_SENSOR (1 << 0)
 #define CTRL__RESET_INT_ON_ARMED (1 << 1)
-#define CTRL__BEEP (1 << 2)
+#define CTRL__BEEP_TEST (1 << 2)
 #define CTRL__LED(x) (((x) & 0xF) << 3)
 #define CTRL__MOTOR_SEL(x) (((x) & 0xF) << 7)
 #define CTRL__MOTOR_TEST(x) (((x) & 0xFFFF) << 11)
@@ -22,7 +22,9 @@
 
 #define VBAT 0
 
-#define VBAT_MIN 1093874483
+#define VBAT_MIN 1093559910
+
+#define EXPO 1045220557
 
 #define MOTOR 131073000
 
@@ -44,19 +46,18 @@
 #define THROTTLE__RANGE(x) (((x) & 0xFFFF) << 0)
 #define THROTTLE__ARMED(x) (((x) & 0xFFFF) << 16)
 
-#define RATE 8224125
+#define RATE 23593320
 
-#define RATE__PITCH(x) (((x) & 0xFF) << 0)
-#define RATE__ROLL(x) (((x) & 0xFF) << 8)
-#define RATE__YAW(x) (((x) & 0xFF) << 16)
+#define RATE__PITCH_ROLL(x) (((x) & 0xFFFF) << 0)
+#define RATE__YAW(x) (((x) & 0xFFFF) << 16)
 
 #define PITCH_P 1073741824
 #define PITCH_I 1017370378
-#define PITCH_D 1101004800
+#define PITCH_D 1092616192
 
 #define ROLL_P 1073741824
 #define ROLL_I 1017370378
-#define ROLL_D 1101004800
+#define ROLL_D 1092616192
 
 #define YAW_P 1082130432
 #define YAW_I 1025758986

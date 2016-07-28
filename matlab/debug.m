@@ -31,7 +31,7 @@ switch DebugCase
 		dtype = 'float';
 		a{1} = axes;
 		a{1}.XLim = [0,TimeWindowSize];
-		a{1}.YLim = [-125,125];
+		a{1}.YLim = [-1000,1000];
 		for n = 1:3
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end

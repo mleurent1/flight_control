@@ -21,14 +21,19 @@ figure(1)
 plot(x,x,'b',x,y1,'r',x,y2,'g',x,y3,'m')
 
 %%
-vacc = zeros(1,5000);
-vacc(1) = 12.6/0.001;
+len = 100000;
+alpha = 0.0002;
 
-for n = 2:length(vacc)
-   
-   vacc(n) = vacc(n-1)*0.999 + 11.2;
-   
+vacc = zeros(1,len);
+vacc(1) = 12.6/alpha;
+vin = [12.6*ones(1,len/4), 11.8*ones(1,len/4), 12.6*ones(1,len/4), 11.4*ones(1,len/4)];
+
+for n = 2:len
+   vacc(n) = vacc(n-1) * (1-alpha) + vin(n);
 end
 
+t = (0:len-1)*1e-3;
+vout = vacc * alpha;
+
 figure(2)
-plot(vacc*0.001)
+plot(t,vout)

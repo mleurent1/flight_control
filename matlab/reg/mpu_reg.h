@@ -26,6 +26,13 @@
 #define MPU_CFG__DLPF_CFG(x) (((x) & 0x7) << 0)
 #define MPU_CFG__EXT_SYNC_SET(x) (((x) & 0x7) << 3)
 
+#define MPU_GYRO_CFG 27
+
+#define MPU_GYRO_CFG__FS_SEL(x) (((x) & 0x3) << 3)
+#define MPU_GYRO_CFG__ZG_ST (1 << 5)
+#define MPU_GYRO_CFG__YG_ST (1 << 6)
+#define MPU_GYRO_CFG__XG_ST (1 << 7)
+
 #define MPU_INT_EN 56
 
 #define MPU_INT_EN__DATA_RDY_EN (1 << 0)

@@ -26,6 +26,13 @@
 #define CFG__DLPF_CFG(x) (((x) & 0x7) << 0)
 #define CFG__EXT_SYNC_SET(x) (((x) & 0x7) << 3)
 
+#define GYRO_CFG 27
+
+#define GYRO_CFG__FS_SEL(x) (((x) & 0x3) << 3)
+#define GYRO_CFG__ZG_ST (1 << 5)
+#define GYRO_CFG__YG_ST (1 << 6)
+#define GYRO_CFG__XG_ST (1 << 7)
+
 #define INT_EN 56
 
 #define INT_EN__DATA_RDY_EN (1 << 0)

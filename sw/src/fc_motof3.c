@@ -3,6 +3,11 @@
 #include "mpu_reg.h"
 
 #define MOTOR_PULSE_MAX 2100
+#define VBAT_MAX 12.6f
+#define VBAT_ALPHA 0.0002f
+#define BEEPER_PERIOD 500
+#define TIMEOUT_COMMAND 200
+
 #define FLAG_SENSOR 0x01
 #define FLAG_COMMAND 0x02
 #define FLAG_I2C_RD_WRN 0x04
@@ -39,7 +44,7 @@ volatile uint16_t aileron_raw;
 volatile uint16_t elevator_raw;
 volatile uint16_t rudder_raw;
 volatile uint16_t armed_raw;
-volatile uint16_t expo_raw;
+volatile uint16_t chan6_raw;
 volatile uint16_t command_error_count;
 
 void SetDmaUart3Tx(uint8_t size)
@@ -288,7 +293,7 @@ void DMA1_Channel6_IRQHandler()
 		{
 			servo = ((uint16_t)uart2_rx_buffer[2+2*i] << 8) | (uint16_t)uart2_rx_buffer[3+2*i];
 			chan_id = (uint8_t)((servo & 0x7800) >> 11);
-			switch(chan_id)
+			switch (chan_id)
 			{
 				case 0:
 					throttle_raw = servo & 0x07FF;
@@ -306,7 +311,7 @@ void DMA1_Channel6_IRQHandler()
 					armed_raw = servo & 0x07FF;
 					break;
 				case 5:
-					expo_raw = servo & 0x07FF;
+					chan6_raw = servo & 0x07FF;
 					break;
 			}
 		}
@@ -342,6 +347,10 @@ int main()
 	float elevator;
 	float rudder;
 	
+	float expo_a;
+	float expo_b;
+	float expo_c;
+	
 	float error_pitch;
 	float error_roll;
 	float error_yaw;
@@ -370,22 +379,18 @@ int main()
 	int32_t motor_clip[4];
 	uint16_t motor_raw[4];
 	
-	uint16_t t;
-	float x;
-	float y;
-	
 	float vbat_acc;
 	float vbat_min;
 	float vbat;
 	
-	//######## CLOCK ##########
+	uint16_t t;
+	float x;
+	float y;
 	
-	RCC->APB1ENR = RCC_APB1ENR_USART2EN | RCC_APB1ENR_USART3EN | RCC_APB1ENR_I2C2EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN;
-	RCC->APB2ENR = RCC_APB2ENR_SYSCFGEN;
-	RCC->AHBENR |= RCC_AHBENR_DMA1EN | RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOBEN | RCC_AHBENR_ADC12EN;
-	ADC12_COMMON->CCR = ADC12_CCR_CKMODE_0;
-	SystemCoreClockUpdate();
-	SysTick_Config(SystemCoreClock/1000); // 1 ms
+	uint32_t gpiob_moder;
+	uint32_t gpiob_pupdr;
+	uint32_t gpiob_ospeedr;
+	uint32_t gpiob_otyper;
 	
 	//####### VAR AND REG INIT #######
 	
@@ -401,7 +406,7 @@ int main()
 	elevator_raw = 0;
 	rudder_raw = 0;
 	armed_raw = 0;
-	expo_raw = 0;
+	chan6_raw = 0;
 	
 	sensor_sample_count = 0;
 	sensor_error_count = 0;
@@ -421,44 +426,25 @@ int main()
 	elevator = 0;
 	rudder = 0;
 	
+	expo_a = 0;
+	expo_b = 0;
+	expo_c = 0;
+	
 	error_pitch_int = 0;
 	error_roll_int = 0;
 	error_yaw_int = 0;
-	
-	pitch = 0;
-	roll = 0;
-	yaw = 0;
-	
-	vbat_acc = 16800.0f;
-	vbat = 16.8f;
-	
-	//####### BIND ########
-	
-	// A7 : Binding ON
-	GPIOA->MODER &= ~GPIO_MODER_MODER7_Msk; //Reset MODER
-	GPIOA->PUPDR &= ~GPIO_PUPDR_PUPDR7_Msk; // Reset PUPDR
-	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR7_1; // PD
-	
-	Wait(1);
-	
-	if (GPIOA->IDR & GPIO_IDR_7)
-	{
-		Wait(100);
 		
-		GPIOB->BSRR = GPIO_BSRR_BS_4;
-		GPIOB->MODER &= ~GPIO_MODER_MODER4_Msk;
-		GPIOB->MODER |= GPIO_MODER_MODER4_0; // Output GP
-		GPIOB->OTYPER &= ~GPIO_OTYPER_OT_4; // PP
-		GPIOB->OSPEEDR &= ~GPIO_OSPEEDER_OSPEEDR4_Msk; // Low speed
-		GPIOB->PUPDR &= ~GPIO_PUPDR_PUPDR4_Msk; // No PU/PD
-		for (i=0; i<9; i++)
-		{
-			GPIOB->BSRR = GPIO_BSRR_BR_4;
-			Wait(1);
-			GPIOB->BSRR = GPIO_BSRR_BS_4;
-			Wait(1);
-		}
-	}
+	vbat_acc = VBAT_MAX / VBAT_ALPHA;
+	vbat = VBAT_MAX;
+	
+	//######## CLOCK ##########
+	
+	RCC->APB1ENR = RCC_APB1ENR_USART2EN | RCC_APB1ENR_USART3EN | RCC_APB1ENR_I2C2EN | RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN;
+	RCC->APB2ENR = RCC_APB2ENR_SYSCFGEN;
+	RCC->AHBENR |= RCC_AHBENR_DMA1EN | RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOBEN | RCC_AHBENR_ADC12EN;
+	ADC12_COMMON->CCR = ADC12_CCR_CKMODE_0;
+	SystemCoreClockUpdate();
+	SysTick_Config(SystemCoreClock/1000); // 1 ms
 	
 	//####### GPIO ##########
 	
@@ -466,16 +452,18 @@ int main()
 	// A4 : Motor 2
 	// A5 : VBAT/10
 	// A6 : Motor 1
+	// A7 : Binding ON
 	// A9 : I2C2 SCL
 	// A10: I2C2 SDA
 	// A15: MPU interrupt
-	GPIOA->MODER &= ~(GPIO_MODER_MODER0_Msk | GPIO_MODER_MODER4_Msk | GPIO_MODER_MODER5_Msk | GPIO_MODER_MODER6_Msk | GPIO_MODER_MODER9_Msk | GPIO_MODER_MODER10_Msk | GPIO_MODER_MODER15_Msk); //Reset MODER
-	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR0_Msk | GPIO_PUPDR_PUPDR4_Msk | GPIO_PUPDR_PUPDR5_Msk | GPIO_PUPDR_PUPDR6_Msk | GPIO_PUPDR_PUPDR9_Msk | GPIO_PUPDR_PUPDR10_Msk | GPIO_PUPDR_PUPDR15_Msk); // Reset PUPDR
+	GPIOA->MODER &= ~(GPIO_MODER_MODER0_Msk | GPIO_MODER_MODER4_Msk | GPIO_MODER_MODER5_Msk | GPIO_MODER_MODER6_Msk | GPIO_MODER_MODER7_Msk | GPIO_MODER_MODER9_Msk | GPIO_MODER_MODER10_Msk | GPIO_MODER_MODER15_Msk); //Reset MODER
+	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR0_Msk | GPIO_PUPDR_PUPDR4_Msk | GPIO_PUPDR_PUPDR5_Msk | GPIO_PUPDR_PUPDR6_Msk | GPIO_PUPDR_PUPDR7_Msk | GPIO_PUPDR_PUPDR9_Msk | GPIO_PUPDR_PUPDR10_Msk | GPIO_PUPDR_PUPDR15_Msk); // Reset PUPDR
 	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDER_OSPEEDR0_Msk | GPIO_OSPEEDER_OSPEEDR4_Msk | GPIO_OSPEEDER_OSPEEDR6_Msk | GPIO_OSPEEDER_OSPEEDR9_Msk | GPIO_OSPEEDER_OSPEEDR10_Msk); // Reset OSPEEDR for output only
-	GPIOA->MODER |= GPIO_MODER_MODER0_0 | GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5 | GPIO_MODER_MODER6_1 | GPIO_MODER_MODER9_1 | GPIO_MODER_MODER10_1;
+	GPIOA->MODER |= GPIO_MODER_MODER0_1 | GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5 | GPIO_MODER_MODER6_1 | GPIO_MODER_MODER9_1 | GPIO_MODER_MODER10_1;
+	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR7_1; // PD
 	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR4 | GPIO_OSPEEDER_OSPEEDR6 | GPIO_OSPEEDER_OSPEEDR9 | GPIO_OSPEEDER_OSPEEDR10; // Full-speed
 	GPIOA->OTYPER = GPIO_OTYPER_OT_9 | GPIO_OTYPER_OT_10; // OD
-	GPIOA->AFR[0] = (GPIO_AFRL_AFRL4_Msk & (2 << GPIO_AFRL_AFRL4_Pos)) | (GPIO_AFRL_AFRL6_Msk & (2 << GPIO_AFRL_AFRL6_Pos)); // AF2 = TIM3
+	GPIOA->AFR[0] = (GPIO_AFRL_AFRL0_Msk & (1 << GPIO_AFRL_AFRL0_Pos)) | (GPIO_AFRL_AFRL4_Msk & (2 << GPIO_AFRL_AFRL4_Pos)) | (GPIO_AFRL_AFRL6_Msk & (2 << GPIO_AFRL_AFRL6_Pos)); // AF1 = TIM2, AF2 = TIM3
 	GPIOA->AFR[1] = (GPIO_AFRH_AFRH1_Msk & (4 << GPIO_AFRH_AFRH1_Pos)) | (GPIO_AFRH_AFRH2_Msk & (4 << GPIO_AFRH_AFRH2_Pos)); // AF4 = I2C
 	
 	// B0 : Motor 3
@@ -496,6 +484,83 @@ int main()
 	GPIOB->AFR[0] = (GPIO_AFRL_AFRL0_Msk & (2 << GPIO_AFRL_AFRL0_Pos)) | (GPIO_AFRL_AFRL1_Msk & (2 << GPIO_AFRL_AFRL1_Pos)) | (GPIO_AFRL_AFRL4_Msk & (7 << GPIO_AFRL_AFRL4_Pos)); // AF2 = TIM3, AF7 = USART
 	GPIOB->AFR[1] = (GPIO_AFRH_AFRH2_Msk & (7 << GPIO_AFRH_AFRH2_Pos)) | (GPIO_AFRH_AFRH3_Msk & (7 << GPIO_AFRH_AFRH3_Pos)); // AF7 = USART
 	
+	//####### TIM ########
+	
+	TIM2->PSC = 7999; // ms
+	TIM2->ARR = 2*BEEPER_PERIOD;
+	TIM2->CCR1 = BEEPER_PERIOD;
+	TIM2->CCER = TIM_CCER_CC1E;
+	TIM2->CCMR1 = TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1M_0;
+	
+	TIM3->CR1 = TIM_CR1_OPM;
+	TIM3->PSC = 0; // 8MHz/(x+1)
+	TIM3->ARR = MOTOR_PULSE_MAX;
+	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
+	TIM3->CCMR1 = TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1M_0 | TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2M_0;
+	TIM3->CCMR2 = TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3M_0 | TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1 | TIM_CCMR2_OC4M_0;
+	
+	TIM6->PSC = 7999; // ms
+	TIM6->ARR = 65535;
+	TIM6->CR1 = TIM_CR1_CEN;
+	TIM7->PSC = 7; // us
+	TIM7->ARR = 65535;
+	TIM7->CR1 = TIM_CR1_CEN;
+	
+	//####### ESC CAL and RADIO BIND ########
+	
+	if (GPIOA->IDR & GPIO_IDR_7)
+	{
+		t = 0;
+		gpiob_moder = GPIOB->MODER;
+		gpiob_pupdr = GPIOB->PUPDR;
+		gpiob_ospeedr = GPIOB->OSPEEDR;
+		gpiob_otyper = GPIOB->OTYPER;
+		
+		while (GPIOA->IDR & GPIO_IDR_7)
+		{
+			TIM3->CCR1 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
+			TIM3->CCR2 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
+			TIM3->CCR3 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
+			TIM3->CCR4 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
+			TIM3->CR1 |= TIM_CR1_CEN;
+			
+			if (t == 10)
+			{
+				GPIOB->BSRR = GPIO_BSRR_BS_4;
+				GPIOB->MODER &= ~GPIO_MODER_MODER4_Msk;
+				GPIOB->MODER |= GPIO_MODER_MODER4_0; // Output GP
+				GPIOB->OTYPER &= ~GPIO_OTYPER_OT_4; // PP
+				GPIOB->OSPEEDR &= ~GPIO_OSPEEDER_OSPEEDR4_Msk; // Low speed
+				GPIOB->PUPDR &= ~GPIO_PUPDR_PUPDR4_Msk; // No PU/PD
+				for (i=0; i<9; i++)
+				{
+					GPIOB->BSRR = GPIO_BSRR_BR_4;
+					Wait(1);
+					GPIOB->BSRR = GPIO_BSRR_BS_4;
+					Wait(1);
+				}
+				GPIOB->MODER = gpiob_moder;
+				GPIOB->PUPDR = gpiob_pupdr;
+				GPIOB->OSPEEDR = gpiob_ospeedr;
+				GPIOB->OTYPER = gpiob_otyper;
+			}
+			
+			t++;
+			Wait(10);
+		}
+		
+		
+		for (i=0; i<100; i++)
+		{
+			TIM3->CCR1 = MOTOR_PULSE_MAX - REG_MOTOR__MIN;
+			TIM3->CCR2 = MOTOR_PULSE_MAX - REG_MOTOR__MIN;
+			TIM3->CCR3 = MOTOR_PULSE_MAX - REG_MOTOR__MIN;
+			TIM3->CCR4 = MOTOR_PULSE_MAX - REG_MOTOR__MIN;
+			TIM3->CR1 |= TIM_CR1_CEN;
+			Wait(10);
+		}
+	}
+	
 	//######## UART ##########
 	
 	USART3->BRR = 69; // 115200 bps
@@ -513,22 +578,6 @@ int main()
 	I2C2->CR1 = I2C_CR1_TCIE | I2C_CR1_TXDMAEN | I2C_CR1_RXDMAEN;
 	I2C2->CR2 = I2C_CR2_SADD_Msk & (104 << (1+I2C_CR2_SADD_Pos));
 	I2C2->TIMINGR = (I2C_TIMINGR_SCLL_Msk & (9 << I2C_TIMINGR_SCLL_Pos)) | (I2C_TIMINGR_SCLH_Msk & (3 << I2C_TIMINGR_SCLH_Pos)) | (I2C_TIMINGR_SDADEL_Msk & (1 << I2C_TIMINGR_SDADEL_Pos)) | (I2C_TIMINGR_SCLDEL_Msk & (3 << I2C_TIMINGR_SCLDEL_Pos));
-	
-	//####### TIM ########
-	
-	TIM3->CR1 = TIM_CR1_OPM;
-	TIM3->PSC = 0; // 8MHz/(x+1)
-	TIM3->ARR = MOTOR_PULSE_MAX;
-	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
-	TIM3->CCMR1 = TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1M_0 | TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2M_0;
-	TIM3->CCMR2 = TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3M_0 | TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1 | TIM_CCMR2_OC4M_0;
-	
-	TIM6->PSC = 7999; // ms
-	TIM6->ARR = 65535;
-	TIM6->CR1 = TIM_CR1_CEN;
-	TIM7->PSC = 7; // us
-	TIM7->ARR = 65535;
-	TIM7->CR1 = TIM_CR1_CEN;
 	
 	//####### ADC ########
 	
@@ -574,6 +623,7 @@ int main()
 	Wait(100);
 	//I2cWrite(MPU_SMPLRT_DIV, 0); // Sample rate = Fs/(x+1)
 	I2cWrite(MPU_CFG, MPU_CFG__DLPF_CFG(2)); // Filter ON => Fs=1kHz
+	I2cWrite(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(2)); // Full scale = +/-1000 deg/s
 	Wait(100); // wait for filter to settle
 	I2cWrite(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
 	
@@ -602,9 +652,9 @@ int main()
 	gyro_y_dc = gyro_y_dc / 1000.0f;
 	gyro_z_dc = gyro_z_dc / 1000.0f;
 	
-	gyro_x_scale = 0.0038f;
-	gyro_y_scale = 0.0038f;
-	gyro_z_scale = 0.0038f;
+	gyro_x_scale = 0.0305f;
+	gyro_y_scale = 0.0305f;
+	gyro_z_scale = 0.0305f;
 	
 	//######## MAIN LOOP #########
 	
@@ -636,52 +686,63 @@ int main()
 			elevator = (float)((int32_t)elevator_raw - (int32_t)REG_CMD_OFFSET__AIL_ELE_RUD) / (float)REG_CMD_RANGE__AIL_ELE_RUD;
 			rudder = (float)((int32_t)rudder_raw - (int32_t)REG_CMD_OFFSET__AIL_ELE_RUD) / (float)REG_CMD_RANGE__AIL_ELE_RUD;
 			
-			if (expo_raw > 1024)
+			if (REG_EXPO)
 			{
 				x = aileron;
 				if (x >= 0)
 				{
-					x += 0.2f;
-					y = x * x - 0.04f;
+					x += expo_a;
+					y = x * x - expo_b;
 				}
 				else
 				{
-					x -= 0.2f;
-					y = -(x * x - 0.04f);
+					x -= expo_a;
+					y = -(x * x - expo_b);
 				}
-				aileron = y * 0.7142857f;
+				aileron = y * expo_c;
 				
 				x = elevator;
 				if (x >= 0)
 				{
-					x += 0.2f;
-					y = x * x - 0.04f;
+					x += expo_a;
+					y = x * x - expo_b;
 				}
 				else
 				{
-					x -= 0.2f;
-					y = -(x * x - 0.04f);
+					x -= expo_a;
+					y = -(x * x - expo_b);
 				}
-				elevator = y * 0.7142857f;
+				elevator = y * expo_c;
 				
 				x = rudder;
 				if (x >= 0)
 				{
-					x += 0.2f;
-					y = x * x - 0.04f;
+					x += expo_a;
+					y = x * x - expo_b;
 				}
 				else
 				{
-					x -= 0.2f;
-					y = -(x * x - 0.04f);
+					x -= expo_a;
+					y = -(x * x - expo_b);
 				}
-				rudder = y * 0.7142857f;
+				rudder = y * expo_c;
+			}
+			
+			if (chan6_raw > 1024)
+				TIM2->CR1 |= TIM_CR1_CEN;
+			else if (vbat >= vbat_min)
+			{
+				TIM2->CR1 &= ~TIM_CR1_CEN;
+				TIM2->EGR |= TIM_EGR_UG;
 			}
 		}
 		
 		// Timeout for commands
-		if (TIM6->CNT > 200)
+		if (TIM6->CNT > TIMEOUT_COMMAND) 
+		{
 			armed_raw = 0;
+			TIM2->CR1 |= TIM_CR1_CEN;
+		}
 		
 		// Process sensors
 		if (FLAG & FLAG_SENSOR)
@@ -704,19 +765,12 @@ int main()
 			gyro_y = ((float)gyro_y_raw - gyro_y_dc) * gyro_y_scale;
 			gyro_z = ((float)gyro_z_raw - gyro_z_dc) * gyro_z_scale;
 			
-			if ((gyro_x < 0.5f) && (gyro_x > -0.5f))
-				gyro_x = 0.0f;
-			if ((gyro_y < 0.5f) && (gyro_y > -0.5f))
-				gyro_y = 0.0f;
-			if ((gyro_z < 0.5f) && (gyro_z > -0.5f))
-				gyro_z = 0.0f;
-			
 			error_pitch_z = error_pitch;
 			error_roll_z = error_roll;
 			error_yaw_z = error_yaw;
 			
-			error_pitch = (elevator * (float)REG_RATE__PITCH) - gyro_y;
-			error_roll = (aileron * (float)REG_RATE__ROLL) - gyro_x;
+			error_pitch = (elevator * (float)REG_RATE__PITCH_ROLL) - gyro_y;
+			error_roll = (aileron * (float)REG_RATE__PITCH_ROLL) - gyro_x;
 			error_yaw = (rudder * (float)REG_RATE__YAW) - gyro_z;
 			
 			if ((armed_raw < 1024) && REG_CTRL__RESET_INT_ON_ARMED)
@@ -771,22 +825,17 @@ int main()
 			
 			// VBAT
 			if (ADC2->ISR & ADC_ISR_EOC)
-					vbat = (float)ADC2->DR * 0.0089f;
+				vbat = (float)ADC2->DR * 0.0089f;
 			
-			vbat_acc = vbat_acc * 0.999f + vbat;
-			vbat = vbat_acc * 0.001f;
+			vbat_acc = vbat_acc * (1.0f - VBAT_ALPHA) + vbat;
+			vbat = vbat_acc * VBAT_ALPHA;
 			
 			float_to_uint32(&vbat, &REG_VBAT);
 			
 			ADC2->CR |= ADC_CR_ADSTART;
 			
 			if (vbat < vbat_min)
-			{
-				if ((sensor_sample_count & 0x3F) == 0)
-					GPIOA->BSRR = GPIO_BSRR_BR_0;
-				else if ((sensor_sample_count & 0x3F) == 32)
-					GPIOA->BSRR = GPIO_BSRR_BS_0;
-			}
+				TIM2->CR1 |= TIM_CR1_CEN;
 		}
 		
 		// Record max loop time
@@ -799,17 +848,8 @@ int main()
 		{
 			FLAG &= ~FLAG_UPDATE_REG;
 			
-			if (REG_CTRL__LED == 0)
-				GPIOB->BSRR = GPIO_BSRR_BS_5;
-			else if (REG_CTRL__LED == 1)
-				GPIOB->BSRR = GPIO_BSRR_BR_5;
-			
-			if (REG_CTRL__BEEP)
-				GPIOA->BSRR = GPIO_BSRR_BS_0;
-			else
-				GPIOA->BSRR = GPIO_BSRR_BR_0;
-			
 			uint32_to_float(&REG_VBAT_MIN, &vbat_min);
+			uint32_to_float(&REG_EXPO, &expo_a);
 			uint32_to_float(&REG_PITCH_P, &pitch_p);
 			uint32_to_float(&REG_PITCH_I, &pitch_i);
 			uint32_to_float(&REG_PITCH_D, &pitch_d);
@@ -819,6 +859,22 @@ int main()
 			uint32_to_float(&REG_YAW_P, &yaw_p);
 			uint32_to_float(&REG_YAW_I, &yaw_i);
 			uint32_to_float(&REG_YAW_D, &yaw_d);
+			
+			expo_b = expo_a * expo_a;
+			expo_c = 1 / ((1.0f + expo_a) * (1.0f + expo_a) - expo_b);
+			
+			if (REG_CTRL__LED == 0)
+				GPIOB->BSRR = GPIO_BSRR_BS_5;
+			else if (REG_CTRL__LED == 1)
+				GPIOB->BSRR = GPIO_BSRR_BR_5;
+			
+			if (REG_CTRL__BEEP_TEST)
+				TIM2->CR1 |= TIM_CR1_CEN;
+			else
+			{
+				TIM2->CR1 &= ~TIM_CR1_CEN;
+				TIM2->EGR |= TIM_EGR_UG;
+			}
 		}
 		
 		// Debug
@@ -866,8 +922,8 @@ int main()
 					uart3_tx_buffer[ 8] = (uint8_t)(rudder_raw >> 8);
 					uart3_tx_buffer[ 9] = (uint8_t) armed_raw;
 					uart3_tx_buffer[10] = (uint8_t)(armed_raw >> 8);
-					uart3_tx_buffer[11] = (uint8_t) expo_raw;
-					uart3_tx_buffer[12] = (uint8_t)(expo_raw >> 8);
+					uart3_tx_buffer[11] = (uint8_t) chan6_raw;
+					uart3_tx_buffer[12] = (uint8_t)(chan6_raw >> 8);
 					SetDmaUart3Tx(13);
 					break;
 				}
