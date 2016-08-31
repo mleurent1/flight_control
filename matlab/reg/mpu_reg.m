@@ -200,6 +200,49 @@ classdef mpu_reg
 				obj.write(27,w);
 			end
 		end
+		function y = ACCEL_CFG(obj,x)
+			if nargin <= 1
+				y = obj.read(28);
+			else
+				obj.write(28,x);
+			end
+		end
+		function y = ACCEL_CFG__AFS_SEL(obj,x)
+			r = obj.read(28);
+			if nargin <= 1
+				y = bitshift(bitand(r, 24), -3);
+			else
+				w = bitand(bitshift(x, 3), 24) + bitand(r, 231);
+				obj.write(28,w);
+			end
+		end
+		function y = ACCEL_CFG__ZA_ST(obj,x)
+			r = obj.read(28);
+			if nargin <= 1
+				y = bitshift(bitand(r, 32), -5);
+			else
+				w = bitand(bitshift(x, 5), 32) + bitand(r, 223);
+				obj.write(28,w);
+			end
+		end
+		function y = ACCEL_CFG__YA_ST(obj,x)
+			r = obj.read(28);
+			if nargin <= 1
+				y = bitshift(bitand(r, 64), -6);
+			else
+				w = bitand(bitshift(x, 6), 64) + bitand(r, 191);
+				obj.write(28,w);
+			end
+		end
+		function y = ACCEL_CFG__XA_ST(obj,x)
+			r = obj.read(28);
+			if nargin <= 1
+				y = bitshift(bitand(r, 128), -7);
+			else
+				w = bitand(bitshift(x, 7), 128) + bitand(r, 127);
+				obj.write(28,w);
+			end
+		end
 		function y = INT_EN(obj,x)
 			if nargin <= 1
 				y = obj.read(56);
@@ -495,6 +538,7 @@ classdef mpu_reg
 		SMPLRT_DIV_addr = 25;
 		CFG_addr = 26;
 		GYRO_CFG_addr = 27;
+		ACCEL_CFG_addr = 28;
 		INT_EN_addr = 56;
 		ACCEL_X_H_addr = 59;
 		ACCEL_X_L_addr = 60;

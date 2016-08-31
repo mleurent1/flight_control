@@ -33,6 +33,13 @@
 #define GYRO_CFG__YG_ST (1 << 6)
 #define GYRO_CFG__XG_ST (1 << 7)
 
+#define ACCEL_CFG 28
+
+#define ACCEL_CFG__AFS_SEL(x) (((x) & 0x3) << 3)
+#define ACCEL_CFG__ZA_ST (1 << 5)
+#define ACCEL_CFG__YA_ST (1 << 6)
+#define ACCEL_CFG__XA_ST (1 << 7)
+
 #define INT_EN 56
 
 #define INT_EN__DATA_RDY_EN (1 << 0)

@@ -26,16 +26,20 @@ switch DebugCase
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 			l{3+n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
 		end
-	case 2 % gyros
-		d1 = 3;
+	case 2 % scaled sensors
+		d1 = 6;
 		dtype = 'float';
-		a{1} = axes;
-		a{1}.XLim = [0,TimeWindowSize];
+		for n = 1:2
+			a{n} = subplot(2,1,n);
+			a{n}.XLim = [0,TimeWindowSize];
+		end
 		a{1}.YLim = [-1000,1000];
+		a{2}.YLim = [-8,8];
 		for n = 1:3
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
+			l{n+3} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
 		end
-	case 3 % raw commands
+	case 4 % raw commands
 		d1 = 6;
 		a{1} = axes;
 		a{1}.XLim = [0,TimeWindowSize];
@@ -44,7 +48,7 @@ switch DebugCase
 		for n = 1:6
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end
-	case 4 % commands
+	case 5 % commands
 		d1 = 4;
 		dtype = 'float';
 		a{1} = subplot(211);
@@ -53,11 +57,11 @@ switch DebugCase
 		a{2}.XLim = [0,TimeWindowSize];
 		a{1}.YLim = [-1,1];
 		a{2}.YLim = [0,1];
-      l{1} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(1));
+		l{1} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(1));
 		for n = 2:4
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
-      end
-	case 5 % pitch, roll, yaw
+		end
+	case 6 % pitch, roll, yaw
 		d1 = 3;
 		dtype = 'float';
 		a{1} = axes;
@@ -66,7 +70,7 @@ switch DebugCase
 		for n = 1:3
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end
-	case 6 % motors
+	case 7 % motors
 		d1 = 4;
 		dtype = 'float';
 		for n = 1:4
@@ -75,13 +79,13 @@ switch DebugCase
 			a{n}.YLim = [-2000,2000];
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{n},'Color',c(n));
 		end
-	case 7 % raw motors
+	case 8 % raw motors
 		d1 = 4;
 		dtype = 'int16';
 		for n = 1:4
 			a{n} = subplot(4,1,n);
 			a{n}.XLim = [0,TimeWindowSize];
-			a{n}.YLim = [950,2050];
+			a{n}.YLim = [990,2010];
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{n},'Color',c(n));
 		end
 end

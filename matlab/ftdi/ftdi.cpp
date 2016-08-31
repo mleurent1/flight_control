@@ -18,7 +18,7 @@
 #define RETURN_ERROR   plhs[0] = mxCreateDoubleScalar(-1); return;
 #define RETURN_SUCCESS plhs[0] = mxCreateDoubleScalar(0); return;
 
-#define USB_TRANSFER_SIZE_MPSSE   4096 // in multiple of 64 bytes (default 4096)
+#define USB_TRANSFER_SIZE_MPSSE   65535 // in multiple of 64 bytes (default 4096)
 #define USB_TRANSFER_SIZE_SERIAL  384 // in multiple of 64 bytes (default 4096)
 #define DATA_TRANSFER_SIZE_MPSSE  (USB_TRANSFER_SIZE_MPSSE*62/64)
 #define DATA_TRANSFER_SIZE_SERIAL (USB_TRANSFER_SIZE_SERIAL*62/64)
@@ -548,21 +548,7 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 	else if (strcmp(CommandName, "clock_polarity") == 0)
 	{
 		if (nrhs > 1)
-		{
 			CLOCK_POLARITY[DEVICE_INDEX] = (bool)mxGetScalar(prhs[1]);
-			
-			if (CLOCK_POLARITY[DEVICE_INDEX])
-				GPIOL[DEVICE_INDEX] |= PIN_CLK;
-			else
-				GPIOL[DEVICE_INDEX] &= ~PIN_CLK;
-			
-			// Send command
-			OutputBuffer[0] = 0x80; // Configure low byte of port
-			OutputBuffer[1] = GPIOL[DEVICE_INDEX] ; // Initial state
-			OutputBuffer[2] = GPIOL_DIR[DEVICE_INDEX]; // Direction
-			Status = USB_transaction(ftHandle[DEVICE_INDEX], OutputBuffer, 3, InputBuffer, 0, &NumBytesRead);
-			ERROR_IF(Status < 0, "USB transaction failed", NULL)
-		}
 		
 		// Mex output
 		plhs[0] = mxCreateDoubleScalar((double)CLOCK_POLARITY[DEVICE_INDEX]);
@@ -698,21 +684,55 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 		
 		NumBytesToSend = 0;
 		
+		// Program clock polarity
+		if (CLOCK_POLARITY[DEVICE_INDEX])
+			GPIOL[DEVICE_INDEX] |= PIN_CLK;
+		else
+			GPIOL[DEVICE_INDEX] &= ~PIN_CLK;
+		OutputBuffer[NumBytesToSend++] = 0x80; // Configure data bits low-byte of MPSSE port
+		OutputBuffer[NumBytesToSend++] = GPIOL[DEVICE_INDEX]; // Initial state
+		OutputBuffer[NumBytesToSend++] = GPIOL_DIR[DEVICE_INDEX]; // Direction
+		
 		// Program CSN = 0
 		GPIOL[DEVICE_INDEX] &= ~PIN_CSN;
 		OutputBuffer[NumBytesToSend++] = 0x80; // Configure data bits low-byte of MPSSE port
 		OutputBuffer[NumBytesToSend++] = GPIOL[DEVICE_INDEX]; // Initial state
 		OutputBuffer[NumBytesToSend++] = GPIOL_DIR[DEVICE_INDEX]; // Direction
 		
+		// Handle SPI modes
+		if ((CLOCK_POLARITY[DEVICE_INDEX] == false) && (CLOCK_PHASE[DEVICE_INDEX] == true))
+		{
+			GPIOL[DEVICE_INDEX] |= PIN_CLK;
+			OutputBuffer[NumBytesToSend++] = 0x80; // Configure data bits low-byte of MPSSE port
+			OutputBuffer[NumBytesToSend++] = GPIOL[DEVICE_INDEX]; // Initial state
+			OutputBuffer[NumBytesToSend++] = GPIOL_DIR[DEVICE_INDEX]; // Direction
+		}
+		else if ((CLOCK_POLARITY[DEVICE_INDEX] == true) && (CLOCK_PHASE[DEVICE_INDEX] == false))
+		{
+			GPIOL[DEVICE_INDEX] &= ~PIN_CLK;
+			OutputBuffer[NumBytesToSend++] = 0x80; // Configure data bits low-byte of MPSSE port
+			OutputBuffer[NumBytesToSend++] = GPIOL[DEVICE_INDEX]; // Initial state
+			OutputBuffer[NumBytesToSend++] = GPIOL_DIR[DEVICE_INDEX]; // Direction
+		}
+		
 		// Program data to send
-		OutputBuffer[NumBytesToSend++] = (CLOCK_POLARITY[DEVICE_INDEX]==CLOCK_PHASE[DEVICE_INDEX]) ? 0x31 : 0x34; // Output byte on falling edge of clock and input byte on rising edge, MSB first
+		OutputBuffer[NumBytesToSend++] = (CLOCK_PHASE[DEVICE_INDEX]) ? 0x34 : 0x31; // 0x31: out fall, in rise, 0x34: out rise, in fall (MSB first)
 		OutputBuffer[NumBytesToSend++] = (SpiNumBytesToSend-1) & 0x00FF; // Length L
 		OutputBuffer[NumBytesToSend++] = ((SpiNumBytesToSend-1) & 0xFF00) >> 8; // Length H, Length = Length L + 2^8*Length H + 1
 		for (i = 0; i < SpiNumBytesToSend; i++)
 			OutputBuffer[NumBytesToSend++] = (BYTE)(DataArray[i]);
-			
+		
 		// Program CSN = 1
 		GPIOL[DEVICE_INDEX] |= PIN_CSN;
+		OutputBuffer[NumBytesToSend++] = 0x80; // Configure data bits low-byte of MPSSE port
+		OutputBuffer[NumBytesToSend++] = GPIOL[DEVICE_INDEX]; // Initial state
+		OutputBuffer[NumBytesToSend++] = GPIOL_DIR[DEVICE_INDEX]; // Direction
+		
+		// Program clock polarity
+		if (CLOCK_POLARITY[DEVICE_INDEX])
+			GPIOL[DEVICE_INDEX] |= PIN_CLK;
+		else
+			GPIOL[DEVICE_INDEX] &= ~PIN_CLK;
 		OutputBuffer[NumBytesToSend++] = 0x80; // Configure data bits low-byte of MPSSE port
 		OutputBuffer[NumBytesToSend++] = GPIOL[DEVICE_INDEX]; // Initial state
 		OutputBuffer[NumBytesToSend++] = GPIOL_DIR[DEVICE_INDEX]; // Direction

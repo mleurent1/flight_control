@@ -22,7 +22,7 @@
 
 #define VBAT 0
 
-#define VBAT_MIN 1093559910
+#define VBAT_MIN 1093664768
 
 #define EXPO 1045220557
 
@@ -41,7 +41,7 @@
 #define CMD_RANGE__THROTTLE(x) (((x) & 0xFFFF) << 0)
 #define CMD_RANGE__AIL_ELE_RUD(x) (((x) & 0xFFFF) << 16)
 
-#define THROTTLE 72090400
+#define THROTTLE 68813700
 
 #define THROTTLE__RANGE(x) (((x) & 0xFFFF) << 0)
 #define THROTTLE__ARMED(x) (((x) & 0xFFFF) << 16)

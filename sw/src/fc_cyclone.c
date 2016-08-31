@@ -20,11 +20,11 @@ volatile uint8_t FLAG;
 
 volatile uint32_t tick;
 
-volatile uint8_t uart3_rx_buffer[16];
-volatile uint8_t uart3_tx_buffer[16];
+volatile uint8_t uart3_rx_buffer[6];
+volatile uint8_t uart3_tx_buffer[25];
 volatile uint8_t uart2_rx_buffer[16];
-volatile uint8_t spi2_rx_buffer[16];
-volatile uint8_t spi2_tx_buffer[16];
+volatile uint8_t spi2_rx_buffer[15];
+volatile uint8_t spi2_tx_buffer[15];
 
 volatile uint16_t sensor_sample_count;
 volatile int16_t gyro_x_raw;
@@ -345,20 +345,23 @@ int main()
 	float gyro_x;
 	float gyro_y;
 	float gyro_z;
-	
 	float gyro_x_dc;
 	float gyro_y_dc;
 	float gyro_z_dc;
-	
 	float gyro_x_scale;
 	float gyro_y_scale;
 	float gyro_z_scale;
+	float accel_x;
+	float accel_y;
+	float accel_z;
+	float accel_x_scale;
+	float accel_y_scale;
+	float accel_z_scale;
 	
 	float throttle;
 	float aileron;
 	float elevator;
 	float rudder;
-	
 	float expo_a;
 	float expo_b;
 	float expo_c;
@@ -372,11 +375,9 @@ int main()
 	float error_pitch_int;
 	float error_roll_int;
 	float error_yaw_int;
-	
 	float pitch;
 	float roll;
 	float yaw;
-	
 	float pitch_p;
 	float pitch_i;
 	float pitch_d;
@@ -461,18 +462,18 @@ int main()
 	//####### GPIO ##########
 	
 	// A0 : Beep
-	// A2 : Binding ON bar
+	// A1 : Binding ON bar
 	// A4 : Motor 2
 	// A5 : VBAT/10
 	// A6 : Motor 1
 	// A15: MPU interrupt
-	GPIOA->MODER &= ~(GPIO_MODER_MODER0_Msk | GPIO_MODER_MODER2_Msk | GPIO_MODER_MODER4_Msk | GPIO_MODER_MODER5_Msk | GPIO_MODER_MODER6_Msk | GPIO_MODER_MODER15_Msk); //Reset MODER
-	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR0_Msk | GPIO_PUPDR_PUPDR2_Msk | GPIO_PUPDR_PUPDR4_Msk | GPIO_PUPDR_PUPDR5_Msk | GPIO_PUPDR_PUPDR6_Msk | GPIO_PUPDR_PUPDR15_Msk); // Reset PUPDR
+	GPIOA->MODER &= ~(GPIO_MODER_MODER0_Msk | GPIO_MODER_MODER1_Msk | GPIO_MODER_MODER4_Msk | GPIO_MODER_MODER5_Msk | GPIO_MODER_MODER6_Msk | GPIO_MODER_MODER15_Msk); //Reset MODER
+	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR0_Msk | GPIO_PUPDR_PUPDR1_Msk | GPIO_PUPDR_PUPDR4_Msk | GPIO_PUPDR_PUPDR5_Msk | GPIO_PUPDR_PUPDR6_Msk | GPIO_PUPDR_PUPDR15_Msk); // Reset PUPDR
 	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDER_OSPEEDR0_Msk | GPIO_OSPEEDER_OSPEEDR4_Msk | GPIO_OSPEEDER_OSPEEDR6_Msk); // Reset OSPEEDR for output only
-	GPIOA->MODER |= GPIO_MODER_MODER0_0 | GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5 | GPIO_MODER_MODER6_1;
-	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR2_0; // PU
+	GPIOA->MODER |= GPIO_MODER_MODER0_1 | GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5 | GPIO_MODER_MODER6_1;
+	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR1_0; // PU
 	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR4 | GPIO_OSPEEDER_OSPEEDR6; // Full-speed
-	GPIOA->AFR[0] = (GPIO_AFRL_AFRL4_Msk & (2 << GPIO_AFRL_AFRL4_Pos)) | (GPIO_AFRL_AFRL6_Msk & (2 << GPIO_AFRL_AFRL6_Pos)); // AF2 = TIM3
+	GPIOA->AFR[0] = (GPIO_AFRL_AFRL0_Msk & (1 << GPIO_AFRL_AFRL0_Pos)) | (GPIO_AFRL_AFRL4_Msk & (2 << GPIO_AFRL_AFRL4_Pos)) | (GPIO_AFRL_AFRL6_Msk & (2 << GPIO_AFRL_AFRL6_Pos)); // AF1 = TIM2, AF2 = TIM3
 	
 	// B0 : Motor 3
 	// B1 : Motor 4
@@ -521,7 +522,7 @@ int main()
 	
 	//####### ESC CAL and RADIO BIND ########
 	
-	if ((GPIOA->IDR & GPIO_IDR_2) == 0)
+	if ((GPIOA->IDR & GPIO_IDR_1) == 0)
 	{
 		t = 0;
 		gpiob_moder = GPIOB->MODER;
@@ -529,7 +530,7 @@ int main()
 		gpiob_ospeedr = GPIOB->OSPEEDR;
 		gpiob_otyper = GPIOB->OTYPER;
 		
-		while ((GPIOA->IDR & GPIO_IDR_2) == 0)
+		while ((GPIOA->IDR & GPIO_IDR_1) == 0)
 		{
 			TIM3->CCR1 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
 			TIM3->CCR2 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
@@ -639,6 +640,7 @@ int main()
 	//SpiWrite(MPU_SMPLRT_DIV, 0); // Sample rate = Fs/(x+1)
 	SpiWrite(MPU_CFG, MPU_CFG__DLPF_CFG(2)); // Filter ON => Fs=1kHz
 	SpiWrite(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(2)); // Full scale = +/-1000 deg/s
+	SpiWrite(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(2)); // Full scale = +/- 8g
 	Wait(100); // wait for filter to settle
 	SpiWrite(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
 	
@@ -670,6 +672,10 @@ int main()
 	gyro_x_scale = 0.0305f;
 	gyro_y_scale = 0.0305f;
 	gyro_z_scale = 0.0305f;
+	
+	accel_x_scale = 0.000244f;
+	accel_y_scale = 0.000244f;
+	accel_z_scale = 0.000244f;
 	
 	//######## MAIN LOOP #########
 	
@@ -728,19 +734,6 @@ int main()
 					y = -(x * x - expo_b);
 				}
 				elevator = y * expo_c;
-				
-				x = rudder;
-				if (x >= 0)
-				{
-					x += expo_a;
-					y = x * x - expo_b;
-				}
-				else
-				{
-					x -= expo_a;
-					y = -(x * x - expo_b);
-				}
-				rudder = y * expo_c;
 			}
 			
 			if (chan6_raw > 1024)
@@ -775,10 +768,13 @@ int main()
 			REG_ERROR &= 0xFFFF0000;
 			REG_ERROR |= (uint32_t)sensor_error_count & 0x0000FFFF;; 
 			
-			// Remove DC
+			// Remove DC and scale
 			gyro_x = ((float)gyro_x_raw - gyro_x_dc) * gyro_x_scale;
 			gyro_y = ((float)gyro_y_raw - gyro_y_dc) * gyro_y_scale;
 			gyro_z = ((float)gyro_z_raw - gyro_z_dc) * gyro_z_scale;
+			accel_x = (float)accel_x_raw * accel_x_scale;
+			accel_y = (float)accel_y_raw * accel_y_scale;
+			accel_z = (float)accel_z_raw * accel_z_scale;
 			
 			error_pitch_z = error_pitch;
 			error_roll_z = error_roll;
@@ -921,10 +917,13 @@ int main()
 					float_to_bytes(&gyro_x, &uart3_tx_buffer[1]);
 					float_to_bytes(&gyro_y, &uart3_tx_buffer[5]);
 					float_to_bytes(&gyro_z, &uart3_tx_buffer[9]);
-					SetDmaUart3Tx(13);
+					float_to_bytes(&accel_x, &uart3_tx_buffer[13]);
+					float_to_bytes(&accel_y, &uart3_tx_buffer[17]);
+					float_to_bytes(&accel_z, &uart3_tx_buffer[21]);
+					SetDmaUart3Tx(25);
 					break;
 				}
-				case 3:
+				case 4:
 				{
 					uart3_tx_buffer[ 0] = (uint8_t) command_frame_count;
 					uart3_tx_buffer[ 1] = (uint8_t) throttle_raw;
@@ -942,7 +941,7 @@ int main()
 					SetDmaUart3Tx(13);
 					break;
 				}
-				case 4:
+				case 5:
 				{
 					uart3_tx_buffer[0] = (uint8_t)command_frame_count;
 					float_to_bytes(&throttle, &uart3_tx_buffer[1]);
@@ -952,7 +951,7 @@ int main()
 					SetDmaUart3Tx(17);
 					break;
 				}
-				case 5:
+				case 6:
 				{
 					uart3_tx_buffer[0] = (uint8_t)sensor_sample_count;
 					float_to_bytes(&pitch, &uart3_tx_buffer[1]);
@@ -961,7 +960,7 @@ int main()
 					SetDmaUart3Tx(13);
 					break;
 				}
-				case 6:
+				case 7:
 				{
 					uart3_tx_buffer[0] = (uint8_t)sensor_sample_count;
 					for (i=0; i<4; i++)
@@ -969,7 +968,7 @@ int main()
 					SetDmaUart3Tx(17);
 					break;
 				}
-				case 7:
+				case 8:
 				{
 					uart3_tx_buffer[0] = (uint8_t)sensor_sample_count;
 					for (i=0; i<4; i++)
