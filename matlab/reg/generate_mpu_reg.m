@@ -2,7 +2,7 @@ clear all
 
 %% parse definitions
 
-f = fopen('define_mpu_reg.h','r');
+f = fopen('../../sw/inc/mpu_reg.h','r');
 
 n = 0;
 
@@ -16,6 +16,11 @@ while ischar(l)
 
 		r = strtrim(r(8:end)); % Remove #define
 		
+      % Remove prefix MPU_
+      if strcmp(r(1:4),'MPU_')
+         r = strtrim(r(5:end));
+      end
+      
 		i = strfind(r,'__'); % Subfied test
 		
 		if isempty(i)
@@ -27,10 +32,8 @@ while ischar(l)
 			r = r(i+1:end);
 
 			reg(n).addr = str2double(strtrim(r));
-			reg(n).description = [];
-			reg(n).subfields = {};
+			reg(n).subf = {};
 			reg(n).mask = [];
-			reg(n).subdescription = {};
 
 		else
 			
@@ -79,7 +82,7 @@ while ischar(l)
 			if ~isempty(name)
 				reg_list = {reg(:).name};
 				i = find(ismember(reg_list,name));
-				reg(i).subfields = {reg(i).subfields{:}, subname};
+				reg(i).subf = {reg(i).subf{:}, subname};
 				reg(i).mask = [reg(i).mask, mask];
 			end
 		end
@@ -90,63 +93,51 @@ end
 
 fclose(f);
 
-%% generate matlab register class and C database
+%% generate matlab register class
 
-f1 = fopen('mpu_reg.m','w');
-f2 = fopen('mpu_reg.h','w');
+f = fopen('mpu_reg.m','w');
 
-fprintf(f1,'classdef mpu_reg\n');
-fprintf(f1,'	methods\n');
-fprintf(f1,'		function data = read(obj,addr)\n');
-fprintf(f1,'			%% WRAP YOUR READ FUNCTION HERE\n');
-fprintf(f1,'		end\n');
-fprintf(f1,'		function write(obj,addr,data)\n');
-fprintf(f1,'			%% WRAP YOUR WRITE FUNCTION HERE\n');
-fprintf(f1,'		end\n');
+fprintf(f,'classdef mpu_reg\n');
+fprintf(f,'\tmethods\n');
+fprintf(f,'\t\tfunction data = read(obj,addr)\n');
+fprintf(f,'\t\t\t%% WRAP YOUR READ FUNCTION HERE\n');
+fprintf(f,'\t\tend\n');
+fprintf(f,'\t\tfunction write(obj,addr,data)\n');
+fprintf(f,'\t\t\t%% WRAP YOUR WRITE FUNCTION HERE\n');
+fprintf(f,'\t\tend\n');
 
 for n = 1:length(reg)
 	
-	name = reg(n).name;
-	addr = reg(n).addr;
-	mask = reg(n).mask;
-	subf = reg(n).subfields;
+	fprintf(f,'\t\tfunction y = %s(obj,x)\n', reg(n).name);
+	fprintf(f,'\t\t\tif nargin < 2\n');
+	fprintf(f,'\t\t\t\ty = obj.read(%d);\n', reg(n).addr);
+	fprintf(f,'\t\t\telse\n');
+	fprintf(f,'\t\t\t\tobj.write(%d,x);\n', reg(n).addr);
+	fprintf(f,'\t\t\tend\n');
+	fprintf(f,'\t\tend\n');
 	
-	fprintf(f1,'		function y = %s(obj,x)\n', name);
-	fprintf(f1,'			if nargin <= 1\n');
-	fprintf(f1,'				y = obj.read(%d);\n', addr);
-	fprintf(f1,'			else\n');
-	fprintf(f1,'				obj.write(%d,x);\n', addr);
-	fprintf(f1,'			end\n');
-	fprintf(f1,'		end\n');
-	
-	if ~isempty(subf)
-		for m = 1:length(subf)
-			shift = find(fliplr(dec2bin(mask(m),8))=='1',1,'first')-1;
-			fprintf(f1,'		function y = %s__%s(obj,x)\n', name, subf{m});
-			fprintf(f1,'			r = obj.read(%d);\n', addr);
-			fprintf(f1,'			if nargin <= 1\n');
-			fprintf(f1,'				y = bitshift(bitand(r, %d), %d);\n', mask(m), -shift);
-			fprintf(f1,'			else\n');
-			fprintf(f1,'				w = bitand(bitshift(x, %d), %d) + bitand(r, %d);\n', shift, mask(m), 255-mask(m));
-			fprintf(f1,'				obj.write(%d,w);\n', addr);
-			fprintf(f1,'			end\n');
-			fprintf(f1,'		end\n');
+	if ~isempty(reg(n).subf)
+		for m = 1:length(reg(n).subf)
+			shift = find(fliplr(dec2bin(reg(n).mask(m),8))=='1',1,'first')-1;
+			fprintf(f,'\t\tfunction y = %s__%s(obj,x)\n', reg(n).name, reg(n).subf{m});
+			fprintf(f,'\t\t\tr = obj.read(%d);\n', reg(n).addr);
+			fprintf(f,'\t\t\tif nargin < 2\n');
+			fprintf(f,'\t\t\t\ty = bitshift(bitand(r, %d), %d);\n', reg(n).mask(m), -shift);
+			fprintf(f,'\t\t\telse\n');
+			fprintf(f,'\t\t\t\tw = bitand(bitshift(x, %d), %d) + bitand(r, %d);\n', shift, reg(n).mask(m), 2^8-1-reg(n).mask(m));
+			fprintf(f,'\t\t\t\tobj.write(%d,w);\n', reg(n).addr);
+			fprintf(f,'\t\t\tend\n');
+			fprintf(f,'\t\tend\n');
 		end
 	end
 end
 
-fprintf(f1,'	end\n');
-fprintf(f1,'	properties\n');
+fprintf(f,'\tend\n');
+fprintf(f,'\tproperties\n');
 for n = 1:length(reg)
-	fprintf(f1,'		%s_addr = %d;\n', reg(n).name, reg(n).addr);
+	fprintf(f,'\t\t%s_addr = %d;\n', reg(n).name, reg(n).addr);
 end
-fprintf(f1,'	end\n');
-fprintf(f1,'end\n');
+fprintf(f,'\tend\n');
+fprintf(f,'end\n');
 
-s = fileread('define_mpu_reg.h');
-s = strrep(s,'#define ','#define MPU_');
-fwrite(f2,s);
-
-fclose(f1);
-fclose(f2);
-
+fclose(f);

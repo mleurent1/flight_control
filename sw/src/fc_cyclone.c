@@ -1,69 +1,57 @@
-#include "stm32f303xc.h"
+#include "stm32f3xx.h"
+#include "usbd_cdc_if.h"
 #include "fc_reg.h"
 #include "mpu_reg.h"
 
-#define MOTOR_PULSE_MAX 2100
-#define VBAT_MAX 12.6f
+//######## DEFINTIONS ########
+
+#define MOTOR_PULSE_MAX 2100 // us
 #define VBAT_ALPHA 0.0002f
-#define BEEPER_PERIOD 500
-#define TIMEOUT_COMMAND 200
+#define BEEPER
+#define BEEPER_PERIOD 250 // ms
+#define TIMEOUT_COMMAND 220 // ms
 
 #define FLAG_SENSOR 0x01
-#define FLAG_COMMAND 0x02
-#define FLAG_SPI_TRANSACTION_COMPLETE 0x04
-#define FLAG_SPI_RETURN_ON_UART 0x08
-#define FLAG_UPDATE_REG 0x10
+#define FLAG_SENSOR_DEBUG 0x02
+#define FLAG_COMMAND 0x04
+#define FLAG_COMMAND_DEBUG 0x08
+#define FLAG_SPI_TRANSACTION_OK 0x10
+#define FLAG_SPI_RETURN_ON_USB 0x20
 
-#define FPU_CPACR ((uint32_t *) 0xE000ED88)
+#define REG_FLASH_ADDR 0x0803F800
 
-volatile uint8_t FLAG;
+//######## GLOBAL VARIABLES ########
 
-volatile uint32_t tick;
+uint8_t FLAG;
 
-volatile uint8_t uart3_rx_buffer[6];
-volatile uint8_t uart3_tx_buffer[25];
-volatile uint8_t uart2_rx_buffer[16];
-volatile uint8_t spi2_rx_buffer[15];
-volatile uint8_t spi2_tx_buffer[15];
+uint32_t tick;
 
-volatile uint16_t sensor_sample_count;
-volatile int16_t gyro_x_raw;
-volatile int16_t gyro_y_raw;
-volatile int16_t gyro_z_raw;
-volatile int16_t accel_x_raw;
-volatile int16_t accel_y_raw;
-volatile int16_t accel_z_raw;
-//volatile int16_t temp_raw;
-volatile uint16_t sensor_error_count;
+uint8_t uart2_rx_buffer[16];
+uint8_t spi2_rx_buffer[15];
+uint8_t spi2_tx_buffer[15];
 
-volatile uint16_t command_frame_count;
-volatile uint8_t command_fades;
-//volatile uint8_t command_system;
-volatile uint16_t throttle_raw;
-volatile uint16_t aileron_raw;
-volatile uint16_t elevator_raw;
-volatile uint16_t rudder_raw;
-volatile uint16_t armed_raw;
-volatile uint16_t chan6_raw;
-volatile uint16_t command_error_count;
+uint16_t sensor_sample_count;
+int16_t gyro_x_raw;
+int16_t gyro_y_raw;
+int16_t gyro_z_raw;
+int16_t accel_x_raw;
+int16_t accel_y_raw;
+int16_t accel_z_raw;
+//int16_t temp_raw;
+uint16_t sensor_error_count;
 
-void SetDmaUart3Tx(uint8_t size)
-{
-	DMA1_Channel2->CCR = DMA_CCR_MINC | DMA_CCR_DIR;
-	DMA1_Channel2->CMAR = (uint32_t)uart3_tx_buffer;
-	DMA1_Channel2->CPAR = (uint32_t)&(USART3->TDR);
-	DMA1_Channel2->CNDTR = size;
-	DMA1_Channel2->CCR |= DMA_CCR_EN;
-}
+uint16_t command_frame_count;
+uint8_t command_fades;
+//uint8_t command_system;
+uint16_t throttle_raw;
+uint16_t aileron_raw;
+uint16_t elevator_raw;
+uint16_t rudder_raw;
+uint16_t armed_raw;
+uint16_t chan6_raw;
+uint16_t command_error_count;
 
-void SetDmaUart3Rx()
-{
-	DMA1_Channel3->CCR = DMA_CCR_TCIE | DMA_CCR_MINC;
-	DMA1_Channel3->CMAR = (uint32_t)uart3_rx_buffer;
-	DMA1_Channel3->CPAR = (uint32_t)&(USART3->RDR);
-	DMA1_Channel3->CNDTR = 6;
-	DMA1_Channel3->CCR |= DMA_CCR_EN;
-}
+//######## PIVATE FUNCTIONS ########
 
 void SetDmaSpi2Rx(uint8_t size)
 {
@@ -82,7 +70,7 @@ void SetDmaSpi2Tx(uint8_t size)
 	DMA1_Channel5->CNDTR = size;
 	DMA1_Channel5->CCR |= DMA_CCR_EN;
 	
-	FLAG &= ~FLAG_SPI_TRANSACTION_COMPLETE;
+	FLAG &= ~FLAG_SPI_TRANSACTION_OK;
 	SPI2->CR1 |= SPI_CR1_SPE;
 }
 
@@ -95,10 +83,10 @@ void SetDmaUart2Rx()
 	DMA1_Channel6->CCR |= DMA_CCR_EN;
 }
 
-void Wait(uint32_t ticks)
+void wait_ms(uint32_t t)
 {
 	uint32_t next_tick;
-	next_tick = tick + ticks;
+	next_tick = tick + t;
 	while (tick != next_tick)
 		__WFI();
 }
@@ -109,7 +97,7 @@ void SpiWrite(uint8_t addr, uint8_t data)
 	spi2_tx_buffer[1] = data;
 	SetDmaSpi2Rx(2);
 	SetDmaSpi2Tx(2);
-	Wait(1);
+	wait_ms(1);
 }
 
 uint8_t SpiRead(uint8_t addr)
@@ -117,11 +105,11 @@ uint8_t SpiRead(uint8_t addr)
 	spi2_tx_buffer[0] = 0x80 | (addr & 0x7F);
 	SetDmaSpi2Rx(2);
 	SetDmaSpi2Tx(2);
-	Wait(1);
+	wait_ms(1);
 	return spi2_rx_buffer[1];
 }
 
-void uint32_to_float(volatile uint32_t * b, float * f)
+void uint32_to_float(uint32_t * b, float * f)
 {
 	union {
 		float f;
@@ -131,7 +119,7 @@ void uint32_to_float(volatile uint32_t * b, float * f)
 	*f = f2b.f;
 }
 
-void float_to_bytes(float * f, volatile uint8_t * b)
+void float_to_bytes(float * f, uint8_t * b)
 {
 	union {
 		float f;
@@ -144,7 +132,7 @@ void float_to_bytes(float * f, volatile uint8_t * b)
 	b[3] = f2b.b[3];
 }
 
-void float_to_uint32(float * f, volatile uint32_t * b)
+void float_to_uint32(float * f, uint32_t * b)
 {
 	union {
 		float f;
@@ -169,77 +157,12 @@ void EXTI15_10_IRQHandler()
 	
 	sensor_sample_count++;
 	
-	if (REG_CTRL__READ_SENSOR)
+	if (REG_CTRL__MPU_HOST_CTRL == 0)
 	{
-		if (FLAG & FLAG_SPI_TRANSACTION_COMPLETE)
-		{
-			accel_x_raw = ((int16_t)spi2_rx_buffer[1]  << 8) | (int16_t)spi2_rx_buffer[2];
-			accel_y_raw = ((int16_t)spi2_rx_buffer[3]  << 8) | (int16_t)spi2_rx_buffer[4];
-			accel_z_raw = ((int16_t)spi2_rx_buffer[5]  << 8) | (int16_t)spi2_rx_buffer[6];
-			//temp_raw    = ((int16_t)spi2_rx_buffer[7]  << 8) | (int16_t)spi2_rx_buffer[8];
-			gyro_x_raw  = ((int16_t)spi2_rx_buffer[9]  << 8) | (int16_t)spi2_rx_buffer[10];
-			gyro_y_raw  = ((int16_t)spi2_rx_buffer[11] << 8) | (int16_t)spi2_rx_buffer[12];
-			gyro_z_raw  = ((int16_t)spi2_rx_buffer[13] << 8) | (int16_t)spi2_rx_buffer[14];
-			
-			FLAG |= FLAG_SENSOR;
-		}
-		else
-		{
-			sensor_error_count++;
-		}
-		
 		spi2_tx_buffer[0] = 0x80 | 59;
 		SetDmaSpi2Rx(15);
 		SetDmaSpi2Tx(15);
 	}
-}
-
-void DMA1_Channel3_IRQHandler()
-{
-	uint8_t cmd;
-	uint8_t addr;
-	
-	DMA1->IFCR = DMA_IFCR_CTCIF3; // clear flag
-	
-	cmd = uart3_rx_buffer[0];
-	addr = uart3_rx_buffer[1];
-	
-	switch (cmd)
-	{
-		case 0: 
-		{
-			uart3_tx_buffer[0] = (uint8_t)((reg[addr] >> 24) & 0xFF);
-			uart3_tx_buffer[1] = (uint8_t)((reg[addr] >> 16) & 0xFF);
-			uart3_tx_buffer[2] = (uint8_t)((reg[addr] >>  8) & 0xFF);
-			uart3_tx_buffer[3] = (uint8_t)((reg[addr] >>  0) & 0xFF);
-			SetDmaUart3Tx(4);
-			break;
-		}
-		case 1:
-		{
-			reg[addr] = ((uint32_t)uart3_rx_buffer[2] << 24) | ((uint32_t)uart3_rx_buffer[3] << 16) | ((uint32_t)uart3_rx_buffer[4] << 8) | (uint32_t)uart3_rx_buffer[5];
-			FLAG |= FLAG_UPDATE_REG;
-			break;
-		}
-		case 2:
-		{
-			FLAG |= FLAG_SPI_RETURN_ON_UART;
-			spi2_tx_buffer[0] = 0x80 | (addr & 0x7F);
-			SetDmaSpi2Rx(2);
-			SetDmaSpi2Tx(2);
-			break;
-		}
-		case 3:
-		{
-			spi2_tx_buffer[0] = addr & 0x7F;
-			spi2_tx_buffer[1] = uart3_rx_buffer[5];
-			SetDmaSpi2Rx(2);
-			SetDmaSpi2Tx(2);
-			break;
-		}
-	}
-	
-	SetDmaUart3Rx();
 }
 
 void DMA1_Channel4_IRQHandler()
@@ -268,13 +191,21 @@ void DMA1_Channel4_IRQHandler()
 		SPI2->DR;
 	
 	if (error == 0)
-		FLAG |= FLAG_SPI_TRANSACTION_COMPLETE;
-	
-	if (FLAG & FLAG_SPI_RETURN_ON_UART)
 	{
-		FLAG &= ~FLAG_SPI_RETURN_ON_UART;
-		uart3_tx_buffer[0] = spi2_rx_buffer[1];
-		SetDmaUart3Tx(1);
+		FLAG |= FLAG_SPI_TRANSACTION_OK;
+		if (REG_CTRL__MPU_HOST_CTRL == 0)
+			FLAG |= FLAG_SENSOR;
+	}
+	else if (REG_CTRL__MPU_HOST_CTRL == 0)
+		sensor_error_count++;
+	
+	if (FLAG & FLAG_SPI_RETURN_ON_USB)
+	{
+		FLAG &= ~FLAG_SPI_RETURN_ON_USB;
+		
+		USBD_CDC_Itf_tx_buffer[0] = spi2_rx_buffer[1];
+		USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_Itf_tx_buffer, 1);
+		USBD_CDC_TransmitPacket(&USBD_device_handler);
 	}
 }
 
@@ -336,6 +267,108 @@ void DMA1_Channel6_IRQHandler()
 	SetDmaUart2Rx();
 }
 
+void USB_LP_CAN_RX0_IRQHandler(void)
+{
+	HAL_PCD_IRQHandler(&PCD_handler);
+}
+
+void HostCommand(uint8_t* buffer)
+{
+	uint8_t cmd;
+	uint8_t addr;
+	uint32_t val;
+	uint32_t* flash_r = (uint32_t*)REG_FLASH_ADDR;
+	uint16_t* flash_w = (uint16_t*)REG_FLASH_ADDR;
+	
+	cmd = buffer[0];
+	addr = buffer[1];
+	
+	switch (cmd)
+	{
+		case 0: // REG read
+		{
+			if (reg_properties[addr].is_float)
+				float_to_uint32(&regf[addr], &val);
+			else
+				val = reg[addr];
+			USBD_CDC_Itf_tx_buffer[0] = (uint8_t)((val >> 24) & 0xFF);
+			USBD_CDC_Itf_tx_buffer[1] = (uint8_t)((val >> 16) & 0xFF);
+			USBD_CDC_Itf_tx_buffer[2] = (uint8_t)((val >>  8) & 0xFF);
+			USBD_CDC_Itf_tx_buffer[3] = (uint8_t)((val >>  0) & 0xFF);
+			USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_Itf_tx_buffer, 4);
+			USBD_CDC_TransmitPacket(&USBD_device_handler);
+			break;
+		}
+		case 1: // REG write
+		{
+			if (!reg_properties[addr].read_only)
+			{
+				val = ((uint32_t)buffer[2] << 24) | ((uint32_t)buffer[3] << 16) | ((uint32_t)buffer[4] << 8) | (uint32_t)buffer[5];
+				if (reg_properties[addr].is_float)
+					uint32_to_float(&val, &regf[addr]);
+				else
+					reg[addr] = val;
+			}
+			break;
+		}
+		case 2: // SPI read to MPU
+		{
+			FLAG |= FLAG_SPI_RETURN_ON_USB;
+			spi2_tx_buffer[0] = 0x80 | (addr & 0x7F);
+			SetDmaSpi2Rx(2);
+			SetDmaSpi2Tx(2);
+			break;
+		}
+		case 3: // SPI write to MPU
+		{
+			spi2_tx_buffer[0] = addr & 0x7F;
+			spi2_tx_buffer[1] = buffer[5];
+			SetDmaSpi2Rx(2);
+			SetDmaSpi2Tx(2);
+			break;
+		}
+		case 4: // Flash read
+		{
+			val = flash_r[addr];
+			USBD_CDC_Itf_tx_buffer[0] = (uint8_t)((val >> 24) & 0xFF);
+			USBD_CDC_Itf_tx_buffer[1] = (uint8_t)((val >> 16) & 0xFF);
+			USBD_CDC_Itf_tx_buffer[2] = (uint8_t)((val >>  8) & 0xFF);
+			USBD_CDC_Itf_tx_buffer[3] = (uint8_t)((val >>  0) & 0xFF);
+			USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_Itf_tx_buffer, 4);
+			USBD_CDC_TransmitPacket(&USBD_device_handler);
+			break;
+		}
+		case 5: // Flash write
+		{
+			if (FLASH->CR & FLASH_CR_LOCK)
+			{
+				FLASH->KEYR = 0x45670123;
+				FLASH->KEYR = 0xCDEF89AB;
+			}
+			FLASH->CR |= FLASH_CR_PG;
+			flash_w[addr*2] = ((uint16_t)buffer[4] << 8) | (uint16_t)buffer[5];
+			flash_w[addr*2+1] = ((uint16_t)buffer[2] << 8) | (uint16_t)buffer[3];
+			while (FLASH->SR & FLASH_SR_BSY) {}
+			FLASH->CR &= ~FLASH_CR_PG;
+			break;
+		}
+		case 6: // Flash page erase
+		{
+			if (FLASH->CR & FLASH_CR_LOCK)
+			{
+				FLASH->KEYR = 0x45670123;
+				FLASH->KEYR = 0xCDEF89AB;
+			}
+			FLASH->CR |= FLASH_CR_PER;
+			FLASH->AR = REG_FLASH_ADDR;
+			FLASH->CR |= FLASH_CR_STRT;
+			while (FLASH->SR & FLASH_SR_BSY) {}
+			FLASH->CR &= ~FLASH_CR_PER;
+			break;
+		}
+	}
+}
+
 //######## MAIN #########
 
 int main()
@@ -378,22 +411,12 @@ int main()
 	float pitch;
 	float roll;
 	float yaw;
-	float pitch_p;
-	float pitch_i;
-	float pitch_d;
-	float roll_p;
-	float roll_i;
-	float roll_d;
-	float yaw_p;
-	float yaw_i;
-	float yaw_d;
 	
 	float motor[4];
 	int32_t motor_clip[4];
 	uint16_t motor_raw[4];
 	
 	float vbat_acc;
-	float vbat_min;
 	float vbat;
 	
 	uint16_t t;
@@ -405,12 +428,33 @@ int main()
 	uint32_t gpiob_ospeedr;
 	uint32_t gpiob_otyper;
 	
-	//####### VAR AND REG INIT #######
+	_Bool reg_flash_valid;
+	uint32_t* flash_r;
+	uint32_t reg_default;
 	
-	for(i=0; i<REG_NB_ADDR; i++)
-		reg[i] = reg_init[i];
+	//####### REG INIT #######
 	
-	FLAG = FLAG_UPDATE_REG;
+	flash_r = (uint32_t*)REG_FLASH_ADDR;
+	if (flash_r[0] == reg_properties[0].dflt)
+		reg_flash_valid = 1;
+	else
+		reg_flash_valid = 0;
+	
+	for(i=0; i<NB_REG; i++)
+	{
+		if (reg_properties[i].flash && reg_flash_valid)
+			reg_default = flash_r[i];
+		else
+			reg_default = reg_properties[i].dflt;
+		if (reg_properties[i].is_float)
+			uint32_to_float(&reg_default, &regf[i]);
+		else
+			reg[i] = reg_default;
+	}
+	
+	//####### VAR INIT #######
+	
+	FLAG = 0;
 	
 	command_frame_count = 0;
 	command_error_count = 0;
@@ -447,76 +491,114 @@ int main()
 	error_roll_int = 0;
 	error_yaw_int = 0;
 		
-	vbat_acc = VBAT_MAX / VBAT_ALPHA;
-	vbat = VBAT_MAX;
+	vbat_acc = REG_VBAT_MAX / VBAT_ALPHA;
+	vbat = REG_VBAT_MAX;
 	
-	//######## CLOCK ##########
+	//######## CLOCK ENABLE ##########
 	
-	RCC->APB1ENR = RCC_APB1ENR_USART2EN | RCC_APB1ENR_USART3EN | RCC_APB1ENR_SPI2EN | RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN;
-	RCC->APB2ENR = RCC_APB2ENR_SYSCFGEN;
-	RCC->AHBENR |= RCC_AHBENR_DMA1EN | RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOBEN | RCC_AHBENR_ADC12EN;
-	ADC12_COMMON->CCR = ADC12_CCR_CKMODE_0;
-	SystemCoreClockUpdate();
-	SysTick_Config(SystemCoreClock/1000); // 1 ms
+	// UART clock enable
+	RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
+	// SPI clock enable
+	RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
+	// Timer clock enable
+	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN;
+	// System configuration controller clock enable (to manage external interrupt line connection to GPIOs)
+	RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
+	// DMA clock enable
+	RCC->AHBENR |= RCC_AHBENR_DMA1EN;
+	// GPIO clock enable 
+	RCC->AHBENR |= RCC_AHBENR_GPIOAEN | RCC_AHBENR_GPIOBEN;
+	// ADC clock enable
+	RCC->AHBENR |= RCC_AHBENR_ADC12EN;
 	
 	//####### GPIO ##########
 	
-	// A0 : Beep
-	// A1 : Binding ON bar
-	// A4 : Motor 2
-	// A5 : VBAT/10
-	// A6 : Motor 1
-	// A15: MPU interrupt
-	GPIOA->MODER &= ~(GPIO_MODER_MODER0_Msk | GPIO_MODER_MODER1_Msk | GPIO_MODER_MODER4_Msk | GPIO_MODER_MODER5_Msk | GPIO_MODER_MODER6_Msk | GPIO_MODER_MODER15_Msk); //Reset MODER
-	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPDR0_Msk | GPIO_PUPDR_PUPDR1_Msk | GPIO_PUPDR_PUPDR4_Msk | GPIO_PUPDR_PUPDR5_Msk | GPIO_PUPDR_PUPDR6_Msk | GPIO_PUPDR_PUPDR15_Msk); // Reset PUPDR
-	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDER_OSPEEDR0_Msk | GPIO_OSPEEDER_OSPEEDR4_Msk | GPIO_OSPEEDER_OSPEEDR6_Msk); // Reset OSPEEDR for output only
-	GPIOA->MODER |= GPIO_MODER_MODER0_1 | GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5 | GPIO_MODER_MODER6_1;
-	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR1_0; // PU
-	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR4 | GPIO_OSPEEDER_OSPEEDR6; // Full-speed
-	GPIOA->AFR[0] = (GPIO_AFRL_AFRL0_Msk & (1 << GPIO_AFRL_AFRL0_Pos)) | (GPIO_AFRL_AFRL4_Msk & (2 << GPIO_AFRL_AFRL4_Pos)) | (GPIO_AFRL_AFRL6_Msk & (2 << GPIO_AFRL_AFRL6_Pos)); // AF1 = TIM2, AF2 = TIM3
+	// MODER: 00:IN, 01:OUT, 10:AF, 11:analog
+	// PUPDR: 00:float 01:PU, 10:PD
+	// OTYPER: 0:PP, 1:OD
+	// OSPEEDR: x0:low 01:mid 11:high
 	
-	// B0 : Motor 3
-	// B1 : Motor 4
-	// B3 : UART2 Tx NOT USED
-	// B4 : UART2 Rx
-	// B5 : Red LED
-	// B6 : UART1 Tx NOT USED
-	// B7 : UART1 Rx NOT USED
-	// B10: UART3 Tx
-	// B11: UART3 Rx
-	// B12: SPI2 CS
-	// B13: SPI2 CLK
-	// B14: SPI2 MISO
-	// B15: SPI2 MOSI
-	GPIOB->MODER &= ~(GPIO_MODER_MODER0_Msk | GPIO_MODER_MODER1_Msk | GPIO_MODER_MODER4_Msk | GPIO_MODER_MODER5_Msk | GPIO_MODER_MODER10_Msk | GPIO_MODER_MODER11_Msk | GPIO_MODER_MODER12_Msk | GPIO_MODER_MODER13_Msk | GPIO_MODER_MODER14_Msk | GPIO_MODER_MODER15_Msk); // Reset MODER
-	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR0_Msk | GPIO_PUPDR_PUPDR1_Msk | GPIO_PUPDR_PUPDR4_Msk | GPIO_PUPDR_PUPDR5_Msk | GPIO_PUPDR_PUPDR10_Msk | GPIO_PUPDR_PUPDR11_Msk | GPIO_PUPDR_PUPDR12_Msk | GPIO_PUPDR_PUPDR13_Msk | GPIO_PUPDR_PUPDR14_Msk | GPIO_PUPDR_PUPDR15_Msk); // Reset PUPDR
-	GPIOB->OSPEEDR &= ~(GPIO_OSPEEDER_OSPEEDR0_Msk | GPIO_OSPEEDER_OSPEEDR1_Msk | GPIO_OSPEEDER_OSPEEDR5_Msk | GPIO_OSPEEDER_OSPEEDR10_Msk | GPIO_OSPEEDER_OSPEEDR12_Msk | GPIO_OSPEEDER_OSPEEDR13_Msk | GPIO_OSPEEDER_OSPEEDR15_Msk); // Reset OSPEEDR for output only
-	GPIOB->MODER |= GPIO_MODER_MODER0_1 | GPIO_MODER_MODER1_1 | GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5_0 | GPIO_MODER_MODER10_1 | GPIO_MODER_MODER11_1 | GPIO_MODER_MODER12_1 | GPIO_MODER_MODER13_1 | GPIO_MODER_MODER14_1 | GPIO_MODER_MODER15_1;
-	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR12_0; // PU
-	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR0 | GPIO_OSPEEDER_OSPEEDR1 | GPIO_OSPEEDER_OSPEEDR10 | GPIO_OSPEEDER_OSPEEDR12 | GPIO_OSPEEDER_OSPEEDR13 | GPIO_OSPEEDER_OSPEEDR15; // Full-speed
-	GPIOB->OTYPER = GPIO_OTYPER_OT_5 | GPIO_OTYPER_OT_12; // OD
-	GPIOB->AFR[0] = (GPIO_AFRL_AFRL0_Msk & (2 << GPIO_AFRL_AFRL0_Pos)) | (GPIO_AFRL_AFRL1_Msk & (2 << GPIO_AFRL_AFRL1_Pos)) | (GPIO_AFRL_AFRL4_Msk & (7 << GPIO_AFRL_AFRL4_Pos)); // AF2 = TIM3, AF7 = USART2
-	GPIOB->AFR[1] = (GPIO_AFRH_AFRH2_Msk & (7 << GPIO_AFRH_AFRH2_Pos)) | (GPIO_AFRH_AFRH3_Msk & (7 << GPIO_AFRH_AFRH3_Pos)) | (GPIO_AFRH_AFRH4_Msk & (5 << GPIO_AFRH_AFRH4_Pos)) | (GPIO_AFRH_AFRH5_Msk & (5 << GPIO_AFRH_AFRH5_Pos)) | (GPIO_AFRH_AFRH6_Msk & (5 << GPIO_AFRH_AFRH6_Pos)) | (GPIO_AFRH_AFRH7_Msk & (5 << GPIO_AFRH_AFRH7_Pos)); // AF7 = USART3, AF5 = SPI2
+	// Reset non-zero registers
+	GPIOA->MODER = 0;
+	GPIOA->PUPDR = 0;
+	GPIOA->OSPEEDR = 0;
+	GPIOB->MODER = 0;
+	GPIOB->PUPDR = 0;
+	GPIOB->OSPEEDR = 0;
+	
+	// A0 : Beeper, to TIM2 (AF1)
+	#ifdef BEEPER
+		GPIOA->MODER |= GPIO_MODER_MODER0_1;
+		GPIOA->AFR[0] |= 1 << GPIO_AFRL_AFRL0_Pos;
+	#endif
+	// A1 : NOT Binding receiver, need pull-up (put jumper to GND to bind)
+	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR1_0;
+	// A4 : Motor 2, to TIM3, AF2
+	// A6 : Motor 1, to TIM3, AF2
+	GPIOA->MODER |= GPIO_MODER_MODER4_1 | GPIO_MODER_MODER6_1;
+	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR4 | GPIO_OSPEEDER_OSPEEDR6;
+	GPIOA->AFR[0] |= (2 << GPIO_AFRL_AFRL4_Pos) | (2 << GPIO_AFRL_AFRL6_Pos);
+	// A5 : VBAT/10
+	GPIOA->MODER |= GPIO_MODER_MODER5;
+	// A11: USB_DM, AF14
+	// A12: USB_DP, AF14
+	GPIOA->MODER |= GPIO_MODER_MODER11_1 | GPIO_MODER_MODER12_1;
+	GPIOA->AFR[1] |= (14 << GPIO_AFRH_AFRH3_Pos) | (14 << GPIO_AFRH_AFRH4_Pos);
+	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR11 | GPIO_OSPEEDER_OSPEEDR12;
+	// A15: MPU interrupt
+	// B0 : Motor 3, to TIM3, AF2
+	// B1 : Motor 4, to TIM3, AF2
+	GPIOB->MODER |= GPIO_MODER_MODER0_1 | GPIO_MODER_MODER1_1;
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR0 | GPIO_OSPEEDER_OSPEEDR1;
+	GPIOB->AFR[0] |= (2 << GPIO_AFRL_AFRL0_Pos) | (2 << GPIO_AFRL_AFRL1_Pos);
+	// B3 : UART2 Tx, AF7, NOT USED
+	// B4 : UART2 Rx, AF7
+	GPIOB->MODER |= GPIO_MODER_MODER4_1;
+	GPIOB->AFR[0] |= 7 << GPIO_AFRL_AFRL4_Pos;
+	// B5 : Red LED, need open-drain (external pull-up)
+	GPIOB->MODER |= GPIO_MODER_MODER5_0;
+	GPIOB->OTYPER |= GPIO_OTYPER_OT_5;
+	// B6 : UART1 Tx, NOT USED
+	// B7 : UART1 Rx, NOT USED
+	// B8 : USB disconnect pin, need open-drain (external pull-up)
+	GPIOB->MODER |= GPIO_MODER_MODER8_0;
+	GPIOB->OTYPER |= GPIO_OTYPER_OT_8;
+	// B10: UART3 Tx, AF7, NOT USED
+	// B11: UART3 Rx, AF7, NOT USED
+	// B12: SPI2 CS, AF5, need open-drain and pull-up
+	// B13: SPI2 CLK, AF5
+	// B14: SPI2 MISO, AF5
+	// B15: SPI2 MOSI, AF5
+	GPIOB->MODER |= GPIO_MODER_MODER12_1 | GPIO_MODER_MODER13_1 | GPIO_MODER_MODER14_1 | GPIO_MODER_MODER15_1;
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR12 | GPIO_OSPEEDER_OSPEEDR13 | GPIO_OSPEEDER_OSPEEDR15;
+	GPIOB->OTYPER |= GPIO_OTYPER_OT_12;
+	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR12_0;
+	GPIOB->AFR[1] |= (5 << GPIO_AFRH_AFRH4_Pos) | (5 << GPIO_AFRH_AFRH5_Pos) | (5 << GPIO_AFRH_AFRH6_Pos) | (5 << GPIO_AFRH_AFRH7_Pos);
 	
 	//####### TIM ########
 	
-	TIM2->PSC = 7999; // ms
-	TIM2->ARR = 2*BEEPER_PERIOD;
-	TIM2->CCR1 = BEEPER_PERIOD;
+	// PWM for beeper
+	TIM2->PSC = 35999; // 0.5ms
+	TIM2->ARR = BEEPER_PERIOD*4;
+	TIM2->CCR1 = BEEPER_PERIOD*2;
 	TIM2->CCER = TIM_CCER_CC1E;
 	TIM2->CCMR1 = TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1M_0;
 	
+	// One-pulse mode for OneShot125 
 	TIM3->CR1 = TIM_CR1_OPM;
-	TIM3->PSC = 0; // 8MHz/(x+1)
+	TIM3->PSC = 8; // 0.125us
 	TIM3->ARR = MOTOR_PULSE_MAX;
 	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
 	TIM3->CCMR1 = TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1M_0 | TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2M_0;
 	TIM3->CCMR2 = TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1 | TIM_CCMR2_OC3M_0 | TIM_CCMR2_OC4M_2 | TIM_CCMR2_OC4M_1 | TIM_CCMR2_OC4M_0;
 	
-	TIM6->PSC = 7999; // ms
+	// Timer for receiver timeout
+	TIM6->PSC = 35999; // 0.5ms
 	TIM6->ARR = 65535;
 	TIM6->CR1 = TIM_CR1_CEN;
-	TIM7->PSC = 7; // us
+	
+	// Timer for loop time
+	TIM7->PSC = 71; // 1us
 	TIM7->ARR = 65535;
 	TIM7->CR1 = TIM_CR1_CEN;
 	
@@ -532,26 +614,28 @@ int main()
 		
 		while ((GPIOA->IDR & GPIO_IDR_1) == 0)
 		{
+			// ESC calibration of max command value
 			TIM3->CCR1 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
 			TIM3->CCR2 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
 			TIM3->CCR3 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
 			TIM3->CCR4 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
 			TIM3->CR1 |= TIM_CR1_CEN;
 			
+			// Receiver binding sequence
 			if (t == 10)
 			{
 				GPIOB->BSRR = GPIO_BSRR_BS_4;
 				GPIOB->MODER &= ~GPIO_MODER_MODER4_Msk;
-				GPIOB->MODER |= GPIO_MODER_MODER4_0; // Output GP
+				GPIOB->MODER |= GPIO_MODER_MODER4_0; // OUT
 				GPIOB->OTYPER &= ~GPIO_OTYPER_OT_4; // PP
 				GPIOB->OSPEEDR &= ~GPIO_OSPEEDER_OSPEEDR4_Msk; // Low speed
 				GPIOB->PUPDR &= ~GPIO_PUPDR_PUPDR4_Msk; // No PU/PD
 				for (i=0; i<9; i++)
 				{
 					GPIOB->BSRR = GPIO_BSRR_BR_4;
-					Wait(1);
+					wait_ms(1);
 					GPIOB->BSRR = GPIO_BSRR_BS_4;
-					Wait(1);
+					wait_ms(1);
 				}
 				GPIOB->MODER = gpiob_moder;
 				GPIOB->PUPDR = gpiob_pupdr;
@@ -560,7 +644,7 @@ int main()
 			}
 			
 			t++;
-			Wait(10);
+			wait_ms(10);
 		}
 		
 		
@@ -571,33 +655,31 @@ int main()
 			TIM3->CCR3 = MOTOR_PULSE_MAX - REG_MOTOR__MIN;
 			TIM3->CCR4 = MOTOR_PULSE_MAX - REG_MOTOR__MIN;
 			TIM3->CR1 |= TIM_CR1_CEN;
-			Wait(10);
+			wait_ms(10);
 		}
 	}
 	
 	//######## UART ##########
 	
-	USART3->BRR = 69; // 115200 bps
-	USART3->CR1 = USART_CR1_UE | USART_CR1_RE | USART_CR1_TE;
-	USART3->CR3 = USART_CR3_DMAR | USART_CR3_DMAT;
-	SetDmaUart3Rx();
-	
-	USART2->BRR = 69; // 115200 bps
+	USART2->BRR = 0x271; // 115200 bps
 	USART2->CR1 = USART_CR1_UE | USART_CR1_RE;
 	USART2->CR3 = USART_CR3_DMAR;
 	SetDmaUart2Rx();
 	
 	//####### SPI #########
 	
-	SPI2->CR1 = SPI_CR1_MSTR | SPI_CR1_BR_0 | SPI_CR1_BR_1;
+	SPI2->CR1 = SPI_CR1_MSTR | (5 << SPI_CR1_BR_Pos); // SPI clock = clock APB1/64 = 36MHz/64 = 562.5 kHz
 	SPI2->CR2 = SPI_CR2_SSOE | SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN | SPI_CR2_FRXTH;
 	
 	//####### ADC ########
 	
+	// Select AHB clock as ADC clock 
+	ADC12_COMMON->CCR = ADC12_CCR_CKMODE_0;
+	
 	// Regulator startup
 	ADC2->CR = 0;
 	ADC2->CR = ADC_CR_ADVREGEN_0;
-	Wait(1);
+	wait_ms(1);
 	
 	// Calibration
 	ADC2->CR |= ADC_CR_ADCAL;
@@ -607,46 +689,58 @@ int main()
 	ADC2->CR |= ADC_CR_ADEN;
 	while ((ADC2->ISR & ADC_ISR_ADRDY) == 0) {}
 	
-	ADC2->SMPR1 = (4 << ADC_SMPR1_SMP2_Pos) & ADC_SMPR1_SMP2_Msk;
-	ADC2->SQR1 = (2 << ADC_SQR1_SQ1_Pos) & ADC_SQR1_SQ1_Msk;
+	ADC2->SMPR1 = 4 << ADC_SMPR1_SMP2_Pos;
+	ADC2->SQR1 = 2 << ADC_SQR1_SQ1_Pos;
 	
 	//####### INTERRUPT #######
 	
+	// MPU interrrupt
 	SYSCFG->EXTICR[3] = SYSCFG_EXTICR4_EXTI15_PA;
 	EXTI->RTSR |= EXTI_RTSR_TR15;
 	//EXTI->IMR = EXTI_IMR_MR15; // To be enabled after MPU init
 	
 	NVIC_EnableIRQ(EXTI15_10_IRQn);
-	NVIC_EnableIRQ(DMA1_Channel3_IRQn);
 	NVIC_EnableIRQ(DMA1_Channel4_IRQn);
 	NVIC_EnableIRQ(DMA1_Channel6_IRQn);
+	NVIC_EnableIRQ(USB_LP_CAN_RX0_IRQn);
 	
 	NVIC_SetPriority(EXTI15_10_IRQn,2);
-	NVIC_SetPriority(DMA1_Channel3_IRQn,4);
 	NVIC_SetPriority(DMA1_Channel4_IRQn,1);
 	NVIC_SetPriority(DMA1_Channel6_IRQn,3);
+	NVIC_SetPriority(USB_LP_CAN_RX0_IRQn,4);
+	
+	//######## USB ############
+	
+	USB->CNTR &= ~USB_CNTR_PDWN;
+	wait_ms(1);
+	
+	USBD_Init(&USBD_device_handler, &USBD_VCP_descriptor, 0);
+	USBD_RegisterClass(&USBD_device_handler, &USBD_CDC);
+	USBD_CDC_RegisterInterface(&USBD_device_handler, &USBD_CDC_Itf_fops);
+	USBD_Start(&USBD_device_handler);
 	
 	//####### MPU INIT #########
 	
 	SpiWrite(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__DEVICE_RST);
-	Wait(100);
+	wait_ms(100);
 	SpiWrite(MPU_SIGNAL_PATH_RST, MPU_SIGNAL_PATH_RST__ACCEL_RST | MPU_SIGNAL_PATH_RST__GYRO_RST | MPU_SIGNAL_PATH_RST__TEMP_RST);
-	Wait(100);
+	wait_ms(100);
 	SpiWrite(MPU_USER_CTRL, MPU_USER_CTRL__I2C_IF_DIS);
 	SpiWrite(MPU_PWR_MGMT_1, 0); // Get MPU out of sleep
-	Wait(100);
+	wait_ms(100);
 	SpiWrite(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1)); // Set CLK = gyro X clock
-	Wait(100);
+	wait_ms(100);
 	//SpiWrite(MPU_SMPLRT_DIV, 0); // Sample rate = Fs/(x+1)
-	SpiWrite(MPU_CFG, MPU_CFG__DLPF_CFG(2)); // Filter ON => Fs=1kHz
-	SpiWrite(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(2)); // Full scale = +/-1000 deg/s
-	SpiWrite(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(2)); // Full scale = +/- 8g
-	Wait(100); // wait for filter to settle
+	SpiWrite(MPU_CFG, MPU_CFG__DLPF_CFG(1)); // Filter ON => Fs=1kHz, else 8kHz
+	SpiWrite(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
+	SpiWrite(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
+	wait_ms(100); // wait for filter to settle
 	SpiWrite(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
 	
 	EXTI->IMR = EXTI_IMR_MR15;
 	
-	// Gyro calibration
+	//####### GYRO calibration ####### 
+	
 	while (sensor_sample_count < 1000)
 	{
 		if (FLAG & FLAG_SENSOR)
@@ -658,9 +752,9 @@ int main()
 			gyro_z_dc += (float)gyro_z_raw;
 			
 			// Blink LED during calibration
-			if ((sensor_sample_count & 0x3F) == 0)
+			if ((sensor_sample_count & 0x7F) == 0)
 				GPIOB->BSRR = GPIO_BSRR_BS_5;
-			else if ((sensor_sample_count & 0x3F) == 32)
+			else if ((sensor_sample_count & 0x7F) == 64)
 				GPIOB->BSRR = GPIO_BSRR_BR_5;
 		}
 		__WFI();
@@ -669,13 +763,18 @@ int main()
 	gyro_y_dc = gyro_y_dc / 1000.0f;
 	gyro_z_dc = gyro_z_dc / 1000.0f;
 	
-	gyro_x_scale = 0.0305f;
-	gyro_y_scale = 0.0305f;
-	gyro_z_scale = 0.0305f;
+	gyro_x_scale = 0.061035f;
+	gyro_y_scale = 0.061035f;
+	gyro_z_scale = 0.061035f;
 	
-	accel_x_scale = 0.000244f;
-	accel_y_scale = 0.000244f;
-	accel_z_scale = 0.000244f;
+	accel_x_scale = 0.00048828f;
+	accel_y_scale = 0.00048828f;
+	accel_z_scale = 0.00048828f;
+	
+	//####### END OF INIT TASKS #####
+	
+	// Disable Systick interrupt, not needed anymore (but can still use COUNTFLAG)
+	SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
 	
 	//######## MAIN LOOP #########
 	
@@ -688,27 +787,36 @@ int main()
 		if (FLAG & FLAG_COMMAND)
 		{
 			FLAG &= ~FLAG_COMMAND;
+			FLAG |= FLAG_COMMAND_DEBUG; // Set flag to indicate data is ready for debug
 			
 			TIM6->EGR = TIM_EGR_UG; // Reset timer
 			
-			if (REG_CTRL__LED == 3)
+			if (REG_CTRL__LED_SELECT == 3)
 			{
-				if ((command_frame_count & 0x3F) == 0)
+				if ((command_frame_count & 0xFF) == 0)
 					GPIOB->BSRR = GPIO_BSRR_BR_5;
-				else if ((command_frame_count & 0x3F) == 32)
+				else if ((command_frame_count & 0xFF) == 128)
 					GPIOB->BSRR = GPIO_BSRR_BS_5;
 			}
 			
 			REG_ERROR &= 0x0000FFFF;
 			REG_ERROR |= ((uint32_t)command_fades + (uint32_t)command_error_count) << 16; 
 			
-			throttle = (float)((int32_t)throttle_raw - (int32_t)REG_CMD_OFFSET__THROTTLE) / (float)REG_CMD_RANGE__THROTTLE;
-			aileron = (float)((int32_t)aileron_raw - (int32_t)REG_CMD_OFFSET__AIL_ELE_RUD) / (float)REG_CMD_RANGE__AIL_ELE_RUD;
-			elevator = (float)((int32_t)elevator_raw - (int32_t)REG_CMD_OFFSET__AIL_ELE_RUD) / (float)REG_CMD_RANGE__AIL_ELE_RUD;
-			rudder = (float)((int32_t)rudder_raw - (int32_t)REG_CMD_OFFSET__AIL_ELE_RUD) / (float)REG_CMD_RANGE__AIL_ELE_RUD;
+			throttle = (float)throttle_raw / 2048.0f;
+			aileron = (float)((int16_t)aileron_raw - 1024) / 1024.0f;
+			elevator = (float)((int16_t)elevator_raw - 1024) / 1024.0f;
+			rudder = (float)((int16_t)rudder_raw - 1024) / 1024.0f;
 			
-			if (REG_EXPO)
+			if (REG_EXPO > 0.0f)
 			{
+				// Update expo coefficient if register change
+				if (expo_a != REG_EXPO)
+				{
+					expo_a = REG_EXPO;
+					expo_b = expo_a * expo_a;
+					expo_c = 1 / ((1.0f + expo_a) * (1.0f + expo_a) - expo_b);
+				}
+				
 				x = aileron;
 				if (x >= 0)
 				{
@@ -734,30 +842,33 @@ int main()
 					y = -(x * x - expo_b);
 				}
 				elevator = y * expo_c;
-			}
-			
-			if (chan6_raw > 1024)
-				TIM2->CR1 |= TIM_CR1_CEN;
-			else if (vbat >= vbat_min)
-			{
-				TIM2->CR1 &= ~TIM_CR1_CEN;
-				TIM2->EGR |= TIM_EGR_UG;
+				
+				x = rudder;
+				if (x >= 0)
+				{
+					x += expo_a;
+					y = x * x - expo_b;
+				}
+				else
+				{
+					x -= expo_a;
+					y = -(x * x - expo_b);
+				}
+				rudder = y * expo_c;
 			}
 		}
 		
-		// Timeout for commands
-		if (TIM6->CNT > TIMEOUT_COMMAND) 
-		{
+		// Disarm if receiver timeout
+		if (TIM6->CNT > TIMEOUT_COMMAND*2)
 			armed_raw = 0;
-			TIM2->CR1 |= TIM_CR1_CEN;
-		}
 		
 		// Process sensors
 		if (FLAG & FLAG_SENSOR)
 		{
 			FLAG &= ~FLAG_SENSOR;
+			FLAG |= FLAG_SENSOR_DEBUG; // Set flag to indicate data is ready for debug
 			
-			if (REG_CTRL__LED == 2)
+			if (REG_CTRL__LED_SELECT == 2)
 			{
 				if ((sensor_sample_count & 0xFF) == 0)
 					GPIOB->BSRR = GPIO_BSRR_BR_5;
@@ -766,7 +877,15 @@ int main()
 			}
 			
 			REG_ERROR &= 0xFFFF0000;
-			REG_ERROR |= (uint32_t)sensor_error_count & 0x0000FFFF;; 
+			REG_ERROR |= (uint32_t)sensor_error_count & 0x0000FFFF;;
+			
+			accel_x_raw = ((int16_t)spi2_rx_buffer[1]  << 8) | (int16_t)spi2_rx_buffer[2];
+			accel_y_raw = ((int16_t)spi2_rx_buffer[3]  << 8) | (int16_t)spi2_rx_buffer[4];
+			accel_z_raw = ((int16_t)spi2_rx_buffer[5]  << 8) | (int16_t)spi2_rx_buffer[6];
+			//temp_raw    = ((int16_t)spi2_rx_buffer[7]  << 8) | (int16_t)spi2_rx_buffer[8];
+			gyro_x_raw  = ((int16_t)spi2_rx_buffer[9]  << 8) | (int16_t)spi2_rx_buffer[10];
+			gyro_y_raw  = ((int16_t)spi2_rx_buffer[11] << 8) | (int16_t)spi2_rx_buffer[12];
+			gyro_z_raw  = ((int16_t)spi2_rx_buffer[13] << 8) | (int16_t)spi2_rx_buffer[14];
 			
 			// Remove DC and scale
 			gyro_x = ((float)gyro_x_raw - gyro_x_dc) * gyro_x_scale;
@@ -784,7 +903,7 @@ int main()
 			error_roll = (aileron * (float)REG_RATE__PITCH_ROLL) - gyro_x;
 			error_yaw = (rudder * (float)REG_RATE__YAW) - gyro_z;
 			
-			if ((armed_raw < 1024) && REG_CTRL__RESET_INT_ON_ARMED)
+			if ((armed_raw < 1024) && REG_CTRL__RESET_INTEGRAL_ON_ARMED)
 			{
 				error_pitch_int = 0.0f;
 				error_roll_int = 0.0f;
@@ -797,9 +916,9 @@ int main()
 				error_yaw_int += error_yaw;
 			}
 			
-			pitch = error_pitch * pitch_p + error_pitch_int * pitch_i + (error_pitch - error_pitch_z) * pitch_d;
-			roll = error_roll * roll_p + error_roll_int * roll_i + (error_roll - error_roll_z) * roll_d;
-			yaw = error_yaw * yaw_p + error_yaw_int * yaw_i + (error_yaw - error_yaw_z) * yaw_d;
+			pitch = error_pitch * REG_PITCH_P + error_pitch_int * REG_PITCH_I + (error_pitch - error_pitch_z) * REG_PITCH_D;
+			roll = error_roll * REG_ROLL_P + error_roll_int * REG_ROLL_I + (error_roll - error_roll_z) * REG_ROLL_D;
+			yaw = error_yaw * REG_YAW_P + error_yaw_int * REG_YAW_I + (error_yaw - error_yaw_z) * REG_YAW_D;
 			
 			motor[0] = (throttle * (float)REG_THROTTLE__RANGE) + roll + pitch - yaw;
 			motor[1] = (throttle * (float)REG_THROTTLE__RANGE) + roll - pitch + yaw;
@@ -820,10 +939,10 @@ int main()
 			
 			if (armed_raw < 1024)
 			{
-				TIM3->CCR1 = (REG_CTRL__MOTOR_SEL == 2) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR__MIN);
-				TIM3->CCR2 = (REG_CTRL__MOTOR_SEL == 1) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR__MIN);
-				TIM3->CCR3 = (REG_CTRL__MOTOR_SEL == 3) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR__MIN);
-				TIM3->CCR4 = (REG_CTRL__MOTOR_SEL == 4) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR__MIN);
+				TIM3->CCR1 = (REG_CTRL__MOTOR_SELECT == 2) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR__MIN);
+				TIM3->CCR2 = (REG_CTRL__MOTOR_SELECT == 1) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR__MIN);
+				TIM3->CCR3 = (REG_CTRL__MOTOR_SELECT == 3) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR__MIN);
+				TIM3->CCR4 = (REG_CTRL__MOTOR_SELECT == 4) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR__MIN);
 			}
 			else
 			{
@@ -841,52 +960,30 @@ int main()
 			vbat_acc = vbat_acc * (1.0f - VBAT_ALPHA) + vbat;
 			vbat = vbat_acc * VBAT_ALPHA;
 			
-			float_to_uint32(&vbat, &REG_VBAT);
+			REG_VBAT = vbat;
 			
 			ADC2->CR |= ADC_CR_ADSTART;
-			
-			if (vbat < vbat_min)
-				TIM2->CR1 |= TIM_CR1_CEN;
 		}
+		
+		// Beeper
+		if ((REG_VBAT < REG_VBAT_MIN) || (chan6_raw > 1024) || (TIM6->CNT > TIMEOUT_COMMAND*2) || REG_CTRL__BEEP_TEST)
+			TIM2->CR1 |= TIM_CR1_CEN;
+		else
+		{
+			TIM2->CR1 &= ~TIM_CR1_CEN;
+			TIM2->EGR |= TIM_EGR_UG;
+		}
+		
+		// Manual contol of LED
+		if (REG_CTRL__LED_SELECT == 0)
+			GPIOB->BSRR = GPIO_BSRR_BS_5;
+		else if (REG_CTRL__LED_SELECT == 1)
+			GPIOB->BSRR = GPIO_BSRR_BR_5;
 		
 		// Record max loop time
 		t = TIM7->CNT;
 		if (t > REG_LOOP_TIME)
 			REG_LOOP_TIME = t;
-		
-		// Update float registers
-		if (FLAG & FLAG_UPDATE_REG)
-		{
-			FLAG &= ~FLAG_UPDATE_REG;
-			
-			uint32_to_float(&REG_VBAT_MIN, &vbat_min);
-			uint32_to_float(&REG_EXPO, &expo_a);
-			uint32_to_float(&REG_PITCH_P, &pitch_p);
-			uint32_to_float(&REG_PITCH_I, &pitch_i);
-			uint32_to_float(&REG_PITCH_D, &pitch_d);
-			uint32_to_float(&REG_ROLL_P, &roll_p);
-			uint32_to_float(&REG_ROLL_I, &roll_i);
-			uint32_to_float(&REG_ROLL_D, &roll_d);
-			uint32_to_float(&REG_YAW_P, &yaw_p);
-			uint32_to_float(&REG_YAW_I, &yaw_i);
-			uint32_to_float(&REG_YAW_D, &yaw_d);
-			
-			expo_b = expo_a * expo_a;
-			expo_c = 1 / ((1.0f + expo_a) * (1.0f + expo_a) - expo_b);
-			
-			if (REG_CTRL__LED == 0)
-				GPIOB->BSRR = GPIO_BSRR_BS_5;
-			else if (REG_CTRL__LED == 1)
-				GPIOB->BSRR = GPIO_BSRR_BR_5;
-			
-			if (REG_CTRL__BEEP_TEST)
-				TIM2->CR1 |= TIM_CR1_CEN;
-			else
-			{
-				TIM2->CR1 &= ~TIM_CR1_CEN;
-				TIM2->EGR |= TIM_EGR_UG;
-			}
-		}
 		
 		// Debug
 		if (REG_DEBUG)
@@ -895,108 +992,136 @@ int main()
 			{
 				case 1:
 				{
-					uart3_tx_buffer[ 0] = (uint8_t) sensor_sample_count;
-					uart3_tx_buffer[ 1] = (uint8_t) gyro_x_raw;
-					uart3_tx_buffer[ 2] = (uint8_t)(gyro_x_raw >> 8);
-					uart3_tx_buffer[ 3] = (uint8_t) gyro_y_raw;
-					uart3_tx_buffer[ 4] = (uint8_t)(gyro_y_raw >> 8);
-					uart3_tx_buffer[ 5] = (uint8_t) gyro_z_raw;
-					uart3_tx_buffer[ 6] = (uint8_t)(gyro_z_raw >> 8);
-					uart3_tx_buffer[ 7] = (uint8_t) accel_x_raw;
-					uart3_tx_buffer[ 8] = (uint8_t)(accel_x_raw >> 8);
-					uart3_tx_buffer[ 9] = (uint8_t) accel_y_raw;
-					uart3_tx_buffer[10] = (uint8_t)(accel_y_raw >> 8);
-					uart3_tx_buffer[11] = (uint8_t) accel_z_raw;
-					uart3_tx_buffer[12] = (uint8_t)(accel_z_raw >> 8);
-					SetDmaUart3Tx(13);
+					if (FLAG & FLAG_SENSOR_DEBUG)
+					{
+						FLAG &= ~FLAG_SENSOR_DEBUG;
+						USBD_CDC_Itf_tx_buffer[ 0] = (uint8_t) sensor_sample_count;
+						USBD_CDC_Itf_tx_buffer[ 1] = (uint8_t) gyro_x_raw;
+						USBD_CDC_Itf_tx_buffer[ 2] = (uint8_t)(gyro_x_raw >> 8);
+						USBD_CDC_Itf_tx_buffer[ 3] = (uint8_t) gyro_y_raw;
+						USBD_CDC_Itf_tx_buffer[ 4] = (uint8_t)(gyro_y_raw >> 8);
+						USBD_CDC_Itf_tx_buffer[ 5] = (uint8_t) gyro_z_raw;
+						USBD_CDC_Itf_tx_buffer[ 6] = (uint8_t)(gyro_z_raw >> 8);
+						USBD_CDC_Itf_tx_buffer[ 7] = (uint8_t) accel_x_raw;
+						USBD_CDC_Itf_tx_buffer[ 8] = (uint8_t)(accel_x_raw >> 8);
+						USBD_CDC_Itf_tx_buffer[ 9] = (uint8_t) accel_y_raw;
+						USBD_CDC_Itf_tx_buffer[10] = (uint8_t)(accel_y_raw >> 8);
+						USBD_CDC_Itf_tx_buffer[11] = (uint8_t) accel_z_raw;
+						USBD_CDC_Itf_tx_buffer[12] = (uint8_t)(accel_z_raw >> 8);
+						USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_Itf_tx_buffer, 13);
+						USBD_CDC_TransmitPacket(&USBD_device_handler);
+						REG_DEBUG = 0;
+					}
 					break;
 				}
 				case 2:
 				{
-					uart3_tx_buffer[0] = (uint8_t)sensor_sample_count;
-					float_to_bytes(&gyro_x, &uart3_tx_buffer[1]);
-					float_to_bytes(&gyro_y, &uart3_tx_buffer[5]);
-					float_to_bytes(&gyro_z, &uart3_tx_buffer[9]);
-					float_to_bytes(&accel_x, &uart3_tx_buffer[13]);
-					float_to_bytes(&accel_y, &uart3_tx_buffer[17]);
-					float_to_bytes(&accel_z, &uart3_tx_buffer[21]);
-					SetDmaUart3Tx(25);
+					if (FLAG & FLAG_SENSOR_DEBUG)
+					{
+						FLAG &= ~FLAG_SENSOR_DEBUG;
+						USBD_CDC_Itf_tx_buffer[0] = (uint8_t)sensor_sample_count;
+						float_to_bytes(&gyro_x, &USBD_CDC_Itf_tx_buffer[1]);
+						float_to_bytes(&gyro_y, &USBD_CDC_Itf_tx_buffer[5]);
+						float_to_bytes(&gyro_z, &USBD_CDC_Itf_tx_buffer[9]);
+						float_to_bytes(&accel_x, &USBD_CDC_Itf_tx_buffer[13]);
+						float_to_bytes(&accel_y, &USBD_CDC_Itf_tx_buffer[17]);
+						float_to_bytes(&accel_z, &USBD_CDC_Itf_tx_buffer[21]);
+						USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_Itf_tx_buffer, 25);
+						USBD_CDC_TransmitPacket(&USBD_device_handler);
+						REG_DEBUG = 0;
+					}
 					break;
 				}
 				case 4:
 				{
-					uart3_tx_buffer[ 0] = (uint8_t) command_frame_count;
-					uart3_tx_buffer[ 1] = (uint8_t) throttle_raw;
-					uart3_tx_buffer[ 2] = (uint8_t)(throttle_raw >> 8);
-					uart3_tx_buffer[ 3] = (uint8_t) aileron_raw;
-					uart3_tx_buffer[ 4] = (uint8_t)(aileron_raw>> 8);
-					uart3_tx_buffer[ 5] = (uint8_t) elevator_raw;
-					uart3_tx_buffer[ 6] = (uint8_t)(elevator_raw>> 8);
-					uart3_tx_buffer[ 7] = (uint8_t) rudder_raw;
-					uart3_tx_buffer[ 8] = (uint8_t)(rudder_raw >> 8);
-					uart3_tx_buffer[ 9] = (uint8_t) armed_raw;
-					uart3_tx_buffer[10] = (uint8_t)(armed_raw >> 8);
-					uart3_tx_buffer[11] = (uint8_t) chan6_raw;
-					uart3_tx_buffer[12] = (uint8_t)(chan6_raw >> 8);
-					SetDmaUart3Tx(13);
+					if (FLAG & FLAG_COMMAND_DEBUG)
+					{
+						FLAG &= ~FLAG_COMMAND_DEBUG;
+						USBD_CDC_Itf_tx_buffer[ 0] = (uint8_t) command_frame_count;
+						USBD_CDC_Itf_tx_buffer[ 1] = (uint8_t) throttle_raw;
+						USBD_CDC_Itf_tx_buffer[ 2] = (uint8_t)(throttle_raw >> 8);
+						USBD_CDC_Itf_tx_buffer[ 3] = (uint8_t) aileron_raw;
+						USBD_CDC_Itf_tx_buffer[ 4] = (uint8_t)(aileron_raw>> 8);
+						USBD_CDC_Itf_tx_buffer[ 5] = (uint8_t) elevator_raw;
+						USBD_CDC_Itf_tx_buffer[ 6] = (uint8_t)(elevator_raw>> 8);
+						USBD_CDC_Itf_tx_buffer[ 7] = (uint8_t) rudder_raw;
+						USBD_CDC_Itf_tx_buffer[ 8] = (uint8_t)(rudder_raw >> 8);
+						USBD_CDC_Itf_tx_buffer[ 9] = (uint8_t) armed_raw;
+						USBD_CDC_Itf_tx_buffer[10] = (uint8_t)(armed_raw >> 8);
+						USBD_CDC_Itf_tx_buffer[11] = (uint8_t) chan6_raw;
+						USBD_CDC_Itf_tx_buffer[12] = (uint8_t)(chan6_raw >> 8);
+						USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_Itf_tx_buffer, 13);
+						USBD_CDC_TransmitPacket(&USBD_device_handler);
+						REG_DEBUG = 0;
+					}
 					break;
 				}
 				case 5:
 				{
-					uart3_tx_buffer[0] = (uint8_t)command_frame_count;
-					float_to_bytes(&throttle, &uart3_tx_buffer[1]);
-					float_to_bytes(&aileron, &uart3_tx_buffer[5]);
-					float_to_bytes(&elevator, &uart3_tx_buffer[9]);
-					float_to_bytes(&rudder, &uart3_tx_buffer[13]);
-					SetDmaUart3Tx(17);
+					if (FLAG & FLAG_COMMAND_DEBUG)
+					{
+						FLAG &= ~FLAG_COMMAND_DEBUG;
+						USBD_CDC_Itf_tx_buffer[0] = (uint8_t)command_frame_count;
+						float_to_bytes(&throttle, &USBD_CDC_Itf_tx_buffer[1]);
+						float_to_bytes(&aileron, &USBD_CDC_Itf_tx_buffer[5]);
+						float_to_bytes(&elevator, &USBD_CDC_Itf_tx_buffer[9]);
+						float_to_bytes(&rudder, &USBD_CDC_Itf_tx_buffer[13]);
+						USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_Itf_tx_buffer, 17);
+						USBD_CDC_TransmitPacket(&USBD_device_handler);
+						REG_DEBUG = 0;
+					}
 					break;
 				}
 				case 6:
 				{
-					uart3_tx_buffer[0] = (uint8_t)sensor_sample_count;
-					float_to_bytes(&pitch, &uart3_tx_buffer[1]);
-					float_to_bytes(&roll, &uart3_tx_buffer[5]);
-					float_to_bytes(&yaw, &uart3_tx_buffer[9]);
-					SetDmaUart3Tx(13);
+					if (FLAG & FLAG_SENSOR_DEBUG)
+					{
+						FLAG &= ~FLAG_SENSOR_DEBUG;
+						USBD_CDC_Itf_tx_buffer[0] = (uint8_t)sensor_sample_count;
+						float_to_bytes(&pitch, &USBD_CDC_Itf_tx_buffer[1]);
+						float_to_bytes(&roll, &USBD_CDC_Itf_tx_buffer[5]);
+						float_to_bytes(&yaw, &USBD_CDC_Itf_tx_buffer[9]);
+						USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_Itf_tx_buffer, 13);
+						USBD_CDC_TransmitPacket(&USBD_device_handler);
+						REG_DEBUG = 0;
+					}
 					break;
 				}
 				case 7:
 				{
-					uart3_tx_buffer[0] = (uint8_t)sensor_sample_count;
-					for (i=0; i<4; i++)
-						float_to_bytes(&motor[i], &uart3_tx_buffer[i*4+1]);
-					SetDmaUart3Tx(17);
+					if (FLAG & FLAG_SENSOR_DEBUG)
+					{
+						FLAG &= ~FLAG_SENSOR_DEBUG;
+						USBD_CDC_Itf_tx_buffer[0] = (uint8_t)sensor_sample_count;
+						for (i=0; i<4; i++)
+							float_to_bytes(&motor[i], &USBD_CDC_Itf_tx_buffer[i*4+1]);
+						USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_Itf_tx_buffer, 17);
+						USBD_CDC_TransmitPacket(&USBD_device_handler);
+						REG_DEBUG = 0;
+					}
 					break;
 				}
 				case 8:
 				{
-					uart3_tx_buffer[0] = (uint8_t)sensor_sample_count;
-					for (i=0; i<4; i++)
+					if (FLAG & FLAG_SENSOR_DEBUG)
 					{
-						uart3_tx_buffer[i*2+1] = (uint8_t) motor_raw[i];
-						uart3_tx_buffer[i*2+2] = (uint8_t)(motor_raw[i] >> 8);
+						FLAG &= ~FLAG_SENSOR_DEBUG;
+						USBD_CDC_Itf_tx_buffer[0] = (uint8_t)sensor_sample_count;
+						for (i=0; i<4; i++)
+						{
+							USBD_CDC_Itf_tx_buffer[i*2+1] = (uint8_t) motor_raw[i];
+							USBD_CDC_Itf_tx_buffer[i*2+2] = (uint8_t)(motor_raw[i] >> 8);
+						}
+						USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_Itf_tx_buffer, 9);
+						USBD_CDC_TransmitPacket(&USBD_device_handler);
+						REG_DEBUG = 0;
 					}
-					SetDmaUart3Tx(9);
 					break;
 				}
 			}
-			
-			REG_DEBUG = 0;
 		}
 		
 		// Wait for interrupts
 		__WFI();
 	}
-}
-
-void Reset_Handler()
-{
-	// Enable FPU
-	*FPU_CPACR = (0xF << 20); 
-	
-	// Reset pipeline
-	__DSB();
-	__ISB();
-	
-	main();
 }

@@ -1,11 +1,9 @@
-function debug(DebugCase,NbSamples,WindowSize,TimeWindowSize)
+function debug(DebugCase,NbSamples)
 
 if nargin < 2, NbSamples = 1024; end
-if nargin < 3, WindowSize = 256; end
-if nargin < 3, TimeWindowSize = 5000; end	
 
 global fc
-global TIMEOUT
+global ser
 
 figure(DebugCase);
 clf
@@ -13,10 +11,17 @@ l = {};
 a = {};
 c = 'brgcmk';
 
+WindowSizeSensor = 256;
+TimeWindowSizeSensor = 5000;
+WindowSizeCommand = 256;
+TimeWindowSizeCommand = 500;
+
 switch DebugCase
 	case 1 % raw sensors
-		d1 = 6;
+		dlen = 6;
 		dtype = 'int16';
+		WindowSize = WindowSizeSensor;
+		TimeWindowSize = TimeWindowSizeSensor;
 		for n = 1:2
 			a{n} = subplot(2,1,n);
 			a{n}.XLim = [0,TimeWindowSize];
@@ -27,30 +32,36 @@ switch DebugCase
 			l{3+n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
 		end
 	case 2 % scaled sensors
-		d1 = 6;
+		dlen = 6;
 		dtype = 'float';
+		WindowSize = WindowSizeSensor;
+		TimeWindowSize = TimeWindowSizeSensor;
 		for n = 1:2
 			a{n} = subplot(2,1,n);
 			a{n}.XLim = [0,TimeWindowSize];
 		end
-		a{1}.YLim = [-1000,1000];
-		a{2}.YLim = [-8,8];
+		a{1}.YLim = [-2000,2000];
+		a{2}.YLim = [-16,16];
 		for n = 1:3
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 			l{n+3} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
 		end
 	case 4 % raw commands
-		d1 = 6;
+		dlen = 6;
+		dtype = 'int16';
+		WindowSize = WindowSizeCommand;
+		TimeWindowSize = TimeWindowSizeCommand;
 		a{1} = axes;
 		a{1}.XLim = [0,TimeWindowSize];
 		a{1}.YLim = [0,2048];
-		dtype = 'int16';
 		for n = 1:6
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end
 	case 5 % commands
-		d1 = 4;
+		dlen = 4;
 		dtype = 'float';
+		WindowSize = WindowSizeCommand;
+		TimeWindowSize = TimeWindowSizeCommand;
 		a{1} = subplot(211);
 		a{2} = subplot(212);
 		a{1}.XLim = [0,TimeWindowSize];
@@ -62,8 +73,10 @@ switch DebugCase
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end
 	case 6 % pitch, roll, yaw
-		d1 = 3;
+		dlen = 3;
 		dtype = 'float';
+		WindowSize = WindowSizeSensor;
+		TimeWindowSize = TimeWindowSizeSensor;
 		a{1} = axes;
 		a{1}.XLim = [0,TimeWindowSize];
 		a{1}.YLim = [-2000,2000];
@@ -71,8 +84,10 @@ switch DebugCase
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end
 	case 7 % motors
-		d1 = 4;
+		dlen = 4;
 		dtype = 'float';
+		WindowSize = WindowSizeSensor;
+		TimeWindowSize = TimeWindowSizeSensor;
 		for n = 1:4
 			a{n} = subplot(4,1,n);
 			a{n}.XLim = [0,TimeWindowSize];
@@ -80,8 +95,10 @@ switch DebugCase
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{n},'Color',c(n));
 		end
 	case 8 % raw motors
-		d1 = 4;
+		dlen = 4;
 		dtype = 'int16';
+		WindowSize = WindowSizeSensor;
+		TimeWindowSize = TimeWindowSizeSensor;
 		for n = 1:4
 			a{n} = subplot(4,1,n);
 			a{n}.XLim = [0,TimeWindowSize];
@@ -91,12 +108,12 @@ switch DebugCase
 end
 
 t = nan(1,WindowSize);
-d = nan(d1,WindowSize);
+d = nan(dlen,WindowSize);
 switch dtype
 	case 'int16'
-		r1 = 2*d1+1;
+		r1 = 2*dlen+1;
 	case 'float'
-		r1 = 4*d1+1;
+		r1 = 4*dlen+1;
 end
 n = 0;
 t0 = 0;
@@ -104,16 +121,7 @@ t0 = 0;
 while n < NbSamples
 	
 	fc.DEBUG(DebugCase);
-	r = [];
-	tic
-	while (length(r) < r1) && (toc < TIMEOUT)
-		sleep(1)
-		r = [r, ftdi('read')];
-	end
-	if length(r) < r1
-		r = zeros(1,r1);
-		warning('read timeout!')
-	end
+	r = fread(ser,r1);
 	n = n + 1;
 	
 	if r(1) < (t(WindowSize-1)-t0)
@@ -124,7 +132,7 @@ while n < NbSamples
 	else
 		t(WindowSize) = t0 + r(1);
 	end
-	for m = 1:d1
+	for m = 1:dlen
 		switch dtype
 			case 'int16'
 				d(m,WindowSize) = c2s(2^8*r((m-1)*2+3) + r((m-1)*2+2), 16);

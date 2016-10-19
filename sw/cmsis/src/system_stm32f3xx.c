@@ -140,7 +140,7 @@
                call the 2 first functions listed above, since SystemCoreClock variable is 
                updated automatically.
   */
-uint32_t SystemCoreClock = 8000000;
+uint32_t SystemCoreClock = 72000000;
 
 const uint8_t AHBPrescTable[16] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 6, 7, 8, 9};
 const uint8_t APBPrescTable[8]  = {0, 0, 0, 0, 1, 2, 3, 4};
@@ -204,6 +204,34 @@ void SystemInit(void)
 #else
   SCB->VTOR = FLASH_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal FLASH */
 #endif
+
+	//######## CUSTOM PART #######
+	
+	// Enable XTAL oscillator
+	RCC->CR |= RCC_CR_HSEON;
+	while ((RCC->CR & RCC_CR_HSERDY) == 0) {}
+	
+	// Set PLL at 72MHz = 9 * XTAL
+	RCC->CFGR |= RCC_CFGR_PLLMUL9 | RCC_CFGR_PLLSRC_HSE_PREDIV;
+	RCC->CR |= RCC_CR_PLLON;
+	while ((RCC->CR & RCC_CR_PLLRDY) == 0) {}
+	
+	// Select PLL as system clock
+	FLASH->ACR |= 2 << FLASH_ACR_LATENCY_Pos; // Inrease Flash latency!
+	RCC->CFGR |= RCC_CFGR_SW_PLL;
+	while ((RCC->CFGR & RCC_CFGR_SWS_PLL) == 0) {}
+	
+	// Set APB1 at 38MHz
+	RCC->CFGR |= RCC_CFGR_PPRE1_DIV2;
+	
+	// Select system clock as UART2/3/4/5 clock
+	RCC->CFGR3 |= RCC_CFGR3_USART2SW_SYSCLK | RCC_CFGR3_USART3SW_SYSCLK | RCC_CFGR3_UART4SW_SYSCLK | RCC_CFGR3_UART5SW_SYSCLK;
+	
+	// Select system clock as I2C1/2 clock
+	RCC->CFGR3 |= RCC_CFGR3_I2C1SW_SYSCLK | RCC_CFGR3_I2C2SW_SYSCLK;
+	
+	// Configure SysTick to generate interrrupt every 1ms
+	SysTick_Config(72000);
 }
 
 /**

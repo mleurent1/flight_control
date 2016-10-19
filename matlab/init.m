@@ -1,21 +1,16 @@
 restoredefaultpath
 addpath reg
-addpath ftdi
 addpath utils
 try
-	ftdi('close');
+	fclose(ser);
 catch
 end
 clear all
 global fc
 global mpu
-global TIMEOUT
+global ser
 fc = fc_reg;
 mpu = mpu_reg;
-ftdi('open',0);
-ftdi('set_serial');
-TIMEOUT = 1;
-
-%%
-% fc.VBAT_MIN(0);
-% fc.CTRL__BEEP_TEST(0);
+ser = serial('COM18');
+ser.Timeout = 1;
+fopen(ser);
