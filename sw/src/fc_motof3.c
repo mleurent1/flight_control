@@ -7,9 +7,9 @@
 
 #define MOTOR_PULSE_MAX 2100 // us
 #define VBAT_ALPHA 0.0002f
-#define BEEPER
 #define BEEPER_PERIOD 250 // ms
 #define TIMEOUT_COMMAND 220 // ms
+#define ADC_SCALE 0.0089f
 
 #define FLAG_SENSOR 0x01
 #define FLAG_SENSOR_DEBUG 0x02
@@ -32,13 +32,6 @@ uint8_t i2c2_rx_buffer[14];
 uint8_t i2c2_tx_buffer[2];
 
 uint16_t sensor_sample_count;
-int16_t gyro_x_raw;
-int16_t gyro_y_raw;
-int16_t gyro_z_raw;
-int16_t accel_x_raw;
-int16_t accel_y_raw;
-int16_t accel_z_raw;
-//int16_t temp_raw;
 uint16_t sensor_error_count;
 
 uint16_t command_frame_count;
@@ -372,6 +365,14 @@ int main()
 {
 	int i;
 	
+	int16_t gyro_x_raw;
+	int16_t gyro_y_raw;
+	int16_t gyro_z_raw;
+	int16_t accel_x_raw;
+	int16_t accel_y_raw;
+	int16_t accel_z_raw;
+	//int16_t temp_raw;
+	
 	float gyro_x;
 	float gyro_y;
 	float gyro_z;
@@ -415,6 +416,7 @@ int main()
 	
 	float vbat_acc;
 	float vbat;
+	float vbat_init;
 	
 	uint16_t t;
 	float x;
@@ -428,6 +430,8 @@ int main()
 	_Bool reg_flash_valid;
 	uint32_t* flash_r;
 	uint32_t reg_default;
+	
+	_Bool beeper_active;
 	
 	//####### REG INIT #######
 	
@@ -524,10 +528,8 @@ int main()
 	GPIOB->OSPEEDR = 0;
 	
 	// A0 : Beeper, to TIM2 (AF1)
-	#ifdef BEEPER
-		GPIOA->MODER |= GPIO_MODER_MODER0_1;
-		GPIOA->AFR[0] |= 1 << GPIO_AFRL_AFRL0_Pos;
-	#endif
+	GPIOA->MODER |= GPIO_MODER_MODER0_1;
+	GPIOA->AFR[0] |= 1 << GPIO_AFRL_AFRL0_Pos;
 	// A4 : Motor 2, to TIM3, AF2
 	// A6 : Motor 1, to TIM3, AF2
 	GPIOA->MODER |= GPIO_MODER_MODER4_1 | GPIO_MODER_MODER6_1;
@@ -763,6 +765,23 @@ int main()
 	accel_y_scale = 0.00048828f;
 	accel_z_scale = 0.00048828f;
 	
+	//####### Check initial VBAT ######
+	
+	vbat_init = 0.0f;
+	for (i=0; i<10; i++)
+	{
+		ADC2->CR |= ADC_CR_ADSTART;
+		wait_ms(1);
+		vbat_init += (float)ADC2->DR * ADC_SCALE;
+	}
+	vbat_init = vbat_init / 10.0f;
+	
+	// If VBAT close to 0, do not activate beeper
+	if (vbat_init < 0.5f)
+		beeper_active = 0;
+	else
+		beeper_active = 1;
+	
 	//####### END OF INIT TASKS #####
 	
 	// Disable Systick interrupt, not needed anymore (but can still use COUNTFLAG)
@@ -947,7 +966,7 @@ int main()
 			
 			// VBAT
 			if (ADC2->ISR & ADC_ISR_EOC)
-				vbat = (float)ADC2->DR * 0.0089f;
+				vbat = (float)ADC2->DR * ADC_SCALE;
 			
 			vbat_acc = vbat_acc * (1.0f - VBAT_ALPHA) + vbat;
 			vbat = vbat_acc * VBAT_ALPHA;
@@ -958,7 +977,7 @@ int main()
 		}
 		
 		// Beeper
-		if ((REG_VBAT < REG_VBAT_MIN) || (chan6_raw > 1024) || (TIM6->CNT > TIMEOUT_COMMAND*2) || REG_CTRL__BEEP_TEST)
+		if ((((REG_VBAT < REG_VBAT_MIN) || (chan6_raw > 1024) || (TIM6->CNT > TIMEOUT_COMMAND*2)) && beeper_active) || REG_CTRL__BEEP_TEST)
 			TIM2->CR1 |= TIM_CR1_CEN;
 		else
 		{
