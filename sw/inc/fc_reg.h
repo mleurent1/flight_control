@@ -1,4 +1,4 @@
-#define NB_REG 21
+#define NB_REG 22
 
 uint32_t reg[NB_REG];
 float regf[NB_REG];
@@ -38,6 +38,7 @@ float regf[NB_REG];
 #define REG_YAW_P regf[18]
 #define REG_YAW_I regf[19]
 #define REG_YAW_D regf[20]
+#define REG_TPA regf[21]
 
 typedef struct
 {
@@ -49,7 +50,7 @@ typedef struct
 
 reg_properties_t reg_properties[NB_REG] = 
 {
-	{1, 1, 0, 11}, // VERSION
+	{1, 1, 0, 12}, // VERSION
 	{0, 0, 0, 2066}, // CTRL
 	{0, 0, 0, 0}, // DEBUG
 	{1, 0, 0, 0}, // ERROR
@@ -69,5 +70,6 @@ reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 1, 1092616192}, // ROLL_D
 	{0, 1, 1, 1082130432}, // YAW_P
 	{0, 1, 1, 1025758986}, // YAW_I
-	{0, 1, 1, 0} // YAW_D
+	{0, 1, 1, 0}, // YAW_D
+	{0, 1, 1, 0} // TPA
 };

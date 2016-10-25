@@ -308,6 +308,15 @@ classdef fc_reg
 				obj.write(20,z);
 			end
 		end
+		function y = TPA(obj,x)
+			if nargin < 2
+				z = obj.read(21);
+				y = typecast(uint32(z), 'single');
+			else
+				z = typecast(single(x), 'uint32');
+				obj.write(21,z);
+			end
+		end
 	end
 	properties
 		VERSION_addr = 0;
@@ -331,8 +340,9 @@ classdef fc_reg
 		YAW_P_addr = 18;
 		YAW_I_addr = 19;
 		YAW_D_addr = 20;
-		flash_addr_list = [0 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20];
-		flash_float_list = [0,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1];
-		flash_name_list = {'VERSION','VBAT_MIN','VBAT_MAX','EXPO','MOTOR','THROTTLE','RATE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D'};
+		TPA_addr = 21;
+		flash_addr_list = [0 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21];
+		flash_float_list = [0,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1,1];
+		flash_name_list = {'VERSION','VBAT_MIN','VBAT_MAX','EXPO','MOTOR','THROTTLE','RATE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D','TPA'};
 	end
 end

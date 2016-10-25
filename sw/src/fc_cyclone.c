@@ -409,6 +409,9 @@ int main()
 	float error_pitch_int;
 	float error_roll_int;
 	float error_yaw_int;
+	float pitch_before_tpa;
+	float roll_before_tpa;
+	float yaw_before_tpa;
 	float pitch;
 	float roll;
 	float yaw;
@@ -935,9 +938,13 @@ int main()
 				error_yaw_int += error_yaw;
 			}
 			
-			pitch = error_pitch * REG_PITCH_P + error_pitch_int * REG_PITCH_I + (error_pitch - error_pitch_z) * REG_PITCH_D;
-			roll = error_roll * REG_ROLL_P + error_roll_int * REG_ROLL_I + (error_roll - error_roll_z) * REG_ROLL_D;
-			yaw = error_yaw * REG_YAW_P + error_yaw_int * REG_YAW_I + (error_yaw - error_yaw_z) * REG_YAW_D;
+			pitch_before_tpa = error_pitch * REG_PITCH_P + error_pitch_int * REG_PITCH_I + (error_pitch - error_pitch_z) * REG_PITCH_D;
+			roll_before_tpa = error_roll * REG_ROLL_P + error_roll_int * REG_ROLL_I + (error_roll - error_roll_z) * REG_ROLL_D;
+			yaw_before_tpa = error_yaw * REG_YAW_P + error_yaw_int * REG_YAW_I + (error_yaw - error_yaw_z) * REG_YAW_D;
+			
+			pitch = pitch_before_tpa * (1.0f - (REG_TPA * throttle));
+			roll = roll_before_tpa * (1.0f - (REG_TPA * throttle));
+			yaw = yaw_before_tpa * (1.0f - (REG_TPA * throttle));
 			
 			motor[0] = (throttle * (float)REG_THROTTLE__RANGE) + roll + pitch - yaw;
 			motor[1] = (throttle * (float)REG_THROTTLE__RANGE) + roll - pitch + yaw;
@@ -974,7 +981,7 @@ int main()
 			
 			// VBAT
 			if (ADC2->ISR & ADC_ISR_EOC)
-				vbat = (float)ADC2->DR * 0.0089f;
+				vbat = (float)ADC2->DR * ADC_SCALE;
 			
 			vbat_acc = vbat_acc * (1.0f - VBAT_ALPHA) + vbat;
 			vbat = vbat_acc * VBAT_ALPHA;

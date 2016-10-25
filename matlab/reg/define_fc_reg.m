@@ -5,7 +5,7 @@ n = n + 1;
 reg(n).name = 'VERSION';
 reg(n).read_only = 1;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VERSION',7,0,'uint8',11};
+reg(n).subf{1} = {'VERSION',7,0,'uint8',12};
 
 n = n + 1;
 reg(n).name = 'CTRL';
@@ -135,3 +135,9 @@ reg(n).name = 'YAW_D';
 reg(n).read_only = 0;
 reg(n).flash = 1;
 reg(n).subf{1} = {'YAW_D',31,0,'float',0};
+
+n = n + 1;
+reg(n).name = 'TPA';
+reg(n).read_only = 0;
+reg(n).flash = 1;
+reg(n).subf{1} = {'TPA',31,0,'float',0};
