@@ -5,7 +5,7 @@ n = n + 1;
 reg(n).name = 'VERSION';
 reg(n).read_only = 1;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VERSION',7,0,'uint8',12};
+reg(n).subf{1} = {'VERSION',7,0,'uint8',13};
 
 n = n + 1;
 reg(n).name = 'CTRL';
@@ -16,7 +16,7 @@ reg(n).subf{2} = {'RESET_INTEGRAL_ON_ARMED',1,1,'uint8',1};
 reg(n).subf{3} = {'BEEP_TEST',2,2,'uint8',0};
 reg(n).subf{4} = {'LED_SELECT',6,3,'uint8',2};
 reg(n).subf{5} = {'MOTOR_SELECT',9,7,'uint8',0};
-reg(n).subf{6} = {'MOTOR_TEST',25,10,'uint16',2};
+reg(n).subf{6} = {'MOTOR_TEST',25,10,'uint16',1000};
 
 n = n + 1;
 reg(n).name = 'DEBUG';
@@ -62,25 +62,25 @@ reg(n).flash = 1;
 reg(n).subf{1} = {'EXPO',31,0,'float',0.2};
 
 n = n + 1;
-reg(n).name = 'MOTOR';
+reg(n).name = 'MOTOR_0';
 reg(n).read_only = 0;
 reg(n).flash = 1;
 reg(n).subf{1} = {'MIN',15,0,'uint16',1000};
 reg(n).subf{2} = {'MAX',31,16,'uint16',2000};
 
 n = n + 1;
-reg(n).name = 'THROTTLE';
+reg(n).name = 'MOTOR_1';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'RANGE',15,0,'uint16',900};
-reg(n).subf{2} = {'ARMED',31,16,'uint16',1050};
+reg(n).subf{1} = {'START',15,0,'uint16',1050};
+reg(n).subf{2} = {'ARMED',31,16,'uint16',1075};
 
 n = n + 1;
 reg(n).name = 'RATE';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'PITCH_ROLL',15,0,'uint16',360};
-reg(n).subf{2} = {'YAW',31,16,'uint16',360};
+reg(n).subf{1} = {'PITCH_ROLL_YAW',15,0,'uint16',360};
+reg(n).subf{2} = {'THROTTLE',31,16,'uint16',900};
 
 n = n + 1;
 reg(n).name = 'PITCH_P';

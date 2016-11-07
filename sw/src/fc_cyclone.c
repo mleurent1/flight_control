@@ -10,6 +10,8 @@
 #define BEEPER_PERIOD 250 // ms
 #define TIMEOUT_COMMAND 220 // ms
 #define ADC_SCALE 0.0089f
+#define VBAT_THRESHOLD 8.0f
+#define INTEGRAL_MAX 100.0f
 
 #define FLAG_SENSOR 0x01
 #define FLAG_SENSOR_DEBUG 0x02
@@ -409,6 +411,9 @@ int main()
 	float error_pitch_int;
 	float error_roll_int;
 	float error_yaw_int;
+	float pitch_i;
+	float roll_i;
+	float yaw_i;
 	float pitch_before_tpa;
 	float roll_before_tpa;
 	float yaw_before_tpa;
@@ -620,10 +625,10 @@ int main()
 		while ((GPIOA->IDR & GPIO_IDR_1) == 0)
 		{
 			// ESC calibration of max command value
-			TIM3->CCR1 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
-			TIM3->CCR2 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
-			TIM3->CCR3 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
-			TIM3->CCR4 = MOTOR_PULSE_MAX - REG_MOTOR__MAX;
+			TIM3->CCR1 = MOTOR_PULSE_MAX - REG_MOTOR_0__MAX;
+			TIM3->CCR2 = MOTOR_PULSE_MAX - REG_MOTOR_0__MAX;
+			TIM3->CCR3 = MOTOR_PULSE_MAX - REG_MOTOR_0__MAX;
+			TIM3->CCR4 = MOTOR_PULSE_MAX - REG_MOTOR_0__MAX;
 			TIM3->CR1 |= TIM_CR1_CEN;
 			
 			// Receiver binding sequence
@@ -655,10 +660,10 @@ int main()
 		
 		for (i=0; i<100; i++)
 		{
-			TIM3->CCR1 = MOTOR_PULSE_MAX - REG_MOTOR__MIN;
-			TIM3->CCR2 = MOTOR_PULSE_MAX - REG_MOTOR__MIN;
-			TIM3->CCR3 = MOTOR_PULSE_MAX - REG_MOTOR__MIN;
-			TIM3->CCR4 = MOTOR_PULSE_MAX - REG_MOTOR__MIN;
+			TIM3->CCR1 = MOTOR_PULSE_MAX - REG_MOTOR_0__MIN;
+			TIM3->CCR2 = MOTOR_PULSE_MAX - REG_MOTOR_0__MIN;
+			TIM3->CCR3 = MOTOR_PULSE_MAX - REG_MOTOR_0__MIN;
+			TIM3->CCR4 = MOTOR_PULSE_MAX - REG_MOTOR_0__MIN;
 			TIM3->CR1 |= TIM_CR1_CEN;
 			wait_ms(10);
 		}
@@ -787,8 +792,8 @@ int main()
 	}
 	vbat_init = vbat_init / 10.0f;
 	
-	// If VBAT close to 0, do not activate beeper
-	if (vbat_init < 0.5f)
+	// If no battery, do not activate beeper
+	if (vbat_init < VBAT_THRESHOLD)
 		beeper_active = 0;
 	else
 		beeper_active = 1;
@@ -921,9 +926,9 @@ int main()
 			error_roll_z = error_roll;
 			error_yaw_z = error_yaw;
 			
-			error_pitch = (elevator * (float)REG_RATE__PITCH_ROLL) - gyro_y;
-			error_roll = (aileron * (float)REG_RATE__PITCH_ROLL) - gyro_x;
-			error_yaw = (rudder * (float)REG_RATE__YAW) - gyro_z;
+			error_pitch = (elevator * (float)REG_RATE__PITCH_ROLL_YAW) - gyro_y;
+			error_roll = (aileron * (float)REG_RATE__PITCH_ROLL_YAW) - gyro_x;
+			error_yaw = (rudder * (float)REG_RATE__PITCH_ROLL_YAW) - gyro_z;
 			
 			if ((armed_raw < 1024) && REG_CTRL__RESET_INTEGRAL_ON_ARMED)
 			{
@@ -938,6 +943,24 @@ int main()
 				error_yaw_int += error_yaw;
 			}
 			
+			// Clip the integral
+			pitch_i = error_pitch_int * REG_PITCH_I;
+			roll_i = error_roll_int * REG_ROLL_I;
+			yaw_i = error_yaw_int * REG_YAW_I;
+			
+			if (pitch_i > INTEGRAL_MAX)
+				error_pitch_int = INTEGRAL_MAX / REG_PITCH_I;
+			else if (pitch_i < -INTEGRAL_MAX)
+				error_pitch_int = -INTEGRAL_MAX / REG_PITCH_I;
+			if (roll_i > INTEGRAL_MAX)
+				error_roll_int = INTEGRAL_MAX / REG_ROLL_I;
+			else if (roll_i < -INTEGRAL_MAX)
+				error_roll_int = -INTEGRAL_MAX / REG_ROLL_I;
+			if (yaw_i > INTEGRAL_MAX)
+				error_yaw_int = INTEGRAL_MAX / REG_YAW_I;
+			else if (yaw_i < -INTEGRAL_MAX)
+				error_yaw_int = -INTEGRAL_MAX / REG_YAW_I;
+			
 			pitch_before_tpa = error_pitch * REG_PITCH_P + error_pitch_int * REG_PITCH_I + (error_pitch - error_pitch_z) * REG_PITCH_D;
 			roll_before_tpa = error_roll * REG_ROLL_P + error_roll_int * REG_ROLL_I + (error_roll - error_roll_z) * REG_ROLL_D;
 			yaw_before_tpa = error_yaw * REG_YAW_P + error_yaw_int * REG_YAW_I + (error_yaw - error_yaw_z) * REG_YAW_D;
@@ -946,29 +969,29 @@ int main()
 			roll = roll_before_tpa * (1.0f - (REG_TPA * throttle));
 			yaw = yaw_before_tpa * (1.0f - (REG_TPA * throttle));
 			
-			motor[0] = (throttle * (float)REG_THROTTLE__RANGE) + roll + pitch - yaw;
-			motor[1] = (throttle * (float)REG_THROTTLE__RANGE) + roll - pitch + yaw;
-			motor[2] = (throttle * (float)REG_THROTTLE__RANGE) - roll - pitch - yaw;
-			motor[3] = (throttle * (float)REG_THROTTLE__RANGE) - roll + pitch + yaw;
+			motor[0] = (throttle * (float)REG_RATE__THROTTLE) + roll + pitch - yaw;
+			motor[1] = (throttle * (float)REG_RATE__THROTTLE) + roll - pitch + yaw;
+			motor[2] = (throttle * (float)REG_RATE__THROTTLE) - roll - pitch - yaw;
+			motor[3] = (throttle * (float)REG_RATE__THROTTLE) - roll + pitch + yaw;
 			
 			for (i=0; i<4; i++)
 			{
-				motor_clip[i] = (int32_t)motor[i] + (int32_t)REG_THROTTLE__ARMED;
+				motor_clip[i] = (int32_t)motor[i] + (int32_t)REG_MOTOR_1__ARMED;
 				
-				if (motor_clip[i] < (int32_t)REG_MOTOR__MIN)
-					motor_clip[i] = (int32_t)REG_MOTOR__MIN;
-				else if (motor_clip[i] > (int32_t)REG_MOTOR__MAX)
-					motor_clip[i] = (int32_t)REG_MOTOR__MAX;
+				if (motor_clip[i] < (int32_t)REG_MOTOR_1__START)
+					motor_clip[i] = (int32_t)REG_MOTOR_1__START;
+				else if (motor_clip[i] > (int32_t)REG_MOTOR_0__MAX)
+					motor_clip[i] = (int32_t)REG_MOTOR_0__MAX;
 				
 				motor_raw[i] = (uint16_t)motor_clip[i];
 			}
 			
 			if (armed_raw < 1024)
 			{
-				TIM3->CCR1 = (REG_CTRL__MOTOR_SELECT == 2) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR__MIN);
-				TIM3->CCR2 = (REG_CTRL__MOTOR_SELECT == 1) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR__MIN);
-				TIM3->CCR3 = (REG_CTRL__MOTOR_SELECT == 3) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR__MIN);
-				TIM3->CCR4 = (REG_CTRL__MOTOR_SELECT == 4) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR__MIN);
+				TIM3->CCR1 = (REG_CTRL__MOTOR_SELECT == 2) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR_0__MIN);
+				TIM3->CCR2 = (REG_CTRL__MOTOR_SELECT == 1) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR_0__MIN);
+				TIM3->CCR3 = (REG_CTRL__MOTOR_SELECT == 3) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR_0__MIN);
+				TIM3->CCR4 = (REG_CTRL__MOTOR_SELECT == 4) ? (MOTOR_PULSE_MAX - (uint16_t)REG_CTRL__MOTOR_TEST) : (MOTOR_PULSE_MAX - REG_MOTOR_0__MIN);
 			}
 			else
 			{

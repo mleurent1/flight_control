@@ -152,14 +152,14 @@ classdef fc_reg
 				obj.write(8,z);
 			end
 		end
-		function y = MOTOR(obj,x)
+		function y = MOTOR_0(obj,x)
 			if nargin < 2
 				y = obj.read(9);
 			else
 				obj.write(9,x);
 			end
 		end
-		function y = MOTOR__MIN(obj,x)
+		function y = MOTOR_0__MIN(obj,x)
 			r = obj.read(9);
 			if nargin < 2
 				y = bitshift(bitand(r, 65535), 0);
@@ -168,7 +168,7 @@ classdef fc_reg
 				obj.write(9,w);
 			end
 		end
-		function y = MOTOR__MAX(obj,x)
+		function y = MOTOR_0__MAX(obj,x)
 			r = obj.read(9);
 			if nargin < 2
 				y = bitshift(bitand(r, 4294901760), -16);
@@ -177,14 +177,14 @@ classdef fc_reg
 				obj.write(9,w);
 			end
 		end
-		function y = THROTTLE(obj,x)
+		function y = MOTOR_1(obj,x)
 			if nargin < 2
 				y = obj.read(10);
 			else
 				obj.write(10,x);
 			end
 		end
-		function y = THROTTLE__RANGE(obj,x)
+		function y = MOTOR_1__START(obj,x)
 			r = obj.read(10);
 			if nargin < 2
 				y = bitshift(bitand(r, 65535), 0);
@@ -193,7 +193,7 @@ classdef fc_reg
 				obj.write(10,w);
 			end
 		end
-		function y = THROTTLE__ARMED(obj,x)
+		function y = MOTOR_1__ARMED(obj,x)
 			r = obj.read(10);
 			if nargin < 2
 				y = bitshift(bitand(r, 4294901760), -16);
@@ -209,7 +209,7 @@ classdef fc_reg
 				obj.write(11,x);
 			end
 		end
-		function y = RATE__PITCH_ROLL(obj,x)
+		function y = RATE__PITCH_ROLL_YAW(obj,x)
 			r = obj.read(11);
 			if nargin < 2
 				y = bitshift(bitand(r, 65535), 0);
@@ -218,7 +218,7 @@ classdef fc_reg
 				obj.write(11,w);
 			end
 		end
-		function y = RATE__YAW(obj,x)
+		function y = RATE__THROTTLE(obj,x)
 			r = obj.read(11);
 			if nargin < 2
 				y = bitshift(bitand(r, 4294901760), -16);
@@ -328,8 +328,8 @@ classdef fc_reg
 		VBAT_MIN_addr = 6;
 		VBAT_MAX_addr = 7;
 		EXPO_addr = 8;
-		MOTOR_addr = 9;
-		THROTTLE_addr = 10;
+		MOTOR_0_addr = 9;
+		MOTOR_1_addr = 10;
 		RATE_addr = 11;
 		PITCH_P_addr = 12;
 		PITCH_I_addr = 13;
@@ -343,6 +343,6 @@ classdef fc_reg
 		TPA_addr = 21;
 		flash_addr_list = [0 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21];
 		flash_float_list = [0,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1,1];
-		flash_name_list = {'VERSION','VBAT_MIN','VBAT_MAX','EXPO','MOTOR','THROTTLE','RATE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D','TPA'};
+		flash_name_list = {'VERSION','VBAT_MIN','VBAT_MAX','EXPO','MOTOR_0','MOTOR_1','RATE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D','TPA'};
 	end
 end

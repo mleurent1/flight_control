@@ -20,15 +20,15 @@ float regf[NB_REG];
 #define REG_VBAT_MIN regf[6]
 #define REG_VBAT_MAX regf[7]
 #define REG_EXPO regf[8]
-#define REG_MOTOR reg[9]
-#define REG_MOTOR__MIN (uint16_t)((reg[9] & 65535U) >> 0)
-#define REG_MOTOR__MAX (uint16_t)((reg[9] & 4294901760U) >> 16)
-#define REG_THROTTLE reg[10]
-#define REG_THROTTLE__RANGE (uint16_t)((reg[10] & 65535U) >> 0)
-#define REG_THROTTLE__ARMED (uint16_t)((reg[10] & 4294901760U) >> 16)
+#define REG_MOTOR_0 reg[9]
+#define REG_MOTOR_0__MIN (uint16_t)((reg[9] & 65535U) >> 0)
+#define REG_MOTOR_0__MAX (uint16_t)((reg[9] & 4294901760U) >> 16)
+#define REG_MOTOR_1 reg[10]
+#define REG_MOTOR_1__START (uint16_t)((reg[10] & 65535U) >> 0)
+#define REG_MOTOR_1__ARMED (uint16_t)((reg[10] & 4294901760U) >> 16)
 #define REG_RATE reg[11]
-#define REG_RATE__PITCH_ROLL (uint16_t)((reg[11] & 65535U) >> 0)
-#define REG_RATE__YAW (uint16_t)((reg[11] & 4294901760U) >> 16)
+#define REG_RATE__PITCH_ROLL_YAW (uint16_t)((reg[11] & 65535U) >> 0)
+#define REG_RATE__THROTTLE (uint16_t)((reg[11] & 4294901760U) >> 16)
 #define REG_PITCH_P regf[12]
 #define REG_PITCH_I regf[13]
 #define REG_PITCH_D regf[14]
@@ -50,8 +50,8 @@ typedef struct
 
 reg_properties_t reg_properties[NB_REG] = 
 {
-	{1, 1, 0, 12}, // VERSION
-	{0, 0, 0, 2066}, // CTRL
+	{1, 1, 0, 13}, // VERSION
+	{0, 0, 0, 1024018}, // CTRL
 	{0, 0, 0, 0}, // DEBUG
 	{1, 0, 0, 0}, // ERROR
 	{1, 0, 0, 0}, // LOOP_TIME
@@ -59,9 +59,9 @@ reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 1, 1093664768}, // VBAT_MIN
 	{0, 1, 1, 1095342490}, // VBAT_MAX
 	{0, 1, 1, 1045220557}, // EXPO
-	{0, 1, 0, 131073000}, // MOTOR
-	{0, 1, 0, 68813700}, // THROTTLE
-	{0, 1, 0, 23593320}, // RATE
+	{0, 1, 0, 131073000}, // MOTOR_0
+	{0, 1, 0, 70452250}, // MOTOR_1
+	{0, 1, 0, 58982760}, // RATE
 	{0, 1, 1, 1073741824}, // PITCH_P
 	{0, 1, 1, 1017370378}, // PITCH_I
 	{0, 1, 1, 1092616192}, // PITCH_D
