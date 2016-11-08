@@ -5,7 +5,7 @@ n = n + 1;
 reg(n).name = 'VERSION';
 reg(n).read_only = 1;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VERSION',7,0,'uint8',13};
+reg(n).subf{1} = {'VERSION',7,0,'uint8',14};
 
 n = n + 1;
 reg(n).name = 'CTRL';
@@ -47,7 +47,7 @@ n = n + 1;
 reg(n).name = 'VBAT_MIN';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VBAT_MIN',31,0,'float',11};
+reg(n).subf{1} = {'VBAT_MIN',31,0,'float',10.7};
 
 n = n + 1;
 reg(n).name = 'VBAT_MAX';
@@ -62,25 +62,28 @@ reg(n).flash = 1;
 reg(n).subf{1} = {'EXPO',31,0,'float',0.2};
 
 n = n + 1;
-reg(n).name = 'MOTOR_0';
+reg(n).name = 'MOTOR_START';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'MIN',15,0,'uint16',1000};
-reg(n).subf{2} = {'MAX',31,16,'uint16',2000};
+reg(n).subf{1} = {'MOTOR_START',15,0,'uint16',1050};
 
 n = n + 1;
-reg(n).name = 'MOTOR_1';
+reg(n).name = 'MOTOR_ARMED';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'START',15,0,'uint16',1050};
-reg(n).subf{2} = {'ARMED',31,16,'uint16',1075};
+reg(n).subf{1} = {'MOTOR_ARMED',15,0,'uint16',1075};
 
 n = n + 1;
-reg(n).name = 'RATE';
+reg(n).name = 'COMMAND_RATE';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'PITCH_ROLL_YAW',15,0,'uint16',360};
-reg(n).subf{2} = {'THROTTLE',31,16,'uint16',900};
+reg(n).subf{1} = {'COMMAND_RATE',31,0,'float',2.5};
+
+n = n + 1;
+reg(n).name = 'THROTTLE_RANGE';
+reg(n).read_only = 0;
+reg(n).flash = 1;
+reg(n).subf{1} = {'THROTTLE_RANGE',15,0,'uint16',900};
 
 n = n + 1;
 reg(n).name = 'PITCH_P';
@@ -92,13 +95,13 @@ n = n + 1;
 reg(n).name = 'PITCH_I';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'PITCH_I',31,0,'float',0.02};
+reg(n).subf{1} = {'PITCH_I',31,0,'float',0.01};
 
 n = n + 1;
 reg(n).name = 'PITCH_D';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'PITCH_D',31,0,'float',10};
+reg(n).subf{1} = {'PITCH_D',31,0,'float',0};
 
 n = n + 1;
 reg(n).name = 'ROLL_P';
@@ -110,25 +113,25 @@ n = n + 1;
 reg(n).name = 'ROLL_I';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'ROLL_I',31,0,'float',0.02};
+reg(n).subf{1} = {'ROLL_I',31,0,'float',0.01};
 
 n = n + 1;
 reg(n).name = 'ROLL_D';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'ROLL_D',31,0,'float',10};
+reg(n).subf{1} = {'ROLL_D',31,0,'float',0};
 
 n = n + 1;
 reg(n).name = 'YAW_P';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'YAW_P',31,0,'float',4};
+reg(n).subf{1} = {'YAW_P',31,0,'float',3};
 
 n = n + 1;
 reg(n).name = 'YAW_I';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'YAW_I',31,0,'float',0.04};
+reg(n).subf{1} = {'YAW_I',31,0,'float',0.02};
 
 n = n + 1;
 reg(n).name = 'YAW_D';
@@ -140,4 +143,4 @@ n = n + 1;
 reg(n).name = 'TPA';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'TPA',31,0,'float',0};
+reg(n).subf{1} = {'TPA',31,0,'float',0.4};

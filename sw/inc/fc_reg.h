@@ -1,4 +1,4 @@
-#define NB_REG 22
+#define NB_REG 23
 
 uint32_t reg[NB_REG];
 float regf[NB_REG];
@@ -20,25 +20,20 @@ float regf[NB_REG];
 #define REG_VBAT_MIN regf[6]
 #define REG_VBAT_MAX regf[7]
 #define REG_EXPO regf[8]
-#define REG_MOTOR_0 reg[9]
-#define REG_MOTOR_0__MIN (uint16_t)((reg[9] & 65535U) >> 0)
-#define REG_MOTOR_0__MAX (uint16_t)((reg[9] & 4294901760U) >> 16)
-#define REG_MOTOR_1 reg[10]
-#define REG_MOTOR_1__START (uint16_t)((reg[10] & 65535U) >> 0)
-#define REG_MOTOR_1__ARMED (uint16_t)((reg[10] & 4294901760U) >> 16)
-#define REG_RATE reg[11]
-#define REG_RATE__PITCH_ROLL_YAW (uint16_t)((reg[11] & 65535U) >> 0)
-#define REG_RATE__THROTTLE (uint16_t)((reg[11] & 4294901760U) >> 16)
-#define REG_PITCH_P regf[12]
-#define REG_PITCH_I regf[13]
-#define REG_PITCH_D regf[14]
-#define REG_ROLL_P regf[15]
-#define REG_ROLL_I regf[16]
-#define REG_ROLL_D regf[17]
-#define REG_YAW_P regf[18]
-#define REG_YAW_I regf[19]
-#define REG_YAW_D regf[20]
-#define REG_TPA regf[21]
+#define REG_MOTOR_START reg[9]
+#define REG_MOTOR_ARMED reg[10]
+#define REG_COMMAND_RATE regf[11]
+#define REG_THROTTLE_RANGE reg[12]
+#define REG_PITCH_P regf[13]
+#define REG_PITCH_I regf[14]
+#define REG_PITCH_D regf[15]
+#define REG_ROLL_P regf[16]
+#define REG_ROLL_I regf[17]
+#define REG_ROLL_D regf[18]
+#define REG_YAW_P regf[19]
+#define REG_YAW_I regf[20]
+#define REG_YAW_D regf[21]
+#define REG_TPA regf[22]
 
 typedef struct
 {
@@ -50,26 +45,27 @@ typedef struct
 
 reg_properties_t reg_properties[NB_REG] = 
 {
-	{1, 1, 0, 13}, // VERSION
+	{1, 1, 0, 14}, // VERSION
 	{0, 0, 0, 1024018}, // CTRL
 	{0, 0, 0, 0}, // DEBUG
 	{1, 0, 0, 0}, // ERROR
 	{1, 0, 0, 0}, // LOOP_TIME
 	{1, 0, 1, 0}, // VBAT
-	{0, 1, 1, 1093664768}, // VBAT_MIN
+	{0, 1, 1, 1093350195}, // VBAT_MIN
 	{0, 1, 1, 1095342490}, // VBAT_MAX
 	{0, 1, 1, 1045220557}, // EXPO
-	{0, 1, 0, 131073000}, // MOTOR_0
-	{0, 1, 0, 70452250}, // MOTOR_1
-	{0, 1, 0, 58982760}, // RATE
+	{0, 1, 0, 1050}, // MOTOR_START
+	{0, 1, 0, 1075}, // MOTOR_ARMED
+	{0, 1, 1, 1075838976}, // COMMAND_RATE
+	{0, 1, 0, 900}, // THROTTLE_RANGE
 	{0, 1, 1, 1073741824}, // PITCH_P
-	{0, 1, 1, 1017370378}, // PITCH_I
-	{0, 1, 1, 1092616192}, // PITCH_D
+	{0, 1, 1, 1008981770}, // PITCH_I
+	{0, 1, 1, 0}, // PITCH_D
 	{0, 1, 1, 1073741824}, // ROLL_P
-	{0, 1, 1, 1017370378}, // ROLL_I
-	{0, 1, 1, 1092616192}, // ROLL_D
-	{0, 1, 1, 1082130432}, // YAW_P
-	{0, 1, 1, 1025758986}, // YAW_I
+	{0, 1, 1, 1008981770}, // ROLL_I
+	{0, 1, 1, 0}, // ROLL_D
+	{0, 1, 1, 1077936128}, // YAW_P
+	{0, 1, 1, 1017370378}, // YAW_I
 	{0, 1, 1, 0}, // YAW_D
-	{0, 1, 1, 0} // TPA
+	{0, 1, 1, 1053609165} // TPA
 };

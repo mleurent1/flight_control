@@ -152,91 +152,37 @@ classdef fc_reg
 				obj.write(8,z);
 			end
 		end
-		function y = MOTOR_0(obj,x)
+		function y = MOTOR_START(obj,x)
 			if nargin < 2
 				y = obj.read(9);
 			else
 				obj.write(9,x);
 			end
 		end
-		function y = MOTOR_0__MIN(obj,x)
-			r = obj.read(9);
-			if nargin < 2
-				y = bitshift(bitand(r, 65535), 0);
-			else
-				w = bitand(bitshift(x, 0), 65535) + bitand(r, 4294901760);
-				obj.write(9,w);
-			end
-		end
-		function y = MOTOR_0__MAX(obj,x)
-			r = obj.read(9);
-			if nargin < 2
-				y = bitshift(bitand(r, 4294901760), -16);
-			else
-				w = bitand(bitshift(x, 16), 4294901760) + bitand(r, 65535);
-				obj.write(9,w);
-			end
-		end
-		function y = MOTOR_1(obj,x)
+		function y = MOTOR_ARMED(obj,x)
 			if nargin < 2
 				y = obj.read(10);
 			else
 				obj.write(10,x);
 			end
 		end
-		function y = MOTOR_1__START(obj,x)
-			r = obj.read(10);
+		function y = COMMAND_RATE(obj,x)
 			if nargin < 2
-				y = bitshift(bitand(r, 65535), 0);
-			else
-				w = bitand(bitshift(x, 0), 65535) + bitand(r, 4294901760);
-				obj.write(10,w);
-			end
-		end
-		function y = MOTOR_1__ARMED(obj,x)
-			r = obj.read(10);
-			if nargin < 2
-				y = bitshift(bitand(r, 4294901760), -16);
-			else
-				w = bitand(bitshift(x, 16), 4294901760) + bitand(r, 65535);
-				obj.write(10,w);
-			end
-		end
-		function y = RATE(obj,x)
-			if nargin < 2
-				y = obj.read(11);
-			else
-				obj.write(11,x);
-			end
-		end
-		function y = RATE__PITCH_ROLL_YAW(obj,x)
-			r = obj.read(11);
-			if nargin < 2
-				y = bitshift(bitand(r, 65535), 0);
-			else
-				w = bitand(bitshift(x, 0), 65535) + bitand(r, 4294901760);
-				obj.write(11,w);
-			end
-		end
-		function y = RATE__THROTTLE(obj,x)
-			r = obj.read(11);
-			if nargin < 2
-				y = bitshift(bitand(r, 4294901760), -16);
-			else
-				w = bitand(bitshift(x, 16), 4294901760) + bitand(r, 65535);
-				obj.write(11,w);
-			end
-		end
-		function y = PITCH_P(obj,x)
-			if nargin < 2
-				z = obj.read(12);
+				z = obj.read(11);
 				y = typecast(uint32(z), 'single');
 			else
 				z = typecast(single(x), 'uint32');
-				obj.write(12,z);
+				obj.write(11,z);
 			end
 		end
-		function y = PITCH_I(obj,x)
+		function y = THROTTLE_RANGE(obj,x)
+			if nargin < 2
+				y = obj.read(12);
+			else
+				obj.write(12,x);
+			end
+		end
+		function y = PITCH_P(obj,x)
 			if nargin < 2
 				z = obj.read(13);
 				y = typecast(uint32(z), 'single');
@@ -245,7 +191,7 @@ classdef fc_reg
 				obj.write(13,z);
 			end
 		end
-		function y = PITCH_D(obj,x)
+		function y = PITCH_I(obj,x)
 			if nargin < 2
 				z = obj.read(14);
 				y = typecast(uint32(z), 'single');
@@ -254,7 +200,7 @@ classdef fc_reg
 				obj.write(14,z);
 			end
 		end
-		function y = ROLL_P(obj,x)
+		function y = PITCH_D(obj,x)
 			if nargin < 2
 				z = obj.read(15);
 				y = typecast(uint32(z), 'single');
@@ -263,7 +209,7 @@ classdef fc_reg
 				obj.write(15,z);
 			end
 		end
-		function y = ROLL_I(obj,x)
+		function y = ROLL_P(obj,x)
 			if nargin < 2
 				z = obj.read(16);
 				y = typecast(uint32(z), 'single');
@@ -272,7 +218,7 @@ classdef fc_reg
 				obj.write(16,z);
 			end
 		end
-		function y = ROLL_D(obj,x)
+		function y = ROLL_I(obj,x)
 			if nargin < 2
 				z = obj.read(17);
 				y = typecast(uint32(z), 'single');
@@ -281,7 +227,7 @@ classdef fc_reg
 				obj.write(17,z);
 			end
 		end
-		function y = YAW_P(obj,x)
+		function y = ROLL_D(obj,x)
 			if nargin < 2
 				z = obj.read(18);
 				y = typecast(uint32(z), 'single');
@@ -290,7 +236,7 @@ classdef fc_reg
 				obj.write(18,z);
 			end
 		end
-		function y = YAW_I(obj,x)
+		function y = YAW_P(obj,x)
 			if nargin < 2
 				z = obj.read(19);
 				y = typecast(uint32(z), 'single');
@@ -299,7 +245,7 @@ classdef fc_reg
 				obj.write(19,z);
 			end
 		end
-		function y = YAW_D(obj,x)
+		function y = YAW_I(obj,x)
 			if nargin < 2
 				z = obj.read(20);
 				y = typecast(uint32(z), 'single');
@@ -308,13 +254,22 @@ classdef fc_reg
 				obj.write(20,z);
 			end
 		end
-		function y = TPA(obj,x)
+		function y = YAW_D(obj,x)
 			if nargin < 2
 				z = obj.read(21);
 				y = typecast(uint32(z), 'single');
 			else
 				z = typecast(single(x), 'uint32');
 				obj.write(21,z);
+			end
+		end
+		function y = TPA(obj,x)
+			if nargin < 2
+				z = obj.read(22);
+				y = typecast(uint32(z), 'single');
+			else
+				z = typecast(single(x), 'uint32');
+				obj.write(22,z);
 			end
 		end
 	end
@@ -328,21 +283,22 @@ classdef fc_reg
 		VBAT_MIN_addr = 6;
 		VBAT_MAX_addr = 7;
 		EXPO_addr = 8;
-		MOTOR_0_addr = 9;
-		MOTOR_1_addr = 10;
-		RATE_addr = 11;
-		PITCH_P_addr = 12;
-		PITCH_I_addr = 13;
-		PITCH_D_addr = 14;
-		ROLL_P_addr = 15;
-		ROLL_I_addr = 16;
-		ROLL_D_addr = 17;
-		YAW_P_addr = 18;
-		YAW_I_addr = 19;
-		YAW_D_addr = 20;
-		TPA_addr = 21;
-		flash_addr_list = [0 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21];
-		flash_float_list = [0,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1,1];
-		flash_name_list = {'VERSION','VBAT_MIN','VBAT_MAX','EXPO','MOTOR_0','MOTOR_1','RATE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D','TPA'};
+		MOTOR_START_addr = 9;
+		MOTOR_ARMED_addr = 10;
+		COMMAND_RATE_addr = 11;
+		THROTTLE_RANGE_addr = 12;
+		PITCH_P_addr = 13;
+		PITCH_I_addr = 14;
+		PITCH_D_addr = 15;
+		ROLL_P_addr = 16;
+		ROLL_I_addr = 17;
+		ROLL_D_addr = 18;
+		YAW_P_addr = 19;
+		YAW_I_addr = 20;
+		YAW_D_addr = 21;
+		TPA_addr = 22;
+		flash_addr_list = [0 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22];
+		flash_float_list = [0,1,1,1,0,0,1,0,1,1,1,1,1,1,1,1,1,1];
+		flash_name_list = {'VERSION','VBAT_MIN','VBAT_MAX','EXPO','MOTOR_START','MOTOR_ARMED','COMMAND_RATE','THROTTLE_RANGE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D','TPA'};
 	end
 end
