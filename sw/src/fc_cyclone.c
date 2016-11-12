@@ -155,9 +155,12 @@ void EXTI15_10_IRQHandler()
 	
 	if (REG_CTRL__MPU_HOST_CTRL == 0)
 	{
-		spi2_tx_buffer[0] = 0x80 | 59;
-		SetDmaSpi2Rx(15);
-		SetDmaSpi2Tx(15);
+		//spi2_tx_buffer[0] = 0x80 | 59;
+		//SetDmaSpi2Rx(15);
+		//SetDmaSpi2Tx(15);
+		spi2_tx_buffer[0] = 0x80 | 67;
+		SetDmaSpi2Rx(7);
+		SetDmaSpi2Tx(7);
 	}
 }
 
@@ -618,9 +621,9 @@ int main()
 	TIM2->CCER = TIM_CCER_CC1E;
 	TIM2->CCMR1 = TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1M_0;
 	
-	// One-pulse mode for OneShot125 
+	// One-pulse mode for OneShot42
 	TIM3->CR1 = TIM_CR1_OPM;
-	TIM3->PSC = 8; // 0.125us
+	TIM3->PSC = 2; // 0.042us
 	TIM3->ARR = MOTOR_MAX + 1;
 	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
 	TIM3->CCMR1 = TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1M_0 | TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2M_0;
@@ -705,13 +708,14 @@ int main()
 	SpiWrite(MPU_USER_CTRL, MPU_USER_CTRL__I2C_IF_DIS);
 	SpiWrite(MPU_PWR_MGMT_1, 0); // Get MPU out of sleep
 	wait_ms(100);
-	SpiWrite(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1)); // Set CLK = gyro X clock
+	SpiWrite(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1) | MPU_PWR_MGMT_1__TEMP_DIS); // Set CLK = gyro X clock  and disable temperature sensors
+	SpiWrite(MPU_PWR_MGMT_2, MPU_PWR_MGMT_2__STDBY_XA | MPU_PWR_MGMT_2__STDBY_YA | MPU_PWR_MGMT_2__STDBY_ZA); // Disable accelerometers
 	wait_ms(100);
-	//SpiWrite(MPU_SMPLRT_DIV, 0); // Sample rate = Fs/(x+1)
-	SpiWrite(MPU_CFG, MPU_CFG__DLPF_CFG(1)); // Filter ON => Fs=1kHz, else 8kHz
+	//SpiWrite(MPU_SMPLRT_DIV, 1); // Sample rate = Fs/(x+1)
+	//SpiWrite(MPU_CFG, MPU_CFG__DLPF_CFG(1)); // Filter ON => Fs=1kHz, else 8kHz
 	SpiWrite(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
 	SpiWrite(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
-	wait_ms(100); // wait for filter to settle
+	//wait_ms(100); // wait for filter to settle
 	SpiWrite(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
 	
 	//####### GYRO CAL ####### 
@@ -722,9 +726,12 @@ int main()
 		{
 			FLAG &= ~FLAG_SENSOR;
 			
-			gyro_x_raw  = ((int16_t)spi2_rx_buffer[9]  << 8) | (int16_t)spi2_rx_buffer[10];
-			gyro_y_raw  = ((int16_t)spi2_rx_buffer[11] << 8) | (int16_t)spi2_rx_buffer[12];
-			gyro_z_raw  = ((int16_t)spi2_rx_buffer[13] << 8) | (int16_t)spi2_rx_buffer[14];
+			//gyro_x_raw  = ((int16_t)spi2_rx_buffer[9]  << 8) | (int16_t)spi2_rx_buffer[10];
+			//gyro_y_raw  = ((int16_t)spi2_rx_buffer[11] << 8) | (int16_t)spi2_rx_buffer[12];
+			//gyro_z_raw  = ((int16_t)spi2_rx_buffer[13] << 8) | (int16_t)spi2_rx_buffer[14];
+			gyro_x_raw  = ((int16_t)spi2_rx_buffer[1]  << 8) | (int16_t)spi2_rx_buffer[2];
+			gyro_y_raw  = ((int16_t)spi2_rx_buffer[3]  << 8) | (int16_t)spi2_rx_buffer[4];
+			gyro_z_raw  = ((int16_t)spi2_rx_buffer[5]  << 8) | (int16_t)spi2_rx_buffer[6];
 			
 			gyro_x_dc += (float)gyro_x_raw;
 			gyro_y_dc += (float)gyro_y_raw;
@@ -890,22 +897,26 @@ int main()
 			
 			if (REG_CTRL__LED_SELECT == 2)
 			{
-				if ((sensor_sample_count & 0xFF) == 0)
+				if ((sensor_sample_count & 0x7FF) == 0)
 					GPIOB->BSRR = GPIO_BSRR_BR_5;
-				else if ((sensor_sample_count & 0xFF) == 128)
+				else if ((sensor_sample_count & 0x7FF) == 1024)
 					GPIOB->BSRR = GPIO_BSRR_BS_5;
 			}
 			
 			REG_ERROR &= 0xFFFF0000;
 			REG_ERROR |= (uint32_t)sensor_error_count & 0x0000FFFF;;
 			
-			accel_x_raw = ((int16_t)spi2_rx_buffer[1]  << 8) | (int16_t)spi2_rx_buffer[2];
-			accel_y_raw = ((int16_t)spi2_rx_buffer[3]  << 8) | (int16_t)spi2_rx_buffer[4];
-			accel_z_raw = ((int16_t)spi2_rx_buffer[5]  << 8) | (int16_t)spi2_rx_buffer[6];
+			//accel_x_raw = ((int16_t)spi2_rx_buffer[1]  << 8) | (int16_t)spi2_rx_buffer[2];
+			//accel_y_raw = ((int16_t)spi2_rx_buffer[3]  << 8) | (int16_t)spi2_rx_buffer[4];
+			//accel_z_raw = ((int16_t)spi2_rx_buffer[5]  << 8) | (int16_t)spi2_rx_buffer[6];
 			//temp_raw    = ((int16_t)spi2_rx_buffer[7]  << 8) | (int16_t)spi2_rx_buffer[8];
-			gyro_x_raw  = ((int16_t)spi2_rx_buffer[9]  << 8) | (int16_t)spi2_rx_buffer[10];
-			gyro_y_raw  = ((int16_t)spi2_rx_buffer[11] << 8) | (int16_t)spi2_rx_buffer[12];
-			gyro_z_raw  = ((int16_t)spi2_rx_buffer[13] << 8) | (int16_t)spi2_rx_buffer[14];
+			//gyro_x_raw  = ((int16_t)spi2_rx_buffer[9]  << 8) | (int16_t)spi2_rx_buffer[10];
+			//gyro_y_raw  = ((int16_t)spi2_rx_buffer[11] << 8) | (int16_t)spi2_rx_buffer[12];
+			//gyro_z_raw  = ((int16_t)spi2_rx_buffer[13] << 8) | (int16_t)spi2_rx_buffer[14];
+			gyro_x_raw  = ((int16_t)spi2_rx_buffer[1]  << 8) | (int16_t)spi2_rx_buffer[2];
+			gyro_y_raw  = ((int16_t)spi2_rx_buffer[3]  << 8) | (int16_t)spi2_rx_buffer[4];
+			gyro_z_raw  = ((int16_t)spi2_rx_buffer[5]  << 8) | (int16_t)spi2_rx_buffer[6];
+			
 			
 			// Remove DC and scale
 			gyro_x = ((float)gyro_x_raw - gyro_x_dc) * gyro_x_scale;

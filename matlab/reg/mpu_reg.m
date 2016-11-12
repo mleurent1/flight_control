@@ -515,6 +515,76 @@ classdef mpu_reg
 				obj.write(107,w);
 			end
 		end
+		function y = PWR_MGMT_2(obj,x)
+			if nargin < 2
+				y = obj.read(108);
+			else
+				obj.write(108,x);
+			end
+		end
+		function y = PWR_MGMT_2__LP_WAKE_CTRL(obj,x)
+			r = obj.read(108);
+			if nargin < 2
+				y = bitshift(bitand(r, 192), -6);
+			else
+				w = bitand(bitshift(x, 6), 192) + bitand(r, 63);
+				obj.write(108,w);
+			end
+		end
+		function y = PWR_MGMT_2__STDBY_XA(obj,x)
+			r = obj.read(108);
+			if nargin < 2
+				y = bitshift(bitand(r, 32), -5);
+			else
+				w = bitand(bitshift(x, 5), 32) + bitand(r, 223);
+				obj.write(108,w);
+			end
+		end
+		function y = PWR_MGMT_2__STDBY_YA(obj,x)
+			r = obj.read(108);
+			if nargin < 2
+				y = bitshift(bitand(r, 16), -4);
+			else
+				w = bitand(bitshift(x, 4), 16) + bitand(r, 239);
+				obj.write(108,w);
+			end
+		end
+		function y = PWR_MGMT_2__STDBY_ZA(obj,x)
+			r = obj.read(108);
+			if nargin < 2
+				y = bitshift(bitand(r, 8), -3);
+			else
+				w = bitand(bitshift(x, 3), 8) + bitand(r, 247);
+				obj.write(108,w);
+			end
+		end
+		function y = PWR_MGMT_2__STDBY_XG(obj,x)
+			r = obj.read(108);
+			if nargin < 2
+				y = bitshift(bitand(r, 4), -2);
+			else
+				w = bitand(bitshift(x, 2), 4) + bitand(r, 251);
+				obj.write(108,w);
+			end
+		end
+		function y = PWR_MGMT_2__STDBY_YG(obj,x)
+			r = obj.read(108);
+			if nargin < 2
+				y = bitshift(bitand(r, 2), -1);
+			else
+				w = bitand(bitshift(x, 1), 2) + bitand(r, 253);
+				obj.write(108,w);
+			end
+		end
+		function y = PWR_MGMT_2__STDBY_ZG(obj,x)
+			r = obj.read(108);
+			if nargin < 2
+				y = bitshift(bitand(r, 1), 0);
+			else
+				w = bitand(bitshift(x, 0), 1) + bitand(r, 254);
+				obj.write(108,w);
+			end
+		end
 		function y = WHO_AM_I(obj,x)
 			if nargin < 2
 				y = obj.read(117);
@@ -550,6 +620,7 @@ classdef mpu_reg
 		SIGNAL_PATH_RST_addr = 104;
 		USER_CTRL_addr = 106;
 		PWR_MGMT_1_addr = 107;
+		PWR_MGMT_2_addr = 108;
 		WHO_AM_I_addr = 117;
 	end
 end

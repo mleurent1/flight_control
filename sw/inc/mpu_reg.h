@@ -84,4 +84,14 @@
 #define MPU_PWR_MGMT_1__SLEEP (1 << 6)
 #define MPU_PWR_MGMT_1__DEVICE_RST (1 << 7)
 
+#define MPU_PWR_MGMT_2 108
+
+#define MPU_PWR_MGMT_2__LP_WAKE_CTRL (x) (((x) & 0x3) << 6)
+#define MPU_PWR_MGMT_2__STDBY_XA (1 << 5)
+#define MPU_PWR_MGMT_2__STDBY_YA (1 << 4)
+#define MPU_PWR_MGMT_2__STDBY_ZA (1 << 3)
+#define MPU_PWR_MGMT_2__STDBY_XG (1 << 2)
+#define MPU_PWR_MGMT_2__STDBY_YG (1 << 1)
+#define MPU_PWR_MGMT_2__STDBY_ZG (1 << 0)
+
 #define MPU_WHO_AM_I 117
