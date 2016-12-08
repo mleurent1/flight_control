@@ -40,11 +40,27 @@
 #define MPU_ACCEL_CFG__YA_ST (1 << 6)
 #define MPU_ACCEL_CFG__XA_ST (1 << 7)
 
+#define MPU_INT_PIN_CFG 55
+
+#define MPU_INT_PIN_CFG__I2C_BYPASS (1 << 1)
+#define MPU_INT_PIN_CFG__FSYNC_INT_EN (1 << 2)
+#define MPU_INT_PIN_CFG__FSYNC_INT_LVL (1 << 3)
+#define MPU_INT_PIN_CFG__INT_RD_CLR (1 << 4)
+#define MPU_INT_PIN_CFG__LATCH_INT_EN (1 << 5)
+#define MPU_INT_PIN_CFG__INT_OPEN (1 << 6)
+#define MPU_INT_PIN_CFG__INT_LVL (1 << 7)
+
 #define MPU_INT_EN 56
 
 #define MPU_INT_EN__DATA_RDY_EN (1 << 0)
-#define MPU_INT_EN__I2C_MST_INT_EN (1 << 3)
+#define MPU_INT_EN__I2C_MST_EN (1 << 3)
 #define MPU_INT_EN__FIFO_OFLOW_EN (1 << 4)
+
+#define MPU_INT_STATUS 58
+
+#define MPU_INT_STATUS__DATA_RDY_INT (1 << 0)
+#define MPU_INT_STATUS__I2C_MST_INT (1 << 3)
+#define MPU_INT_STATUS__FIFO_OFLOW_INT (1 << 4)
 
 #define MPU_ACCEL_X_H 59
 #define MPU_ACCEL_X_L 60

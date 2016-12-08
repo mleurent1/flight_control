@@ -37,7 +37,7 @@
 #include "stm32f3xx_hal_pcd.h"
 
 #define USBD_CDC_ITF_RX_SIZE  6
-#define USBD_CDC_ITF_TX_SIZE  25
+#define USBD_CDC_ITF_TX_SIZE  32
 
 extern USBD_HandleTypeDef USBD_device_handler;
 extern USBD_CDC_ItfTypeDef USBD_CDC_Itf_fops;

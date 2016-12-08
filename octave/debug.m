@@ -134,7 +134,7 @@ t0 = 0;
 while n < NbSamples
 	
 	fc.DEBUG(DebugCase);
-	r = fread(ser,r1);
+	r = double(srl_read(ser,r1));
 	n = n + 1;
 	
 	t1 = r(1) + 2^8*r(2);
@@ -164,3 +164,4 @@ while n < NbSamples
 end
 
 end
+

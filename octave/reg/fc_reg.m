@@ -2,12 +2,12 @@ classdef fc_reg
 	methods
 		function data = read(obj,addr)
 			global ser
-			fwrite(ser,[0,addr,0,0,0,0]);
-			data = sum(fread(ser,4) .* 2.^(24:-8:0)');
+			srl_write(ser,sprintf("%s",[0,addr,0,0,0,0]));
+			data = sum(double(srl_read(ser,4)) .* 2.^(24:-8:0));
 		end
 		function write(obj,addr,data)
 			global ser
-			fwrite(ser,[1,addr,floor(mod(double(data) ./ 2.^(24:-8:0),2^8))]);
+			srl_write(ser,sprintf("%s",[1,addr,floor(mod(double(data) ./ 2.^(24:-8:0),2^8))]));
 		end
 		function y = VERSION(obj,x)
 			if nargin < 2

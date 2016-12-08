@@ -1,0 +1,2 @@
+global ser
+fclose(ser);

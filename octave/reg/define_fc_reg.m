@@ -57,12 +57,6 @@ reg(n).flash = 1;
 reg(n).subf{1} = {'VBAT_MIN',31,0,'float',10.7};
 
 n = n + 1;
-reg(n).name = 'VBAT_MAX';
-reg(n).read_only = 0;
-reg(n).flash = 1;
-reg(n).subf{1} = {'VBAT_MAX',31,0,'float',12.6};
-
-n = n + 1;
 reg(n).name = 'RECEIVER_BIND';
 reg(n).read_only = 0;
 reg(n).flash = 1;
