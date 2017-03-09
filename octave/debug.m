@@ -12,7 +12,7 @@ a = {};
 c = 'brgcmk';
 
 WindowSizeSensor = 256;
-TimeWindowSizeSensor = 40000;
+TimeWindowSizeSensor = 10000;
 WindowSizeCommand = 256;
 TimeWindowSizeCommand = 500;
 WindowSizeVbat = 256;
@@ -57,7 +57,7 @@ switch DebugCase
 		TimeWindowSize = TimeWindowSizeVbat;
 		a{1} = axes;
 		set(a{1},'XLim',[0,TimeWindowSize]);
-		set(a{1},'YLim',[8,17]);
+		set(a{1},'YLim',[0,17]);
 		l{1} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(1));
 	case 4 % raw commands
 		dlen = 6;

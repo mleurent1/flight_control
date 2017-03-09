@@ -25,26 +25,63 @@
   ******************************************************************************
   */ 
 
+/* Includes ------------------------------------------------------------------*/
 #include "usbd_cdc_if.h"
+#include "fc.h"
 
-USBD_HandleTypeDef USBD_device_handler;
+/** @addtogroup STM32_USB_DEVICE_LIBRARY
+  * @{
+  */
 
-uint8_t USBD_CDC_Itf_rx_buffer[USBD_CDC_ITF_RX_SIZE];
-uint8_t USBD_CDC_Itf_tx_buffer[USBD_CDC_ITF_TX_SIZE];
 
-static int8_t USBD_CDC_Itf_Init     (void);
-static int8_t USBD_CDC_Itf_DeInit   (void);
-static int8_t USBD_CDC_Itf_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length);
-static int8_t USBD_CDC_Itf_Receive  (uint8_t* pbuf, uint32_t *Len);
+/** @defgroup USBD_CDC 
+  * @brief usbd core module
+  * @{
+  */ 
 
-extern void HostCommand(uint8_t* buffer);
+/** @defgroup USBD_CDC_Private_TypesDefinitions
+  * @{
+  */ 
+/**
+  * @}
+  */ 
 
-USBD_CDC_ItfTypeDef USBD_CDC_Itf_fops = 
+
+/** @defgroup USBD_CDC_Private_Defines
+  * @{
+  */ 
+
+#define USBD_CDC_IF_RX_SIZE  6
+
+/**
+  * @}
+  */ 
+
+
+/** @defgroup USBD_CDC_Private_Macros
+  * @{
+  */ 
+
+/**
+  * @}
+  */ 
+
+
+/** @defgroup USBD_CDC_Private_FunctionPrototypes
+  * @{
+  */
+
+static int8_t USBD_CDC_IF_Init     (void);
+static int8_t USBD_CDC_IF_DeInit   (void);
+static int8_t USBD_CDC_IF_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length);
+static int8_t USBD_CDC_IF_Receive  (uint8_t* pbuf, uint32_t *Len);
+
+USBD_CDC_ItfTypeDef USBD_CDC_IF_fops = 
 {
-  USBD_CDC_Itf_Init,
-  USBD_CDC_Itf_DeInit,
-  USBD_CDC_Itf_Control,
-  USBD_CDC_Itf_Receive
+	USBD_CDC_IF_Init,
+	USBD_CDC_IF_DeInit,
+	USBD_CDC_IF_Control,
+	USBD_CDC_IF_Receive
 };
 
 USBD_CDC_LineCodingTypeDef linecoding =
@@ -55,43 +92,48 @@ USBD_CDC_LineCodingTypeDef linecoding =
     0x08    /* nb. of bits 8*/
   };
 
+uint8_t USBD_CDC_IF_tx_buffer[USBD_CDC_IF_TX_SIZE];
+uint8_t USBD_CDC_IF_rx_buffer[USBD_CDC_IF_RX_SIZE];
+
+/* Private functions ---------------------------------------------------------*/
+
 /**
-  * @brief  USBD_CDC_Itf_Init
+  * @brief  USBD_CDC_IF_Init
   *         Initializes the CDC media low layer
   * @param  None
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
-static int8_t USBD_CDC_Itf_Init(void)
+static int8_t USBD_CDC_IF_Init(void)
 {
-	USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_Itf_tx_buffer, 0);
-	USBD_CDC_SetRxBuffer(&USBD_device_handler, USBD_CDC_Itf_rx_buffer);
-	return (USBD_OK);
+	USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_IF_tx_buffer, 0);
+	USBD_CDC_SetRxBuffer(&USBD_device_handler, USBD_CDC_IF_rx_buffer);
+	return (0);
 }
 
 /**
-  * @brief  USBD_CDC_Itf_DeInit
+  * @brief  USBD_CDC_IF_DeInit
   *         DeInitializes the CDC media low layer
   * @param  None
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
-static int8_t USBD_CDC_Itf_DeInit(void)
+static int8_t USBD_CDC_IF_DeInit(void)
 {
   /*
      Add your deinitialization code here 
   */  
-  return (USBD_OK);
+  return (0);
 }
 
 
 /**
-  * @brief  USBD_CDC_Itf_Control
+  * @brief  USBD_CDC_IF_Control
   *         Manage the CDC class requests
   * @param  Cmd: Command code            
   * @param  Buf: Buffer containing command data (request parameters)
   * @param  Len: Number of data to be sent (in bytes)
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
-static int8_t USBD_CDC_Itf_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length)
+static int8_t USBD_CDC_IF_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length)
 { 
   switch (cmd)
   {
@@ -149,11 +191,11 @@ static int8_t USBD_CDC_Itf_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length
     break;
   }
 
-  return (USBD_OK);
+  return (0);
 }
 
 /**
-  * @brief  USBD_CDC_Itf_Receive
+  * @brief  USBD_CDC_IF_Receive
   *         Data received over USB OUT endpoint are sent over CDC interface 
   *         through this function.
   *           
@@ -168,16 +210,25 @@ static int8_t USBD_CDC_Itf_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length
   * @param  Len: Number of data received (in bytes)
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
-static int8_t USBD_CDC_Itf_Receive (uint8_t* Buf, uint32_t *Len)
+static int8_t USBD_CDC_IF_Receive (uint8_t* Buf, uint32_t *Len)
 {
 	if (*Len == 6)
-	{
 		HostCommand(Buf);
-	}
 	USBD_CDC_ReceivePacket(&USBD_device_handler);
-	return (USBD_OK);
+	return (0);
 }
 
+/**
+  * @}
+  */ 
+
+/**
+  * @}
+  */ 
+
+/**
+  * @}
+  */ 
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
 

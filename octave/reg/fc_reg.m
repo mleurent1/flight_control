@@ -200,11 +200,9 @@ classdef fc_reg
 		end
 		function y = COMMAND_RATE(obj,x)
 			if nargin < 2
-				z = obj.read(12);
-				y = typecast(uint32(z), 'single');
+				y = obj.read(12);
 			else
-				z = typecast(single(x), 'uint32');
-				obj.write(12,z);
+				obj.write(12,x);
 			end
 		end
 		function y = THROTTLE_RANGE(obj,x)
@@ -341,7 +339,7 @@ classdef fc_reg
 		TPA_THRESHOLD_addr = 23;
 		TPA_SLOPE_addr = 24;
 		flash_addr_list = [0 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24];
-		flash_float_list = [0,1,0,1,0,0,1,0,1,1,1,1,1,1,1,1,1,1,1];
+		flash_float_list = [0,1,0,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1];
 		flash_name_list = {'VERSION','VBAT_MIN','RECEIVER_BIND','EXPO','MOTOR_START','MOTOR_ARMED','COMMAND_RATE','THROTTLE_RANGE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D','TPA_THRESHOLD','TPA_SLOPE'};
 	end
 end

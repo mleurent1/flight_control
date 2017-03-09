@@ -1,7 +1,6 @@
-#define NB_REG 25
+#include <stdint.h>
 
-uint32_t reg[NB_REG];
-float regf[NB_REG];
+#define NB_REG 25
 
 #define REG_VERSION reg[0]
 #define REG_CTRL reg[1]
@@ -26,7 +25,7 @@ float regf[NB_REG];
 #define REG_EXPO regf[9]
 #define REG_MOTOR_START reg[10]
 #define REG_MOTOR_ARMED reg[11]
-#define REG_COMMAND_RATE regf[12]
+#define REG_COMMAND_RATE reg[12]
 #define REG_THROTTLE_RANGE reg[13]
 #define REG_PITCH_P regf[14]
 #define REG_PITCH_I regf[15]
@@ -48,31 +47,6 @@ typedef struct
 	uint32_t dflt;
 } reg_properties_t;
 
-reg_properties_t reg_properties[NB_REG] = 
-{
-	{1, 1, 0, 16}, // VERSION
-	{0, 0, 0, 34}, // CTRL
-	{0, 0, 0, 0}, // MOTOR_TEST
-	{0, 0, 0, 0}, // DEBUG
-	{1, 0, 0, 0}, // ERROR
-	{1, 0, 0, 0}, // TIME
-	{1, 0, 1, 0}, // VBAT
-	{0, 1, 1, 1093350195}, // VBAT_MIN
-	{0, 1, 0, 0}, // RECEIVER_BIND
-	{0, 1, 1, 1045220557}, // EXPO
-	{0, 1, 0, 50}, // MOTOR_START
-	{0, 1, 0, 150}, // MOTOR_ARMED
-	{0, 1, 1, 1075838976}, // COMMAND_RATE
-	{0, 1, 0, 1800}, // THROTTLE_RANGE
-	{0, 1, 1, 1073741824}, // PITCH_P
-	{0, 1, 1, 1008981770}, // PITCH_I
-	{0, 1, 1, 0}, // PITCH_D
-	{0, 1, 1, 1073741824}, // ROLL_P
-	{0, 1, 1, 1008981770}, // ROLL_I
-	{0, 1, 1, 0}, // ROLL_D
-	{0, 1, 1, 1077936128}, // YAW_P
-	{0, 1, 1, 1017370378}, // YAW_I
-	{0, 1, 1, 0}, // YAW_D
-	{0, 1, 1, 1056964608}, // TPA_THRESHOLD
-	{0, 1, 1, 1053609165} // TPA_SLOPE
-};
+extern uint32_t reg[NB_REG];
+extern float regf[NB_REG];
+extern reg_properties_t reg_properties[NB_REG];

@@ -2,48 +2,23 @@
 
 x = -1:(2/2047):1;
 
-y1(x>0) = -sqrt(1 - x(x>=0)) + 1;
-y1(x<0) =  sqrt(1 + x(x<0)) - 1;
+a = 3;
 
-e = 4;
-y2(x>0) = ( e.^( x(x>=0)) - 1)/(e^1-1);
-y2(x<0) = (-e.^(-x(x<0)) + 1)/(e^1-1);
 
-b = 0.2;
-x3p = x(x>=0) + b;
-x3m = x(x< 0) - b;
-y3p =  x3p.^2 - b^2;
-y3m = -x3m.^2 + b^2;
-s = (1+b)^2-b^2;
-y3 = [y3m,y3p]/s;
+y1(x>=0) = (e.^( x(x>=0)*a) - 1)/(e^(a)-1);
+y1(x<0) = (-e.^(-x(x<0)*a) + 1)/(e^(a)-1);
 
-figure(1)
-plot(x,x,'b',x,y1,'r',x,y2,'g',x,y3,'m')
+b = a + a^2/2 + a^3/6 + a^4/24 + a^5/120 + a^6/720;
+y2(x>=0) = ((x(x>=0)*a) + (x(x>=0)*a).^(2)/2 + (x(x>=0)*a).^(3)/6 + (x(x>=0)*a).^(4)/24 + (x(x>=0)*a).^(5)/120 + (x(x>=0)*a).^(6)/720) / b;
+y2(x<0) = -((-x(x<0)*a) + (-x(x<0)*a).^(2)/2 + (-x(x<0)*a).^(3)/6 + (-x(x<0)*a).^(4)/24 + (-x(x<0)*a).^(5)/120 + (-x(x<0)*a).^(6)/720) / b;
 
-b_set = [0.15,0.2,0.4];
-
-figure(2)
-hold off
-plot(x,x,'b--')
-hold on
-plot(x,x/2,'b--')
-plot(x,x/3,'b--')
-plot(x,x/4,'b--')
-
-for n = 1:length(b_set)
-	b = b_set(n);
-	x3p = x(x>=0) + b;
-	x3m = x(x< 0) - b;
-	y3p =  x3p.^2 - b^2;
-	y3m = -x3m.^2 + b^2;
-	s = (1+b)^2-b^2;
-	y3 = [y3m,y3p]/s;
-	plot(x,y3)
-end
+figure(3)
+plot(x,x,'b--',x,x/8,'b--',x,y1,'r',x,y2,'g')
 
 
 %%
 len = 100000;
+%alpha = 0.0002;
 alpha = 0.0002;
 
 vacc = zeros(1,len);
@@ -57,5 +32,5 @@ end
 t = (0:len-1)*1e-3;
 vout = vacc * alpha;
 
-figure(3)
+figure(2)
 plot(t,vout)

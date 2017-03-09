@@ -34,7 +34,12 @@
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f3xx.h"  /* replace 'stm32xxx' with your HAL driver header filename, ex: stm32f4xx.h */
+#ifdef STM32F3
+	#include "stm32f3xx.h"  /* replace 'stm32xxx' with your HAL driver header filename, ex: stm32f4xx.h */
+#endif
+#ifdef STM32F4
+	#include "stm32f4xx.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -159,6 +164,10 @@ void USBD_static_free(void *p);
 /**
   * @}
   */ 
+
+/* Exported variables --------------------------------------------------------*/
+
+extern PCD_HandleTypeDef PCD_handler;
 
 #ifdef __cplusplus
 }

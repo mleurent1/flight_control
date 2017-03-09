@@ -59,9 +59,10 @@
 #define         DEVICE_ID3          (0x1FFFF7B4)
 
 #define  USB_SIZ_STRING_SERIAL               0x1A
+
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
-extern USBD_DescriptorsTypeDef VCP_Desc;
+extern USBD_DescriptorsTypeDef USBD_VCP_descriptor;
 
 #endif /* __USBD_DESC_H */
  

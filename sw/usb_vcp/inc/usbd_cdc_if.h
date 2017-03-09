@@ -33,17 +33,21 @@
  extern "C" {
 #endif
 
+/* Includes ------------------------------------------------------------------*/
 #include "usbd_cdc.h"
-#include "stm32f3xx_hal_pcd.h"
 
-#define USBD_CDC_ITF_RX_SIZE  6
-#define USBD_CDC_ITF_TX_SIZE  32
+/* Defines -------------------------------------------------------------------*/
 
-extern USBD_HandleTypeDef USBD_device_handler;
-extern USBD_CDC_ItfTypeDef USBD_CDC_Itf_fops;
-extern PCD_HandleTypeDef PCD_handler;
-extern USBD_DescriptorsTypeDef USBD_VCP_descriptor;
-extern uint8_t USBD_CDC_Itf_tx_buffer[USBD_CDC_ITF_TX_SIZE];
+#define USBD_CDC_IF_TX_SIZE  32
+
+/* Exported types ------------------------------------------------------------*/
+/* Exported variables --------------------------------------------------------*/
+
+extern USBD_CDC_ItfTypeDef USBD_CDC_IF_fops;
+extern uint8_t USBD_CDC_IF_tx_buffer[USBD_CDC_IF_TX_SIZE];
+
+/* Exported macro ------------------------------------------------------------*/
+/* Exported functions ------------------------------------------------------- */
 
 #ifdef __cplusplus
 }

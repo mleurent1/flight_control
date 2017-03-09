@@ -2,12 +2,10 @@
 
 f = fopen('../../sw/inc/fc_reg.h','w');
 
-fprintf(f,'#define NB_REG %d\n', length(reg));
+fprintf(f,'#include <stdint.h>\n\n');
 
-fprintf(f,'\nuint32_t reg[NB_REG];\n');
-fprintf(f,'float regf[NB_REG];\n');
+fprintf(f,'#define NB_REG %d\n\n', length(reg));
 
-fprintf(f,'\n');
 for n = 1:length(reg)
 	if length(reg(n).subf) == 1
 		if strcmp(reg(n).subf{1}{4}, 'float')
@@ -24,14 +22,29 @@ for n = 1:length(reg)
 	end
 end
 
-fprintf(f,'\ntypedef struct\n{\n');
+fprintf(f,'\n');
+
+fprintf(f,'typedef struct\n{\n');
 fprintf(f,'\t_Bool read_only;\n');
 fprintf(f,'\t_Bool flash;\n');
 fprintf(f,'\t_Bool is_float;\n');
 fprintf(f,'\tuint32_t dflt;\n');
-fprintf(f,'} reg_properties_t;\n');
+fprintf(f,'} reg_properties_t;\n\n');
 
-fprintf(f,'\nreg_properties_t reg_properties[NB_REG] = \n{\n');
+fprintf(f,'extern uint32_t reg[NB_REG];\n');
+fprintf(f,'extern float regf[NB_REG];\n');
+fprintf(f,'extern reg_properties_t reg_properties[NB_REG];\n');
+
+fclose(f);
+
+f = fopen('../../sw/src/fc_reg.c','w');
+
+fprintf(f,'#include "fc_reg.h"\n\n');
+
+fprintf(f,'uint32_t reg[NB_REG];\n');
+fprintf(f,'float regf[NB_REG];\n\n');
+
+fprintf(f,'reg_properties_t reg_properties[NB_REG] = \n{\n');
 
 % bools = {'false','true'};
 bools = {'0','1'};
