@@ -14,8 +14,8 @@
 #define REG_MOTOR_TEST__SELECT (uint8_t)((reg[2] & 983040U) >> 16)
 #define REG_DEBUG reg[3]
 #define REG_ERROR reg[4]
-#define REG_ERROR__SENSOR (uint16_t)((reg[4] & 65535U) >> 0)
-#define REG_ERROR__COMMMAND (uint16_t)((reg[4] & 4294901760U) >> 16)
+#define REG_ERROR__MPU (uint16_t)((reg[4] & 65535U) >> 0)
+#define REG_ERROR__RADIO (uint16_t)((reg[4] & 4294901760U) >> 16)
 #define REG_TIME reg[5]
 #define REG_TIME__SPI (uint16_t)((reg[5] & 65535U) >> 0)
 #define REG_TIME__PROCESS (uint16_t)((reg[5] & 4294901760U) >> 16)
@@ -25,8 +25,8 @@
 #define REG_EXPO regf[9]
 #define REG_MOTOR_START reg[10]
 #define REG_MOTOR_ARMED reg[11]
-#define REG_COMMAND_RATE reg[12]
-#define REG_THROTTLE_RANGE reg[13]
+#define REG_COMMAND_RATE regf[12]
+#define REG_THROTTLE_RANGE regf[13]
 #define REG_PITCH_P regf[14]
 #define REG_PITCH_I regf[15]
 #define REG_PITCH_D regf[16]
@@ -36,8 +36,8 @@
 #define REG_YAW_P regf[20]
 #define REG_YAW_I regf[21]
 #define REG_YAW_D regf[22]
-#define REG_TPA_THRESHOLD regf[23]
-#define REG_TPA_SLOPE regf[24]
+#define REG_THROTTLE_PID_ATTEN regf[23]
+#define REG_RATE_PID_ATTEN regf[24]
 
 typedef struct
 {

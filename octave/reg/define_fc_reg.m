@@ -5,7 +5,7 @@ n = n + 1;
 reg(n).name = 'VERSION';
 reg(n).read_only = 1;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VERSION',7,0,'uint8',17};
+reg(n).subf{1} = {'VERSION',7,0,'uint8',0};
 
 n = n + 1;
 reg(n).name = 'CTRL';
@@ -34,8 +34,8 @@ n = n + 1;
 reg(n).name = 'ERROR';
 reg(n).read_only = 1;
 reg(n).flash = 0;
-reg(n).subf{1} = {'SENSOR',15,0,'uint16',0};
-reg(n).subf{2} = {'COMMMAND',31,16,'uint16',0};
+reg(n).subf{1} = {'MPU',15,0,'uint16',0};
+reg(n).subf{2} = {'RADIO',31,16,'uint16',0};
 
 n = n + 1;
 reg(n).name = 'TIME';
@@ -54,7 +54,7 @@ n = n + 1;
 reg(n).name = 'VBAT_MIN';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VBAT_MIN',31,0,'float',10.7};
+reg(n).subf{1} = {'VBAT_MIN',31,0,'float',14.4};
 
 n = n + 1;
 reg(n).name = 'RECEIVER_BIND';
@@ -84,13 +84,13 @@ n = n + 1;
 reg(n).name = 'COMMAND_RATE';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'COMMAND_RATE',15,0,'uint16',1080};
+reg(n).subf{1} = {'COMMAND_RATE',15,0,'float',1200};
 
 n = n + 1;
 reg(n).name = 'THROTTLE_RANGE';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'THROTTLE_RANGE',15,0,'uint16',1800};
+reg(n).subf{1} = {'THROTTLE_RANGE',15,0,'float',1750};
 
 n = n + 1;
 reg(n).name = 'PITCH_P';
@@ -102,13 +102,13 @@ n = n + 1;
 reg(n).name = 'PITCH_I';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'PITCH_I',31,0,'float',0.004};
+reg(n).subf{1} = {'PITCH_I',31,0,'float',0.005};
 
 n = n + 1;
 reg(n).name = 'PITCH_D';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'PITCH_D',31,0,'float',8};
+reg(n).subf{1} = {'PITCH_D',31,0,'float',0};
 
 n = n + 1;
 reg(n).name = 'ROLL_P';
@@ -120,13 +120,13 @@ n = n + 1;
 reg(n).name = 'ROLL_I';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'ROLL_I',31,0,'float',0.004};
+reg(n).subf{1} = {'ROLL_I',31,0,'float',0.005};
 
 n = n + 1;
 reg(n).name = 'ROLL_D';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'ROLL_D',31,0,'float',8};
+reg(n).subf{1} = {'ROLL_D',31,0,'float',0};
 
 n = n + 1;
 reg(n).name = 'YAW_P';
@@ -138,7 +138,7 @@ n = n + 1;
 reg(n).name = 'YAW_I';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'YAW_I',31,0,'float',0.006};
+reg(n).subf{1} = {'YAW_I',31,0,'float',0.01};
 
 n = n + 1;
 reg(n).name = 'YAW_D';
@@ -147,13 +147,13 @@ reg(n).flash = 1;
 reg(n).subf{1} = {'YAW_D',31,0,'float',0};
 
 n = n + 1;
-reg(n).name = 'TPA_THRESHOLD';
+reg(n).name = 'THROTTLE_PID_ATTEN';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'TPA_THRESHOLD',31,0,'float',1};
+reg(n).subf{1} = {'THROTTLE_PID_ATTEN',31,0,'float',0};
 
 n = n + 1;
-reg(n).name = 'TPA_SLOPE';
+reg(n).name = 'RATE_PID_ATTEN';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'TPA_SLOPE',31,0,'float',0};
+reg(n).subf{1} = {'RATE_PID_ATTEN',31,0,'float',0};

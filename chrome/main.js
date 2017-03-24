@@ -24,9 +24,9 @@ onload = function(){
 	};
 	document.getElementById('motorstart').onchange = function(){ regUint32Write(10,parseInt(this.value)); log('Updated Motor Start'); };
 	document.getElementById('motorarmed').onchange = function(){ regUint32Write(11,parseInt(this.value)); log('Updated Motor Armed'); };
-	document.getElementById('throttle').onchange = function(){ regUint32Write(13,parseInt(this.value)); log('Updated Throttle Range'); };
+	document.getElementById('throttle').onchange = function(){ regFloat32Write(13,parseFloat(this.value)); log('Updated Throttle Range'); };
 	document.getElementById('vbatmin').onchange = function(){ regFloat32Write(7,parseFloat(this.value)); log('Updated VBAT Min'); };
-	document.getElementById('rate').onchange = function(){ regUint32Write(12,parseInt(this.value)); log('Updated Expo'); };
+	document.getElementById('rate').onchange = function(){ regFloat32Write(12,parseFloat(this.value)); log('Updated Expo'); };
 	document.getElementById('expo').onchange = function(){ regFloat32Write(9,parseFloat(this.value)); log('Updated Rate'); };
 	document.getElementById('pitchp').onchange = function(){ regFloat32Write(14,parseFloat(this.value)); log('Updated Pitch P'); };
 	document.getElementById('pitchi').onchange = function(){ regFloat32Write(15,parseFloat(this.value)); log('Updated Pitch I'); };
@@ -37,8 +37,8 @@ onload = function(){
 	document.getElementById('yawp').onchange = function(){ regFloat32Write(20,parseFloat(this.value)); log('Updated Yaw P'); };
 	document.getElementById('yawi').onchange = function(){ regFloat32Write(21,parseFloat(this.value)); log('Updated Yaw I'); };
 	document.getElementById('yawd').onchange = function(){ regFloat32Write(22,parseFloat(this.value)); log('Updated Yaw D'); };
-	document.getElementById('tpathresh').onchange = function(){ regFloat32Write(23,parseFloat(this.value)); log('Updated TPA Threshold'); };
-	document.getElementById('tpaslope').onchange = function(){ regFloat32Write(24,parseFloat(this.value)); log('Updated TPA Slope'); };
+	document.getElementById('tpa').onchange = function(){ regFloat32Write(23,parseFloat(this.value)); log('Updated Throttle PID Atten'); };
+	document.getElementById('rpa').onchange = function(){ regFloat32Write(24,parseFloat(this.value)); log('Updated Rate PID Atten'); };
 	document.getElementById('motorsel1').onclick = motorTest;
 	document.getElementById('motorsel2').onclick = motorTest;
 	document.getElementById('motorsel3').onclick = motorTest;
@@ -92,6 +92,7 @@ function openSer(port){
 		chrome.serial.disconnect(conHandle.connectionId, function(){
 			conStatus = 0;
 			log('COM port closed');
+			clearElements();
 			chrome.serial.getDevices(openPort);
 		});
 	}
@@ -164,11 +165,11 @@ function readConfig(){
 	
 	regUint32Read(10,'motorstart');
 	regUint32Read(11,'motorarmed');
-	regUint32Read(12,'rate');
-	regUint32Read(13,'throttle');
 	
 	regFloat32Read(7,'vbatmin');
 	regFloat32Read(9,'expo');
+	regFloat32Read(12,'rate');
+	regFloat32Read(13,'throttle');
 	regFloat32Read(14,'pitchp');
 	regFloat32Read(15,'pitchi');
 	regFloat32Read(16,'pitchd');
@@ -178,8 +179,8 @@ function readConfig(){
 	regFloat32Read(20,'yawp');
 	regFloat32Read(21,'yawi');
 	regFloat32Read(22,'yawd');
-	regFloat32Read(23,'tpathresh');
-	regFloat32Read(24,'tpaslope');
+	regFloat32Read(23,'tpa');
+	regFloat32Read(24,'rpa');
 	
 	setTimeout(function(){ log('Read config DONE');}, timeout);
 }
@@ -194,12 +195,11 @@ function writeConfig(){
 	regUint32Flash(8);
 	regUint32Flash(10);
 	regUint32Flash(11);
-	regUint32Flash(12);
-	regUint32Flash(13);
-	
 	
 	regFloat32Flash(7);
 	regFloat32Flash(9);
+	regFloat32Flash(12);
+	regFloat32Flash(13);
 	regFloat32Flash(14);
 	regFloat32Flash(15);
 	regFloat32Flash(16);
@@ -229,6 +229,33 @@ function motorTest(){
 		motorTestOn = false;
 		log('Motor Test OFF');
 	}
+}
+
+function clearElements(){
+	document.getElementById('version').innerHTML = [];
+	document.getElementById('bind').checked = 0;
+	document.getElementById('motorstart').value = [];
+	document.getElementById('motorarmed').value = [];
+	document.getElementById('throttle').value = [];
+	document.getElementById('vbatmin').value = [];
+	document.getElementById('rate').value = [];
+	document.getElementById('expo').value = [];
+	document.getElementById('pitchp').value = [];
+	document.getElementById('pitchi').value = [];
+	document.getElementById('pitchd').value = [];
+	document.getElementById('rollp').value = [];
+	document.getElementById('rolli').value = [];
+	document.getElementById('rolld').value = [];
+	document.getElementById('yawp').value = [];
+	document.getElementById('yawi').value = [];
+	document.getElementById('yawd').value = [];
+	document.getElementById('tpa').value = [];
+	document.getElementById('rpa').value = [];
+	document.getElementById('motorsel1').checked = 0;
+	document.getElementById('motorsel2').checked = 0;
+	document.getElementById('motorsel3').checked = 0;
+	document.getElementById('motorsel4').checked = 0;
+	document.getElementById('motortest').value = 0;
 }
 
 function regUint32Read(addr, name){

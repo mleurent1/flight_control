@@ -12,5 +12,5 @@ global ser
 fc = fc_reg;
 mpu = mpu_reg;
 
-ser = serial("COM9",115200,1);
-%ser = serial("\\\\.\\COM12",115200,1);
+%ser = serial("COM9",115200,1);
+ser = serial("\\\\.\\COM11",115200,1);
