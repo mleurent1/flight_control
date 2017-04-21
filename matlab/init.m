@@ -13,5 +13,6 @@ mpu = mpu_reg;
 
 delete(instrfindall);
 ser = serial('COM18');
+ser.BaudRate = 115200;
 ser.Timeout = 1;
 fopen(ser);

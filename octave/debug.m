@@ -12,7 +12,7 @@ a = {};
 c = 'brgcmk';
 
 WindowSizeSensor = 256;
-TimeWindowSizeSensor = 10000;
+TimeWindowSizeSensor = 4000;
 WindowSizeCommand = 256;
 TimeWindowSizeCommand = 500;
 WindowSizeVbat = 256;

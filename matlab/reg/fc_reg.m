@@ -107,7 +107,7 @@ classdef fc_reg
 				obj.write(4,x);
 			end
 		end
-		function y = ERROR__SENSOR(obj,x)
+		function y = ERROR__MPU(obj,x)
 			r = obj.read(4);
 			if nargin < 2
 				y = bitshift(bitand(r, 65535), 0);
@@ -116,7 +116,7 @@ classdef fc_reg
 				obj.write(4,w);
 			end
 		end
-		function y = ERROR__COMMMAND(obj,x)
+		function y = ERROR__RADIO(obj,x)
 			r = obj.read(4);
 			if nargin < 2
 				y = bitshift(bitand(r, 4294901760), -16);
@@ -209,9 +209,11 @@ classdef fc_reg
 		end
 		function y = THROTTLE_RANGE(obj,x)
 			if nargin < 2
-				y = obj.read(13);
+				z = obj.read(13);
+				y = typecast(uint32(z), 'single');
 			else
-				obj.write(13,x);
+				z = typecast(single(x), 'uint32');
+				obj.write(13,z);
 			end
 		end
 		function y = PITCH_P(obj,x)
@@ -295,7 +297,7 @@ classdef fc_reg
 				obj.write(22,z);
 			end
 		end
-		function y = TPA_THRESHOLD(obj,x)
+		function y = THROTTLE_PID_ATTEN(obj,x)
 			if nargin < 2
 				z = obj.read(23);
 				y = typecast(uint32(z), 'single');
@@ -304,7 +306,7 @@ classdef fc_reg
 				obj.write(23,z);
 			end
 		end
-		function y = TPA_SLOPE(obj,x)
+		function y = RATE_PID_ATTEN(obj,x)
 			if nargin < 2
 				z = obj.read(24);
 				y = typecast(uint32(z), 'single');
@@ -338,10 +340,10 @@ classdef fc_reg
 		YAW_P_addr = 20;
 		YAW_I_addr = 21;
 		YAW_D_addr = 22;
-		TPA_THRESHOLD_addr = 23;
-		TPA_SLOPE_addr = 24;
+		THROTTLE_PID_ATTEN_addr = 23;
+		RATE_PID_ATTEN_addr = 24;
 		flash_addr_list = [0 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24];
-		flash_float_list = [0,1,0,1,0,0,1,0,1,1,1,1,1,1,1,1,1,1,1];
-		flash_name_list = {'VERSION','VBAT_MIN','RECEIVER_BIND','EXPO','MOTOR_START','MOTOR_ARMED','COMMAND_RATE','THROTTLE_RANGE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D','TPA_THRESHOLD','TPA_SLOPE'};
+		flash_float_list = [0,1,0,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1];
+		flash_name_list = {'VERSION','VBAT_MIN','RECEIVER_BIND','EXPO','MOTOR_START','MOTOR_ARMED','COMMAND_RATE','THROTTLE_RANGE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D','THROTTLE_PID_ATTEN','RATE_PID_ATTEN'};
 	end
 end
