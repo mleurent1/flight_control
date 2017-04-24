@@ -7,11 +7,13 @@
 
 /* Private defines ------------------------------------*/
 
-#define VERSION 19
+#define VERSION 20
 
 #define MPU_SPI
 #define ESC_DSHOT
-#define INIT_RADIO_SYNCH
+#define RADIO_SYNCH_AT_INIT
+
+#define RADIO_TYPE 0 // 0:IBUS, 1:SUMD
 
 #define MOTOR_MAX 2000 // us
 #define MOTOR_MIN 1000 // us
@@ -26,19 +28,11 @@
 #define COMMAND_ALPHA 0.5f
 #define REG_FLASH_ADDR 0x0803F800
 
-#define FLAG_BEEP__USER 0x01
-#define FLAG_BEEP__RADIO 0x02
-#define FLAG_BEEP__MPU 0x04
-#define FLAG_BEEP__HOST 0x08
-#define FLAG_BEEP__VBAT 0x10
-
 //#define DEBUG
 //#define DISABLE_BEEPER_ON_PA7
 
 /* Private variables --------------------------------------*/
 
-volatile uint16_t FLAG;
-volatile uint8_t FLAG_BEEP;
 volatile uint32_t tick;
 USBD_HandleTypeDef USBD_device_handler;
 uint8_t host_rx_buffer[6];
@@ -47,14 +41,38 @@ volatile uint8_t spi2_tx_buffer[16];
 volatile uint8_t i2c2_rx_buffer[15];
 volatile uint8_t i2c2_tx_buffer[2];
 volatile uint8_t uart2_rx_buffer[32];
-volatile uint16_t time_mpu_transaction;
-volatile uint16_t armed_raw; 
+volatile uint16_t time[4];
+volatile float armed;
 uint32_t motor_raw[4];
+
+volatile _Bool flag_mpu;
+volatile _Bool flag_radio;
+volatile _Bool flag_motor;
+volatile _Bool flag_host;
+volatile _Bool flag_reg;
+volatile _Bool flag_mpu_host_read;
+volatile _Bool flag_radio_synch;
+volatile _Bool flag_mpu_cal;
+volatile _Bool flag_vbat;
+volatile _Bool flag_error_mpu;
+volatile _Bool flag_error_radio;
+
+volatile _Bool flag_beep_user;
+volatile _Bool flag_beep_radio;
+volatile _Bool flag_beep_mpu;
+volatile _Bool flag_beep_host;
+volatile _Bool flag_beep_vbat;
 
 /* Private macros ---------------------------------------------------*/
 
+#if (RADIO_TYPE == 0)
+	#define RADIO_NB_BYTES 32
+#else
+	#define RADIO_NB_BYTES 29
+#endif
+
 #define UART2_RX_DMA_EN \
-	DMA1_Channel6->CNDTR = 32; \
+	DMA1_Channel6->CNDTR = RADIO_NB_BYTES; \
 	DMA1_Channel6->CCR |= DMA_CCR_EN;
 
 #define TIM_DMA_EN \
@@ -84,7 +102,7 @@ uint32_t motor_raw[4];
 	DMA1_Channel5->CCR &= ~DMA_CCR_EN; \
 	DMA1_Channel5->CNDTR = 0; \
 	DMA1->IFCR = DMA_IFCR_CGIF4 | DMA_IFCR_CGIF5; \
-	FLAG &= ~FLAG__MPU_HOST_READ;
+	flag_mpu_host_read = 0;;
 
 #define ABORT_MPU_SPI \
 	SPI2->CR1 &= ~SPI_CR1_SPE; \
@@ -261,10 +279,9 @@ void EXTI15_10_IRQHandler()
 #endif
 	{
 		MpuRead(58,15);
-	
-		// Reset SPI transaction time
-		TIM15->CNT = 0;
-		
+
+		// SPI transaction time
+		time[0] = TIM7->CNT;
 		#ifdef DEBUG
 			GPIOA->BSRR = GPIO_BSRR_BS_8;
 		#endif
@@ -276,7 +293,7 @@ void I2C2_ER_IRQHandler()
 {
 	ABORT_MPU_DMA
 	ABORT_MPU_I2C
-	FLAG |= FLAG__ERROR_MPU;
+	flag_error_mpu = 1;
 }
 
 /* I2C R/W management ---*/
@@ -311,7 +328,7 @@ void SPI2_IRQHandler()
 {
 	ABORT_MPU_DMA
 	ABORT_MPU_SPI
-	FLAG |= FLAG__ERROR_MPU;
+	flag_error_mpu = 1;
 }
 
 #ifdef MPU_SPI
@@ -321,7 +338,7 @@ void SPI2_IRQHandler()
 	{
 		// Check DMA transfer error
 		if (DMA1->ISR & DMA_ISR_TEIF4)
-			FLAG |= FLAG__ERROR_MPU;
+			flag_error_mpu = 1;
 		
 		// Disable DMA
 		DMA1_Channel4->CCR &= ~DMA_CCR_EN;
@@ -332,13 +349,12 @@ void SPI2_IRQHandler()
 		SPI2->CR1 &= ~SPI_CR1_SPE;
 		
 		// Raise flag for sample ready
-		FLAG |= FLAG__MPU;
+		flag_mpu = 1;
 		
 		// SPI transaction time
-		time_mpu_transaction = TIM15->CNT;
-		
+		time[1] = TIM7->CNT;
 		#ifdef DEBUG
-			GPIOA->BSRR = GPIO_BSRR_BR_6;
+			GPIOA->BSRR = GPIO_BSRR_BR_8;
 		#endif
 	}
 
@@ -347,7 +363,7 @@ void SPI2_IRQHandler()
 	{
 		ABORT_MPU_DMA
 		ABORT_MPU_SPI
-		FLAG |= FLAG__ERROR_MPU;
+		flag_error_mpu = 1;
 	} 
 
 #else
@@ -357,7 +373,7 @@ void SPI2_IRQHandler()
 	{
 		ABORT_MPU_DMA
 		ABORT_MPU_I2C
-		FLAG |= FLAG__ERROR_MPU;
+		flag_error_mpu = 1;
 	}
 
 	/* End of I2C receive ---*/
@@ -365,14 +381,14 @@ void SPI2_IRQHandler()
 	{
 		// Check DMA transfer error
 		if (DMA1->ISR & DMA_ISR_TEIF5)
-			FLAG |= FLAG__ERROR_MPU;
+			flag_error_mpu = 1;
 		
 		// Disable DMA
 		DMA1->IFCR = DMA_IFCR_CGIF5; // clear all flags
 		DMA1_Channel5->CCR &= ~DMA_CCR_EN;
 		
 		// Raise flag for sample ready
-		FLAG |= FLAG__MPU;
+		flag_mpu = 1;
 		
 		// I2C transaction time
 		time_mpu_transaction = TIM15->CNT;
@@ -397,7 +413,8 @@ void USART2_IRQHandler()
 	USART2->CR1 |= USART_CR1_UE;
 	
 	// Request a resynch and signal an error
-	FLAG |= FLAG__RADIO_SYNCH | FLAG__ERROR_RADIO;
+	flag_radio_synch = 1;
+	flag_error_radio = 1;
 	
 	UART2_RX_DMA_EN
 }
@@ -407,13 +424,13 @@ void DMA1_Channel6_IRQHandler()
 {
 	// Check DMA transfer error
 	if (DMA1->ISR & DMA_ISR_TEIF6)
-		FLAG |= FLAG__ERROR_RADIO;
+		flag_error_radio = 1;
 	
 	// Disable DMA
 	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
 	DMA1->IFCR = DMA_IFCR_CGIF6; // clear all flags
 	
-	FLAG |= FLAG__RADIO;
+	flag_radio = 1;
 	
 	UART2_RX_DMA_EN
 }
@@ -423,7 +440,7 @@ void TIM4_IRQHandler()
 {
 	TIM4->SR &= ~TIM_SR_UIF;
 	
-	if (FLAG_BEEP)
+	if (flag_beep_user | flag_beep_radio | flag_beep_mpu | flag_beep_host | flag_beep_vbat)
 	{
 		if (GPIOA->ODR & GPIO_ODR_0)
 			GPIOA->ODR &= ~GPIO_ODR_0;
@@ -440,10 +457,10 @@ void TIM6_DAC_IRQHandler()
 	TIM6->SR &= ~TIM_SR_UIF;
 	
 	// Disarm motors!
-	armed_raw = 0;
+	armed = 0;
 	
 	// Beep!
-	FLAG_BEEP |= FLAG_BEEP__RADIO;
+	flag_beep_radio = 1;
 }
 
 /* MPU timeout ---*/
@@ -456,17 +473,17 @@ void TIM1_BRK_TIM15_IRQHandler()
 	// Stop motors!
 	for (i=0; i<4; i++)
 		motor_raw[i] = 0;
-	FLAG |= FLAG__MOTOR;
+	flag_motor = 1;
 	
 	// Beep!
-	FLAG_BEEP |= FLAG_BEEP__MPU;
+	flag_beep_mpu = 1;
 }
 
 /* VBAT sampling time ---*/
 void TIM1_UP_TIM16_IRQHandler()
 {
 	TIM16->SR &= ~TIM_SR_UIF;
-	FLAG |= FLAG__VBAT;
+	flag_vbat = 1;
 }
 
 void USB_LP_CAN_RX0_IRQHandler()
@@ -482,15 +499,15 @@ int main()
 	int i;
 	float x;
 	
-	volatile uint16_t mpu_sample_count;
-	volatile int16_t gyro_x_raw;
-	volatile int16_t gyro_y_raw;
-	volatile int16_t gyro_z_raw;
-	volatile int16_t accel_x_raw;
-	volatile int16_t accel_y_raw;
-	volatile int16_t accel_z_raw;
-	volatile int16_t temperature_raw;
-	volatile uint16_t mpu_error_count;
+	uint16_t mpu_sample_count;
+	int16_t gyro_x_raw;
+	int16_t gyro_y_raw;
+	int16_t gyro_z_raw;
+	int16_t accel_x_raw;
+	int16_t accel_y_raw;
+	int16_t accel_z_raw;
+	int16_t temperature_raw;
+	uint16_t mpu_error_count;
 	float gyro_x;
 	float gyro_y;
 	float gyro_z;
@@ -508,18 +525,20 @@ int main()
 	volatile float accel_z_scale;
 	float temperature;
 	
-	volatile uint16_t radio_frame_count;
-	volatile uint16_t throttle_raw;
-	volatile uint16_t aileron_raw;
-	volatile uint16_t elevator_raw;
-	volatile uint16_t rudder_raw;
-	//volatile uint16_t armed_raw; // Moved to global because shared by interrupt
-	volatile uint16_t chan6_raw;
-	volatile uint16_t radio_error_count;
+	uint16_t radio_frame_count;
+	uint16_t throttle_raw;
+	uint16_t aileron_raw;
+	uint16_t elevator_raw;
+	uint16_t rudder_raw;
+	uint16_t armed_raw;
+	uint16_t chan6_raw;
+	uint16_t radio_error_count;
 	volatile float throttle;
 	volatile float aileron;
 	volatile float elevator;
 	volatile float rudder;
+	//volatile float armed; // Moved to global because shared by interrupt
+	volatile float chan6;
 	volatile float expo_scale;
 	float throttle_rate;
 	float pitch_rate;
@@ -575,17 +594,32 @@ int main()
 	uint16_t* flash_w;
 	uint32_t reg_default;
 	
-	
-	uint16_t time_process;
+	int32_t time_mpu;
+	int32_t time_process;
 	
 	/* Variable init ---------------------------------------*/
 	
-	FLAG = FLAG__REG | FLAG__MPU_CAL;
-#ifdef INIT_RADIO_SYNCH
-	FLAG |= FLAG__RADIO_SYNCH;
+	flag_mpu = 0;
+	flag_radio = 0;
+	flag_motor = 0;
+	flag_host = 0;
+	flag_reg = 1;
+	flag_mpu_host_read = 0;
+#ifdef RADIO_SYNCH_AT_INIT
+	flag_radio_synch = 1;
+#else
+	flag_radio_synch = 0;
 #endif
-	
-	FLAG_BEEP = 0;
+	flag_mpu_cal = 1;
+	flag_vbat = 0;
+	flag_error_mpu = 0;
+	flag_error_radio = 0;
+
+	flag_beep_user = 0;
+	flag_beep_radio = 0;
+	flag_beep_mpu = 0;
+	flag_beep_host = 0;
+	flag_beep_vbat = 0;
 	
 	radio_frame_count = 0;
 	radio_error_count = 0;
@@ -844,14 +878,14 @@ int main()
 	// Beeper
 	TIM4->PSC = 35999; // 0.5ms
 	TIM4->ARR = BEEPER_PERIOD*2;
-	TIM4->CR1 = TIM_CR1_CEN;
 	TIM4->DIER = TIM_DIER_UIE;
+	TIM4->CR1 = TIM_CR1_CEN;
 	
 	// Receiver timeout
 	TIM6->PSC = 35999; // 0.5ms
 	TIM6->ARR = TIMEOUT_RADIO*2;
-	TIM6->CR1 = TIM_CR1_CEN;
 	TIM6->DIER = TIM_DIER_UIE;
+	TIM6->CR1 = TIM_CR1_CEN;
 	
 	// Sensor to motor processing time
 	TIM7->PSC = 71; // 1us
@@ -861,14 +895,14 @@ int main()
 	// MPU transaction time
 	TIM15->PSC = 71; // 1us
 	TIM15->ARR = TIMEOUT_MPU;
-	TIM15->CR1 = TIM_CR1_CEN;
 	TIM15->DIER = TIM_DIER_UIE;
+	TIM15->CR1 = TIM_CR1_CEN;
 	
 	// VBAT
 	TIM16->PSC = 35999; // 0.5ms
 	TIM16->ARR = VBAT_PERIOD*2;
-	TIM16->CR1 = TIM_CR1_CEN;
 	TIM16->DIER = TIM_DIER_UIE;
+	TIM16->CR1 = TIM_CR1_CEN;
 	
 	/* UART ---------------------------------------------------*/
 	
@@ -876,8 +910,10 @@ int main()
 	USART2->CR1 = USART_CR1_RE;
 	USART2->CR2 = (2 << USART_CR2_STOP_Pos);
 	USART2->CR3 = USART_CR3_EIE | USART_CR3_DMAR;
-	USART2->CR1 |= USART_CR1_UE;
-	
+#ifndef RADIO_SYNCH_AT_INIT
+	UART2_RX_DMA_EN
+#endif
+
 #ifdef MPU_SPI
 
 	/* SPI ----------------------------------------------------*/
@@ -941,19 +977,19 @@ int main()
 	NVIC_EnableIRQ(TIM1_UP_TIM16_IRQn);
 	NVIC_EnableIRQ(USB_LP_CAN_RX0_IRQn);
 	
-	NVIC_SetPriority(EXTI15_10_IRQn,2);
-	NVIC_SetPriority(USART2_IRQn,1);
-	NVIC_SetPriority(SPI2_IRQn,1);
-	NVIC_SetPriority(I2C2_ER_IRQn,1);
-	NVIC_SetPriority(I2C2_EV_IRQn,1);
-	NVIC_SetPriority(DMA1_Channel4_IRQn,3);
-	NVIC_SetPriority(DMA1_Channel5_IRQn,3);
-	NVIC_SetPriority(DMA1_Channel6_IRQn,4);
-	NVIC_SetPriority(TIM4_IRQn,5);
-	NVIC_SetPriority(TIM6_DAC_IRQn,5);
-	NVIC_SetPriority(TIM1_BRK_TIM15_IRQn,5);
-	NVIC_SetPriority(TIM1_UP_TIM16_IRQn,5);
-	NVIC_SetPriority(USB_LP_CAN_RX0_IRQn,6);
+	NVIC_SetPriority(EXTI15_10_IRQn,0);
+	NVIC_SetPriority(USART2_IRQn,0);
+	NVIC_SetPriority(SPI2_IRQn,0);
+	NVIC_SetPriority(I2C2_ER_IRQn,0);
+	NVIC_SetPriority(I2C2_EV_IRQn,0);
+	NVIC_SetPriority(DMA1_Channel4_IRQn,0);
+	NVIC_SetPriority(DMA1_Channel5_IRQn,0);
+	NVIC_SetPriority(DMA1_Channel6_IRQn,0);
+	NVIC_SetPriority(TIM4_IRQn,0);
+	NVIC_SetPriority(TIM6_DAC_IRQn,0);
+	NVIC_SetPriority(TIM1_BRK_TIM15_IRQn,0);
+	NVIC_SetPriority(TIM1_UP_TIM16_IRQn,0);
+	NVIC_SetPriority(USB_LP_CAN_RX0_IRQn,1);
 
 	/* USB ----------------------------------------------------------*/
 	
@@ -1005,19 +1041,22 @@ int main()
 	
 	while (1)
 	{
-		// Reset processing time
-		TIM7->CNT = 0;
+		// Processing time
+		time[2] = TIM7->CNT;
 		#ifdef DEBUG
 			GPIOA->BSRR = GPIO_BSRR_BS_3;
 		#endif
 		
 		/* Radio frame synchronisation -------------------------------------------------*/
 		
-		if (FLAG & FLAG__RADIO_SYNCH)
+		if (flag_radio_synch)
 		{
-			FLAG &= ~FLAG__RADIO_SYNCH;
+			flag_radio_synch = 0;
 			
-			USART2->CR3 |= USART_CR3_DMAR;
+			// Disable DMA
+			USART2->CR1 &= ~USART_CR1_UE;			
+			USART2->CR3 &= ~USART_CR3_DMAR;
+			USART2->CR1 |= USART_CR1_UE;
 			
 			// Synchonise on IDLE character
 			USART2->ICR = USART_ICR_ORECF | USART_ICR_IDLECF;
@@ -1026,41 +1065,77 @@ int main()
 			USART2->ICR = USART_ICR_IDLECF;
 			USART2->RDR;
 			
+			// Enable DMA
+			USART2->CR1 &= ~USART_CR1_UE;
 			USART2->CR3 |= USART_CR3_DMAR;
+			USART2->CR1 |= USART_CR1_UE;
 			UART2_RX_DMA_EN
 		}
 		
 		/* Process radio commands -----------------------------------------------------*/
 		
-		if (FLAG & FLAG__RADIO)
+		if (flag_radio)
 		{
-			FLAG &= ~FLAG__RADIO;
-			
-			// Reset timeout
-			TIM6->CNT = 0;
-			FLAG_BEEP &= ~FLAG_BEEP__RADIO;
+			flag_radio = 0;
 			
 			// Check header
-			// TODO: verify checksum?
+		#if (RADIO_TYPE == 0)
 			if ((uart2_rx_buffer[0] != 0x20) || (uart2_rx_buffer[1] != 0x40))
-				FLAG |= FLAG__ERROR_RADIO | FLAG__RADIO_SYNCH;
-			
-			if ((FLAG & FLAG__ERROR_RADIO) == 0)
+		#else
+			if ((uart2_rx_buffer[0] != 0xA8) || ((uart2_rx_buffer[1] != 0x01) && (uart2_rx_buffer[1] != 0x81)))
+		#endif
 			{
-				radio_frame_count++;
+				flag_error_radio = 1;
+				flag_radio_synch = 1;
+			}
+			
+			// TODO: verify checksum
+			
+			if (flag_error_radio)
+			{
+				flag_error_radio = 0;
+				radio_error_count++;
+				REG_ERROR &= 0x0000FFFF;
+				REG_ERROR |= (uint32_t)radio_error_count << 16;
+			}
+			else
+			{
+				// Reset timeout
+				TIM6->CNT = 0;
+				flag_beep_radio = 0;
 				
+				radio_frame_count++;
+			#if (RADIO_TYPE == 0)
 				aileron_raw  = (uint16_t)uart2_rx_buffer[ 2] | ((uint16_t)uart2_rx_buffer[ 3] << 8);
 				elevator_raw = (uint16_t)uart2_rx_buffer[ 4] | ((uint16_t)uart2_rx_buffer[ 5] << 8);
 				throttle_raw = (uint16_t)uart2_rx_buffer[ 6] | ((uint16_t)uart2_rx_buffer[ 7] << 8);
 				rudder_raw   = (uint16_t)uart2_rx_buffer[ 8] | ((uint16_t)uart2_rx_buffer[ 9] << 8);
 				armed_raw    = (uint16_t)uart2_rx_buffer[10] | ((uint16_t)uart2_rx_buffer[11] << 8);
 				chan6_raw    = (uint16_t)uart2_rx_buffer[12] | ((uint16_t)uart2_rx_buffer[13] << 8);
-			}
-			
+			#else
+				aileron_raw  = (uint16_t)uart2_rx_buffer[ 4] | ((uint16_t)uart2_rx_buffer[ 3] << 8);
+				elevator_raw = (uint16_t)uart2_rx_buffer[ 6] | ((uint16_t)uart2_rx_buffer[ 5] << 8);
+				throttle_raw = (uint16_t)uart2_rx_buffer[ 8] | ((uint16_t)uart2_rx_buffer[ 7] << 8);
+				rudder_raw   = (uint16_t)uart2_rx_buffer[10] | ((uint16_t)uart2_rx_buffer[ 9] << 8);
+				armed_raw    = (uint16_t)uart2_rx_buffer[12] | ((uint16_t)uart2_rx_buffer[11] << 8);
+				chan6_raw    = (uint16_t)uart2_rx_buffer[14] | ((uint16_t)uart2_rx_buffer[13] << 8);
+			#endif
+			}			
+		#if (RADIO_TYPE == 0)
 			throttle = (float)(throttle_raw - 1000) / 1000.0f;
 			aileron = (float)((int16_t)aileron_raw - 1500) / 500.0f;
 			elevator = (float)((int16_t)elevator_raw - 1500) / 500.0f;
 			rudder = (float)((int16_t)rudder_raw - 1500) / 500.0f;
+			armed = (float)(armed_raw - 1000) / 1000.0f;
+			chan6 = (float)(chan6_raw - 1000) / 1000.0f;
+		#else
+			throttle = (float)(throttle_raw - 8800) / 6400.0f;
+			aileron = (float)((int16_t)aileron_raw - 12000) / 3200.0f;
+			elevator = (float)((int16_t)elevator_raw - 12000) / 3200.0f;
+			rudder = (float)((int16_t)rudder_raw - 12000) / 3200.0f;
+			armed = (float)(armed_raw - 8800) / 6400.0f;
+			chan6 = (float)(chan6_raw - 8800) / 6400.0f;
+		#endif
 			
 			if (REG_EXPO > 0.0f)
 			{
@@ -1102,11 +1177,10 @@ int main()
 			}
 			
 			// Beep if requested
-			if (chan6_raw > 1024)
-				FLAG_BEEP |= FLAG_BEEP__USER;
+			if (chan6 > 0.5f)
+				flag_beep_user = 1;
 			else
-				FLAG_BEEP &= ~FLAG_BEEP__USER;
-			
+				flag_beep_user = 0;
 			
 			// Toggle LED at rate of Radio flag
 			if (REG_CTRL__LED_SELECT == 3)
@@ -1120,22 +1194,33 @@ int main()
 		
 		/* Process sensors -----------------------------------------------------------------------*/
 		
-		if (FLAG & FLAG__MPU)
+		if (flag_mpu)
 		{
-			FLAG &= ~FLAG__MPU;
+			flag_mpu = 0;
 			
 			#ifdef MPU_SPI
-				if ((spi2_rx_buffer[1] & MPU_INT_STATUS__DATA_RDY_INT) == 0)
-					FLAG |= FLAG__ERROR_MPU;
+				if ((REG_CTRL__MPU_HOST_CTRL == 0) && ((spi2_rx_buffer[1] & MPU_INT_STATUS__DATA_RDY_INT) == 0))
+					flag_error_mpu = 1;
 			#else
-				if ((i2c2_rx_buffer[0] & MPU_INT_STATUS__DATA_RDY_INT) == 0)
-					FLAG |= FLAG__ERROR_MPU;
+				if ((REG_CTRL__MPU_HOST_CTRL == 0) && ((i2c2_rx_buffer[0] & MPU_INT_STATUS__DATA_RDY_INT) == 0))
+					flag_error_mpu = 1;
 			#endif
 			
-			if ((FLAG & FLAG__ERROR_MPU) == 0)
+			if (flag_error_mpu)
+			{
+				flag_error_mpu = 0;
+				mpu_error_count++;
+				REG_ERROR &= 0xFFFF0000;
+				REG_ERROR |= (uint32_t)mpu_error_count & 0x0000FFFF;
+			}
+			else
 			{
 				if (REG_CTRL__MPU_HOST_CTRL == 0)
 				{
+					// Reset timeout
+					TIM15->CNT = 0;
+					flag_beep_mpu = 0;
+					
 					mpu_sample_count++;
 					
 					#ifdef MPU_SPI
@@ -1157,7 +1242,7 @@ int main()
 					#endif
 					
 					// MPU calibration
-					if (FLAG__MPU_CAL)
+					if (flag_mpu_cal)
 					{
 						if (mpu_sample_count <= 1000)
 						{
@@ -1167,7 +1252,7 @@ int main()
 						}
 						else
 						{
-							FLAG &= ~FLAG__MPU_CAL;
+							flag_mpu_cal = 0;
 							
 							gyro_x_dc = gyro_x_dc / 1000.0f;
 							gyro_y_dc = gyro_y_dc / 1000.0f;
@@ -1184,16 +1269,18 @@ int main()
 					}
 					
 					// Record SPI transaction time
-					// time_mpu_transaction = TIM15->CNT; // Moved into interrupt routine, for better accuracy
-					if ((REG_CTRL__TIME_MAXHOLD == 0) || ((time_mpu_transaction > REG_TIME__SPI) && REG_CTRL__TIME_MAXHOLD))
+					time_mpu = (int32_t)time[1] - (int32_t)time[0];
+					if (time_mpu < 0)
+						time_mpu += 65536;
+					if ((REG_CTRL__TIME_MAXHOLD == 0) || ((time_mpu > REG_TIME__SPI) && REG_CTRL__TIME_MAXHOLD))
 					{
 						REG_TIME &= 0xFFFF0000;
-						REG_TIME |= (uint32_t)time_mpu_transaction & 0x0000FFFF;
+						REG_TIME |= (uint32_t)time_mpu & 0x0000FFFF;
 					}
 				}
-				else if (FLAG & FLAG__MPU_HOST_READ)
+				else if (flag_mpu_host_read)
 				{
-					FLAG &= ~FLAG__MPU_HOST_READ;
+					flag_mpu_host_read = 0;
 					#ifdef MPU_SPI
 						USBD_CDC_IF_tx_buffer[0] = spi2_rx_buffer[1];
 					#else
@@ -1301,7 +1388,7 @@ int main()
 			error_yaw = yaw_rate - gyro_z;
 			
 			// Integrate error
-			if ((armed_raw < 1024) && REG_CTRL__RESET_INTEGRAL_ON_ARMED)
+			if ((armed < 0.5f) && REG_CTRL__RESET_INTEGRAL_ON_ARMED)
 			{
 				error_pitch_i = 0.0f;
 				error_roll_i = 0.0f;
@@ -1394,14 +1481,14 @@ int main()
 				
 				if (REG_MOTOR_TEST__SELECT)
 					motor_raw[i] = (REG_MOTOR_TEST__SELECT & (1 << i)) ? (uint32_t)REG_MOTOR_TEST__VALUE : 0;
-				else if (armed_raw < 1250)
+				else if (armed < 0.5f)
 					motor_raw[i] = 0;
 				else
 					motor_raw[i] = (uint32_t)motor_clip[i];
 			}
 			
 			// Raise flag for motor command ready
-			FLAG |= FLAG__MOTOR;
+			flag_motor = 1;
 			
 			// Send motor command to host
 			if (REG_DEBUG == 8)
@@ -1429,9 +1516,9 @@ int main()
 		
 		/* ESC command -----------------------------------------------------------------*/
 		
-		if (FLAG & FLAG__MOTOR)
+		if (flag_motor)
 		{
-			FLAG &= ~FLAG__MOTOR;
+			flag_motor = 0;
 			
 			#ifdef ESC_DSHOT
 				dshot_encode(&motor_raw[0], motor1_dshot);
@@ -1451,9 +1538,9 @@ int main()
 		
 		/* VBAT ---------------------------------------------------------------------*/
 		
-		if (FLAG & FLAG__VBAT)
+		if (flag_vbat)
 		{
-			FLAG &= ~FLAG__VBAT;
+			flag_vbat = 0;
 			
 			vbat_sample_count++;
 			
@@ -1479,33 +1566,16 @@ int main()
 			
 			// Beep if VBAT too low
 			if ((REG_VBAT < REG_VBAT_MIN) && (REG_VBAT > VBAT_THRESHOLD))
-				FLAG_BEEP |= FLAG_BEEP__VBAT;
+				flag_beep_vbat = 1;
 			else
-				FLAG_BEEP &= ~FLAG_BEEP__VBAT;
-		}
-		
-		/* Error count ----------------------------------------------------------------*/
-		
-		if (FLAG & FLAG__ERROR_MPU)
-		{
-			FLAG &= ~FLAG__ERROR_MPU;
-			mpu_error_count++;
-			REG_ERROR &= 0xFFFF0000;
-			REG_ERROR |= (uint32_t)mpu_error_count & 0x0000FFFF;
-		}
-		if (FLAG & FLAG__ERROR_RADIO)
-		{
-			FLAG &= ~FLAG__ERROR_RADIO;
-			radio_error_count++;
-			REG_ERROR &= 0x0000FFFF;
-			REG_ERROR |= (uint32_t)radio_error_count << 16;
+				flag_beep_vbat = 0;
 		}
 		
 		/* Host command from USB -------------------------------------------------------*/
 		
-		if (FLAG & FLAG__HOST)
+		if (flag_host)
 		{
-			FLAG &= ~FLAG__HOST;
+			flag_host = 0;
 			
 			reg_addr = host_rx_buffer[1];
 			
@@ -1533,13 +1603,13 @@ int main()
 							uint32_to_float(&val, &regf[reg_addr]);
 						else
 							reg[reg_addr] = val;
-						FLAG |= FLAG__REG;
+						flag_reg = 1;
 					}
 					break;
 				}
 				case 2: // SPI read to MPU
 				{
-					FLAG |= FLAG__MPU_HOST_READ;
+					flag_mpu_host_read = 1;
 					MpuRead(reg_addr,1);
 					break;
 				}
@@ -1591,9 +1661,9 @@ int main()
 		
 		/* Actions only needed on a register write ---------------------------------------------------*/
 		
-		if (FLAG & FLAG__REG)
+		if (flag_reg)
 		{
-			FLAG &= ~FLAG__REG;
+			flag_reg = 0;
 		
 		#ifdef MPU_SPI
 			// Adapt SPI clock frequency
@@ -1630,15 +1700,18 @@ int main()
 			
 			// Beep test
 			if (REG_CTRL__BEEP_TEST)
-				FLAG_BEEP |= FLAG_BEEP__HOST;
+				flag_beep_host = 1;
 			else
-				FLAG_BEEP &= ~FLAG_BEEP__HOST;
+				flag_beep_host = 0;
 		}
 		
 		/*------------------------------------------------------------------*/
 		
 		// Record processing time
-		time_process = TIM7->CNT;
+		time[3] = TIM7->CNT;
+		time_process = (int32_t)time[3] - (int32_t)time[2];
+		if (time_process < 0)
+			time_process += 65536;
 		if ((REG_CTRL__TIME_MAXHOLD == 0) || ((time_process > REG_TIME__PROCESS) && REG_CTRL__TIME_MAXHOLD))
 		{
 			REG_TIME &= 0x0000FFFF;

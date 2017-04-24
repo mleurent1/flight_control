@@ -212,7 +212,7 @@ static int8_t USBD_CDC_IF_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t USBD_CDC_IF_Receive (uint8_t* Buf, uint32_t *Len)
 {
 	memcpy(host_rx_buffer, Buf, 6);
-	FLAG |= FLAG__HOST;
+	flag_host = 1;
 	USBD_CDC_ReceivePacket(&USBD_device_handler);
 	return (0);
 }

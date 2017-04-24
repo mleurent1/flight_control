@@ -17,7 +17,7 @@
 
 /* Public variables -----------------*/
 
-extern volatile uint16_t FLAG;
+extern volatile _Bool flag_host;
 extern uint8_t host_rx_buffer[6];
 extern USBD_HandleTypeDef USBD_device_handler;
 
