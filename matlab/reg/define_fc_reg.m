@@ -28,7 +28,8 @@ n = n + 1;
 reg(n).name = 'DEBUG';
 reg(n).read_only = 0;
 reg(n).flash = 0;
-reg(n).subf{1} = {'DEBUG',7,0,'uint8',0};
+reg(n).subf{1} = {'CASE',7,0,'uint8',0};
+reg(n).subf{2} = {'MASK',23,8,'uint16',127};
 
 n = n + 1;
 reg(n).name = 'ERROR';

@@ -8,7 +8,7 @@ reg_properties_t reg_properties[NB_REG] =
 	{1, 1, 0, 0}, // VERSION
 	{0, 0, 0, 34}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
-	{0, 0, 0, 0}, // DEBUG
+	{0, 0, 0, 32512}, // DEBUG
 	{1, 0, 0, 0}, // ERROR
 	{1, 0, 0, 0}, // TIME
 	{1, 0, 1, 0}, // VBAT

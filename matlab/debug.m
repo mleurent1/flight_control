@@ -5,13 +5,23 @@ if nargin < 2, NbSamples = 512; end
 global fc
 global ser
 
+%% To Customize
+WindowSize = 256;
+switch DebugCase
+	case {1,2,5,6,7,8} % sensor rate (1kHz)
+      SampleMask = hex2dec('001F');
+	case 4 % radio rate (~100Hz)
+		SampleMask = hex2dec('0003');
+	case 3 % vbat rate (100Hz)
+		SampleMask = hex2dec('0003');
+end
+c = 'brgcmk';
+
+%%
 figure(DebugCase);
 clf
 l = {};
 a = {};
-c = 'brgcmk';
-
-WindowSize = 512;
 
 switch DebugCase
 	case 1 % raw sensors
@@ -19,7 +29,7 @@ switch DebugCase
 		dtype = 'int16';
 		for n = 1:3
 			a{n} = subplot(3,1,n);
-			set(a{n},'XLim',[1,WindowSize],'YLim',[-2^15,2^15]);
+         a{n}.YLim = [-2^15,2^15];
 		end
 		for n = 1:3
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
@@ -31,11 +41,10 @@ switch DebugCase
 		dtype = 'float';
 		for n = 1:3
 			a{n} = subplot(3,1,n);
-			set(a{n},'XLim',[1,WindowSize]);
 		end
-		set(a{1},'YLim',[-2000,2000]);
-		set(a{2},'YLim',[-16,16]);
-		set(a{3},'YLim',[-10,100]);
+		a{1}.YLim = [-2000,2000];
+		a{2}.YLim = [-16,16];
+		a{3}.YLim = [-10,100];
 		for n = 1:3
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 			l{n+3} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
@@ -45,28 +54,24 @@ switch DebugCase
 		dlen = 1;
 		dtype = 'float';
 		a{1} = axes;
-		set(a{1},'XLim',[1,WindowSize]);
-		set(a{1},'YLim',[-1,20]);
 		l{1} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(1));
 	case 4 % raw commands
 		dlen = 6;
 		dtype = 'int16';
 		a{1} = axes;
-		set(a{1},'XLim',[1,WindowSize]);
-		%set(a{1},'YLim',[0,2048]);
 		for n = 1:6
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end
 	case 5 % commands
-		dlen = 4;
+		dlen = 6;
 		dtype = 'float';
 		a{1} = subplot(211);
 		a{2} = subplot(212);
-		set(a{1},'XLim',[1,WindowSize]);
-		set(a{2},'XLim',[1,WindowSize]);
-		set(a{1},'YLim',[-1,1]);
-		set(a{2},'YLim',[0,1]);
-		l{1} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(1));
+		a{1}.YLim = [-1.05,1.05];
+		a{2}.YLim = [-0.05,1.05];
+		for n = [1,5,6]
+			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
+		end
 		for n = 2:4
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end
@@ -74,8 +79,6 @@ switch DebugCase
 		dlen = 3;
 		dtype = 'float';
 		a{1} = axes;
-		set(a{1},'XLim',[1,WindowSize]);
-		set(a{1},'YLim',[-3000,3000]);
 		for n = 1:3
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end
@@ -84,8 +87,6 @@ switch DebugCase
 		dtype = 'float';
 		for n = 1:4
 			a{n} = subplot(4,1,n);
-			set(a{n},'XLim',[1,WindowSize]);
-			set(a{n},'YLim',[-3000,3000]);
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{n},'Color',c(n));
 		end
 	case 8 % raw motors
@@ -93,41 +94,66 @@ switch DebugCase
 		dtype = 'int16';
 		for n = 1:4
 			a{n} = subplot(4,1,n);
-			set(a{n},'XLim',[1,WindowSize]);
-			set(a{n},'YLim',[-10,2010]);
+			a{n}.YLim = [-10,2010];
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{n},'Color',c(n));
 		end
+end
+
+for n = 1:length(a)
+	a{n}.XLim = [1,WindowSize];
 end
 
 d = nan(dlen,WindowSize);
 switch dtype
 	case 'int16'
-		r1 = 2*dlen+2;
+		r1 = 2*dlen;
 	case 'float'
-		r1 = 4*dlen+2;
+		r1 = 4*dlen;
 end
 n = 0;
 
-while n < NbSamples
+% Empty VCP buffer
+fc.DEBUG(0);
+sleep(10);
+while (ser.BytesAvailable > 0)
+	fread(ser,ser.BytesAvailable);
+   sleep(10);
+end
+
+fc.DEBUG__MASK(SampleMask);
+fc.DEBUG__CASE(DebugCase);
+
+while (n < NbSamples)
 	
-	fc.DEBUG(DebugCase);
-	r = fread(ser,r1);
-	n = n + 1;
-	
-	for m = 1:dlen
-		switch dtype
-			case 'int16'
-				d(m,WindowSize) = c2s(2^8*r((m-1)*2+4) + r((m-1)*2+3), 16);
-			case 'float'
-				d(m,WindowSize) = typecast(uint32(2^24*r((m-1)*4+6) + 2^16*r((m-1)*4+5) + 2^8*r((m-1)*4+4) + r((m-1)*4+3)), 'single');
-			end
-		set(l{m},'XData',1:WindowSize);
-		set(l{m},'YData',d(m,:));
+	if (ser.BytesAvailable >= r1)
+
+		r = fread(ser,r1);
+		n = n + 1;
+
+		for m = 1:dlen
+			switch dtype
+				case 'int16'
+					d(m,WindowSize) = c2s(2^8*r((m-1)*2+2) + r((m-1)*2+1), 16);
+				case 'float'
+					d(m,WindowSize) = typecast(uint32(2^24*r((m-1)*4+4) + 2^16*r((m-1)*4+3) + 2^8*r((m-1)*4+2) + r((m-1)*4+1)), 'single');
+				end
+			set(l{m},'XData',1:WindowSize);
+			set(l{m},'YData',d(m,:));
+		end
+		drawnow
+
+		d(:,1:WindowSize-1) = d(:,2:WindowSize);
+
 	end
-	drawnow
-	
-	d(:,1:WindowSize-1) = d(:,2:WindowSize);
-	
+
+end
+
+% Empty VCP buffer
+fc.DEBUG(0);
+sleep(10);
+while (ser.BytesAvailable > 0)
+	fread(ser,ser.BytesAvailable);
+   sleep(10);
 end
 
 end

@@ -7,11 +7,10 @@
 
 /* Private defines ------------------------------------*/
 
-#define VERSION 20
+#define VERSION 21
 
 #define MPU_SPI
 #define ESC_DSHOT
-#define RADIO_SYNCH_AT_INIT
 
 #define RADIO_TYPE 0 // 0:IBUS, 1:SUMD
 
@@ -40,9 +39,8 @@ volatile uint8_t spi2_rx_buffer[16];
 volatile uint8_t spi2_tx_buffer[16];
 volatile uint8_t i2c2_rx_buffer[15];
 volatile uint8_t i2c2_tx_buffer[2];
-volatile uint8_t uart2_rx_buffer[32];
-volatile uint16_t time[4];
-volatile float armed;
+uint16_t time[4];
+float armed;
 uint32_t motor_raw[4];
 
 volatile _Bool flag_mpu;
@@ -56,6 +54,7 @@ volatile _Bool flag_mpu_cal;
 volatile _Bool flag_vbat;
 volatile _Bool flag_error_mpu;
 volatile _Bool flag_error_radio;
+volatile _Bool flag_armed_locked;
 
 volatile _Bool flag_beep_user;
 volatile _Bool flag_beep_radio;
@@ -391,8 +390,7 @@ void SPI2_IRQHandler()
 		flag_mpu = 1;
 		
 		// I2C transaction time
-		time_mpu_transaction = TIM15->CNT;
-		
+		time[1] = TIM7->CNT;
 		#ifdef DEBUG
 			GPIOA->BSRR = GPIO_BSRR_BR_8;
 		#endif
@@ -440,7 +438,7 @@ void TIM4_IRQHandler()
 {
 	TIM4->SR &= ~TIM_SR_UIF;
 	
-	if (flag_beep_user | flag_beep_radio | flag_beep_mpu | flag_beep_host | flag_beep_vbat)
+	if (flag_beep_user || flag_beep_radio || flag_beep_mpu || flag_beep_host || flag_beep_vbat)
 	{
 		if (GPIOA->ODR & GPIO_ODR_0)
 			GPIOA->ODR &= ~GPIO_ODR_0;
@@ -511,19 +509,21 @@ int main()
 	float gyro_x;
 	float gyro_y;
 	float gyro_z;
-	volatile float gyro_x_dc;
-	volatile float gyro_y_dc;
-	volatile float gyro_z_dc;
-	volatile float gyro_x_scale;
-	volatile float gyro_y_scale;
-	volatile float gyro_z_scale;
+	float gyro_x_dc;
+	float gyro_y_dc;
+	float gyro_z_dc;
+	float gyro_x_scale;
+	float gyro_y_scale;
+	float gyro_z_scale;
 	float accel_x;
 	float accel_y;
 	float accel_z;
-	volatile float accel_x_scale;
-	volatile float accel_y_scale;
-	volatile float accel_z_scale;
+	float accel_x_scale;
+	float accel_y_scale;
+	float accel_z_scale;
 	float temperature;
+	
+	volatile uint8_t uart2_rx_buffer[32];
 	
 	uint16_t radio_frame_count;
 	uint16_t throttle_raw;
@@ -533,13 +533,14 @@ int main()
 	uint16_t armed_raw;
 	uint16_t chan6_raw;
 	uint16_t radio_error_count;
-	volatile float throttle;
-	volatile float aileron;
-	volatile float elevator;
-	volatile float rudder;
-	//volatile float armed; // Moved to global because shared by interrupt
-	volatile float chan6;
-	volatile float expo_scale;
+	float throttle;
+	float aileron;
+	float elevator;
+	float rudder;
+	//float armed; // Moved to global because shared by interrupt
+	float armed1;
+	float chan6;
+	float expo_scale;
 	float throttle_rate;
 	float pitch_rate;
 	float roll_rate;
@@ -548,27 +549,27 @@ int main()
 	float pitch_gain;
 	float roll_gain;
 	float yaw_gain;
-	volatile float throttle_acc;
-	volatile float aileron_acc;
-	volatile float elevator_acc;
-	volatile float rudder_acc;
+	float throttle_acc;
+	float aileron_acc;
+	float elevator_acc;
+	float rudder_acc;
 	float throttle_s;
 	float aileron_s;
 	float elevator_s;
 	float rudder_s;
 	
-	volatile float error_pitch;
-	volatile float error_roll;
-	volatile float error_yaw;
+	float error_pitch;
+	float error_roll;
+	float error_yaw;
 	float error_pitch_z;
 	float error_roll_z;
 	float error_yaw_z;
-	volatile float error_pitch_i;
-	volatile float error_roll_i;
-	volatile float error_yaw_i;
-	volatile float error_pitch_i_max;
-	volatile float error_roll_i_max;
-	volatile float error_yaw_i_max;
+	float error_pitch_i;
+	float error_roll_i;
+	float error_yaw_i;
+	float error_pitch_i_max;
+	float error_roll_i_max;
+	float error_yaw_i_max;
 	float pitch;
 	float roll;
 	float yaw;
@@ -588,7 +589,6 @@ int main()
 	uint8_t reg_addr;
 	uint32_t val;
 	
-	
 	_Bool reg_flash_valid;
 	uint32_t* flash_r;
 	uint16_t* flash_w;
@@ -596,6 +596,8 @@ int main()
 	
 	int32_t time_mpu;
 	int32_t time_process;
+	
+	_Bool armed_unlock_step1;
 	
 	/* Variable init ---------------------------------------*/
 	
@@ -605,15 +607,12 @@ int main()
 	flag_host = 0;
 	flag_reg = 1;
 	flag_mpu_host_read = 0;
-#ifdef RADIO_SYNCH_AT_INIT
 	flag_radio_synch = 1;
-#else
-	flag_radio_synch = 0;
-#endif
 	flag_mpu_cal = 1;
 	flag_vbat = 0;
 	flag_error_mpu = 0;
 	flag_error_radio = 0;
+	flag_armed_locked = 1;
 
 	flag_beep_user = 0;
 	flag_beep_radio = 0;
@@ -623,49 +622,40 @@ int main()
 	
 	radio_frame_count = 0;
 	radio_error_count = 0;
-	throttle_raw = 0;
-	aileron_raw = 0;
-	elevator_raw = 0;
-	rudder_raw = 0;
-	armed_raw = 0;
-	chan6_raw = 0;
+
+	throttle = 0;
+	aileron = 0;
+	elevator = 0;
+	rudder = 0;
+	armed = 0;
+	chan6 = 0;
 	
 	mpu_sample_count = 0;
 	mpu_error_count = 0;
-	gyro_x_raw = 0;
-	gyro_y_raw = 0;
-	gyro_z_raw = 0;
-	accel_x_raw = 0;
-	accel_y_raw = 0;
-	accel_z_raw = 0;
-	temperature_raw = 0;
 	
 	gyro_x_dc = 0;
 	gyro_y_dc = 0;
 	gyro_z_dc = 0;
+	gyro_x_scale = 0.061035f;
+	gyro_y_scale = 0.061035f;
+	gyro_z_scale = 0.061035f;
+	accel_x_scale = 0.00048828f;
+	accel_y_scale = 0.00048828f;
+	accel_z_scale = 0.00048828f;
 	
-	throttle_rate = 0;
-	pitch_rate = 0;
-	roll_rate = 0;
-	yaw_rate = 0;
-	pid_gain = 1.0f;
-	pitch_gain = 1.0f;
-	roll_gain = 1.0f;
-	yaw_gain = 1.0f;	
 	throttle_acc = 0;
 	aileron_acc = 0;
 	elevator_acc = 0;
 	rudder_acc = 0;
-	
-	expo_scale = 1.0f;
 	
 	error_pitch_i = 0;
 	error_roll_i = 0;
 	error_yaw_i = 0;
 	
 	vbat_acc = 15.0f / VBAT_ALPHA;
-	vbat = 15.0f;
 	vbat_sample_count = 0;
+	
+	armed_unlock_step1 = 0;
 	
 	/* Register init -----------------------------------*/
 	
@@ -989,7 +979,7 @@ int main()
 	NVIC_SetPriority(TIM6_DAC_IRQn,0);
 	NVIC_SetPriority(TIM1_BRK_TIM15_IRQn,0);
 	NVIC_SetPriority(TIM1_UP_TIM16_IRQn,0);
-	NVIC_SetPriority(USB_LP_CAN_RX0_IRQn,1);
+	NVIC_SetPriority(USB_LP_CAN_RX0_IRQn,16);
 
 	/* USB ----------------------------------------------------------*/
 	
@@ -1046,6 +1036,52 @@ int main()
 		#ifdef DEBUG
 			GPIOA->BSRR = GPIO_BSRR_BS_3;
 		#endif
+		
+		/* Actions only needed on a register write ---------------------------------------------------*/
+		
+		if (flag_reg)
+		{
+			flag_reg = 0;
+		
+		#ifdef MPU_SPI
+			// Adapt SPI clock frequency
+			if (REG_CTRL__MPU_HOST_CTRL)
+				SPI2->CR1 |= (5 << SPI_CR1_BR_Pos); // 562.5kHz
+			else
+				SPI2->CR1 &= ~SPI_CR1_BR_Msk; // 18MHz
+		#endif
+			
+			// Manual contol of LED
+			if (REG_CTRL__LED_SELECT == 0)
+				GPIOB->BSRR = GPIO_BSRR_BS_5;
+			else if (REG_CTRL__LED_SELECT == 1)
+				GPIOB->BSRR = GPIO_BSRR_BR_5;
+			
+			// Expo
+			x = REG_EXPO;
+			expo_scale = x;
+			x = x * REG_EXPO;
+			expo_scale += x / 2.0f;
+			x = x * REG_EXPO;
+			expo_scale += x / 6.0f;
+			x = x * REG_EXPO;
+			expo_scale += x / 24.0f;
+			x = x * REG_EXPO;
+			expo_scale += x / 120.0f;
+			x = x * REG_EXPO;
+			expo_scale += x / 720.0f;
+			
+			// Max value of integral term
+			error_pitch_i_max = INTEGRAL_MAX / REG_PITCH_I;
+			error_roll_i_max = INTEGRAL_MAX / REG_ROLL_I;
+			error_yaw_i_max = INTEGRAL_MAX / REG_YAW_I;
+			
+			// Beep test
+			if (REG_CTRL__BEEP_TEST)
+				flag_beep_host = 1;
+			else
+				flag_beep_host = 0;
+		}
 		
 		/* Radio frame synchronisation -------------------------------------------------*/
 		
@@ -1120,22 +1156,35 @@ int main()
 				armed_raw    = (uint16_t)uart2_rx_buffer[12] | ((uint16_t)uart2_rx_buffer[11] << 8);
 				chan6_raw    = (uint16_t)uart2_rx_buffer[14] | ((uint16_t)uart2_rx_buffer[13] << 8);
 			#endif
-			}			
+			}
+			
 		#if (RADIO_TYPE == 0)
 			throttle = (float)(throttle_raw - 1000) / 1000.0f;
 			aileron = (float)((int16_t)aileron_raw - 1500) / 500.0f;
 			elevator = (float)((int16_t)elevator_raw - 1500) / 500.0f;
 			rudder = (float)((int16_t)rudder_raw - 1500) / 500.0f;
-			armed = (float)(armed_raw - 1000) / 1000.0f;
+			armed1 = (float)(armed_raw - 1000) / 1000.0f;
 			chan6 = (float)(chan6_raw - 1000) / 1000.0f;
 		#else
 			throttle = (float)(throttle_raw - 8800) / 6400.0f;
 			aileron = (float)((int16_t)aileron_raw - 12000) / 3200.0f;
 			elevator = (float)((int16_t)elevator_raw - 12000) / 3200.0f;
 			rudder = (float)((int16_t)rudder_raw - 12000) / 3200.0f;
-			armed = (float)(armed_raw - 8800) / 6400.0f;
+			armed1 = (float)(armed_raw - 8800) / 6400.0f;
 			chan6 = (float)(chan6_raw - 8800) / 6400.0f;
 		#endif
+			
+			if (flag_armed_locked)
+			{
+				armed = 0;
+				
+				if (!armed_unlock_step1 && (armed1 > 0.5f))
+					armed_unlock_step1 = 1;
+				if (armed_unlock_step1 && (armed1 < 0.5f) && (throttle < 0.01f))
+					flag_armed_locked = 0;
+			}
+			else
+				armed = armed1;
 			
 			if (REG_EXPO > 0.0f)
 			{
@@ -1156,24 +1205,21 @@ int main()
 			}
 			
 			// Send raw radio commands to host
-			if (REG_DEBUG == 4)
+			if ((REG_DEBUG__CASE == 4) && ((radio_frame_count & REG_DEBUG__MASK) == 0))
 			{
-				USBD_CDC_IF_tx_buffer[ 0] = (uint8_t) radio_frame_count;
-				USBD_CDC_IF_tx_buffer[ 1] = (uint8_t)(radio_frame_count >> 8);
-				USBD_CDC_IF_tx_buffer[ 2] = (uint8_t) throttle_raw;
-				USBD_CDC_IF_tx_buffer[ 3] = (uint8_t)(throttle_raw >> 8);
-				USBD_CDC_IF_tx_buffer[ 4] = (uint8_t) aileron_raw;
-				USBD_CDC_IF_tx_buffer[ 5] = (uint8_t)(aileron_raw>> 8);
-				USBD_CDC_IF_tx_buffer[ 6] = (uint8_t) elevator_raw;
-				USBD_CDC_IF_tx_buffer[ 7] = (uint8_t)(elevator_raw>> 8);
-				USBD_CDC_IF_tx_buffer[ 8] = (uint8_t) rudder_raw;
-				USBD_CDC_IF_tx_buffer[ 9] = (uint8_t)(rudder_raw >> 8);
-				USBD_CDC_IF_tx_buffer[10] = (uint8_t) armed_raw;
-				USBD_CDC_IF_tx_buffer[11] = (uint8_t)(armed_raw >> 8);
-				USBD_CDC_IF_tx_buffer[12] = (uint8_t) chan6_raw;
-				USBD_CDC_IF_tx_buffer[13] = (uint8_t)(chan6_raw >> 8);
-				USB_TX(14)
-				REG_DEBUG = 0;
+				USBD_CDC_IF_tx_buffer[ 0] = (uint8_t) throttle_raw;
+				USBD_CDC_IF_tx_buffer[ 1] = (uint8_t)(throttle_raw >> 8);
+				USBD_CDC_IF_tx_buffer[ 2] = (uint8_t) aileron_raw;
+				USBD_CDC_IF_tx_buffer[ 3] = (uint8_t)(aileron_raw>> 8);
+				USBD_CDC_IF_tx_buffer[ 4] = (uint8_t) elevator_raw;
+				USBD_CDC_IF_tx_buffer[ 5] = (uint8_t)(elevator_raw>> 8);
+				USBD_CDC_IF_tx_buffer[ 6] = (uint8_t) rudder_raw;
+				USBD_CDC_IF_tx_buffer[ 7] = (uint8_t)(rudder_raw >> 8);
+				USBD_CDC_IF_tx_buffer[ 8] = (uint8_t) armed_raw;
+				USBD_CDC_IF_tx_buffer[ 9] = (uint8_t)(armed_raw >> 8);
+				USBD_CDC_IF_tx_buffer[10] = (uint8_t) chan6_raw;
+				USBD_CDC_IF_tx_buffer[11] = (uint8_t)(chan6_raw >> 8);
+				USB_TX(12)
 			}
 			
 			// Beep if requested
@@ -1257,14 +1303,6 @@ int main()
 							gyro_x_dc = gyro_x_dc / 1000.0f;
 							gyro_y_dc = gyro_y_dc / 1000.0f;
 							gyro_z_dc = gyro_z_dc / 1000.0f;
-	
-							gyro_x_scale = 0.061035f;
-							gyro_y_scale = 0.061035f;
-							gyro_z_scale = 0.061035f;
-							
-							accel_x_scale = 0.00048828f;
-							accel_y_scale = 0.00048828f;
-							accel_z_scale = 0.00048828f;
 						}
 					}
 					
@@ -1291,26 +1329,23 @@ int main()
 			}
 			
 			// Send Raw sensor values to host
-			if (REG_DEBUG == 1)
+			if ((REG_DEBUG__CASE == 1) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				USBD_CDC_IF_tx_buffer[ 0] = (uint8_t) mpu_sample_count;
-				USBD_CDC_IF_tx_buffer[ 1] = (uint8_t)(mpu_sample_count >> 8);
-				USBD_CDC_IF_tx_buffer[ 2] = (uint8_t) gyro_x_raw;
-				USBD_CDC_IF_tx_buffer[ 3] = (uint8_t)(gyro_x_raw >> 8);
-				USBD_CDC_IF_tx_buffer[ 4] = (uint8_t) gyro_y_raw;
-				USBD_CDC_IF_tx_buffer[ 5] = (uint8_t)(gyro_y_raw >> 8);
-				USBD_CDC_IF_tx_buffer[ 6] = (uint8_t) gyro_z_raw;
-				USBD_CDC_IF_tx_buffer[ 7] = (uint8_t)(gyro_z_raw >> 8);
-				USBD_CDC_IF_tx_buffer[ 8] = (uint8_t) accel_x_raw;
-				USBD_CDC_IF_tx_buffer[ 9] = (uint8_t)(accel_x_raw >> 8);
-				USBD_CDC_IF_tx_buffer[10] = (uint8_t) accel_y_raw;
-				USBD_CDC_IF_tx_buffer[11] = (uint8_t)(accel_y_raw >> 8);
-				USBD_CDC_IF_tx_buffer[12] = (uint8_t) accel_z_raw;
-				USBD_CDC_IF_tx_buffer[13] = (uint8_t)(accel_z_raw >> 8);
-				USBD_CDC_IF_tx_buffer[14] = (uint8_t) temperature_raw;
-				USBD_CDC_IF_tx_buffer[15] = (uint8_t)(temperature_raw >> 8);
-				USB_TX(16)
-				REG_DEBUG = 0;
+				USBD_CDC_IF_tx_buffer[ 0] = (uint8_t) gyro_x_raw;
+				USBD_CDC_IF_tx_buffer[ 1] = (uint8_t)(gyro_x_raw >> 8);
+				USBD_CDC_IF_tx_buffer[ 2] = (uint8_t) gyro_y_raw;
+				USBD_CDC_IF_tx_buffer[ 3] = (uint8_t)(gyro_y_raw >> 8);
+				USBD_CDC_IF_tx_buffer[ 4] = (uint8_t) gyro_z_raw;
+				USBD_CDC_IF_tx_buffer[ 5] = (uint8_t)(gyro_z_raw >> 8);
+				USBD_CDC_IF_tx_buffer[ 6] = (uint8_t) accel_x_raw;
+				USBD_CDC_IF_tx_buffer[ 7] = (uint8_t)(accel_x_raw >> 8);
+				USBD_CDC_IF_tx_buffer[ 8] = (uint8_t) accel_y_raw;
+				USBD_CDC_IF_tx_buffer[ 9] = (uint8_t)(accel_y_raw >> 8);
+				USBD_CDC_IF_tx_buffer[10] = (uint8_t) accel_z_raw;
+				USBD_CDC_IF_tx_buffer[11] = (uint8_t)(accel_z_raw >> 8);
+				USBD_CDC_IF_tx_buffer[12] = (uint8_t) temperature_raw;
+				USBD_CDC_IF_tx_buffer[13] = (uint8_t)(temperature_raw >> 8);
+				USB_TX(14)
 			}
 			
 			// Remove DC and scale
@@ -1323,19 +1358,16 @@ int main()
 			temperature = (float)temperature_raw / 340.0f + 36.53f;
 			
 			// Send scaled sensor values to host
-			if (REG_DEBUG == 2)
+			if ((REG_DEBUG__CASE == 2) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				USBD_CDC_IF_tx_buffer[0] = (uint8_t) mpu_sample_count;
-				USBD_CDC_IF_tx_buffer[1] = (uint8_t)(mpu_sample_count >> 8);
-				float_to_bytes(&gyro_x, &USBD_CDC_IF_tx_buffer[2]);
-				float_to_bytes(&gyro_y, &USBD_CDC_IF_tx_buffer[6]);
-				float_to_bytes(&gyro_z, &USBD_CDC_IF_tx_buffer[10]);
-				float_to_bytes(&accel_x, &USBD_CDC_IF_tx_buffer[14]);
-				float_to_bytes(&accel_y, &USBD_CDC_IF_tx_buffer[18]);
-				float_to_bytes(&accel_z, &USBD_CDC_IF_tx_buffer[22]);
-				float_to_bytes(&temperature, &USBD_CDC_IF_tx_buffer[26]);
-				USB_TX(30)
-				REG_DEBUG = 0;
+				float_to_bytes(&gyro_x, &USBD_CDC_IF_tx_buffer[0]);
+				float_to_bytes(&gyro_y, &USBD_CDC_IF_tx_buffer[4]);
+				float_to_bytes(&gyro_z, &USBD_CDC_IF_tx_buffer[8]);
+				float_to_bytes(&accel_x, &USBD_CDC_IF_tx_buffer[12]);
+				float_to_bytes(&accel_y, &USBD_CDC_IF_tx_buffer[16]);
+				float_to_bytes(&accel_z, &USBD_CDC_IF_tx_buffer[20]);
+				float_to_bytes(&temperature, &USBD_CDC_IF_tx_buffer[24]);
+				USB_TX(28)
 			}
 			
 			// Smooth radio command
@@ -1349,16 +1381,15 @@ int main()
 			rudder_s = rudder_acc * COMMAND_ALPHA;
 			
 			// Send smoothed radio commands to host
-			if (REG_DEBUG == 5)
+			if ((REG_DEBUG__CASE == 5) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				USBD_CDC_IF_tx_buffer[ 0] = (uint8_t) mpu_sample_count;
-				USBD_CDC_IF_tx_buffer[ 1] = (uint8_t)(mpu_sample_count >> 8);
-				float_to_bytes(&throttle_s, &USBD_CDC_IF_tx_buffer[2]);
-				float_to_bytes(&aileron_s, &USBD_CDC_IF_tx_buffer[6]);
-				float_to_bytes(&elevator_s, &USBD_CDC_IF_tx_buffer[10]);
-				float_to_bytes(&rudder_s, &USBD_CDC_IF_tx_buffer[14]);
-				USB_TX(18)
-				REG_DEBUG = 0;
+				float_to_bytes(&throttle_s, &USBD_CDC_IF_tx_buffer[0]);
+				float_to_bytes(&aileron_s, &USBD_CDC_IF_tx_buffer[4]);
+				float_to_bytes(&elevator_s, &USBD_CDC_IF_tx_buffer[8]);
+				float_to_bytes(&rudder_s, &USBD_CDC_IF_tx_buffer[12]);
+				float_to_bytes(&armed, &USBD_CDC_IF_tx_buffer[16]);
+				float_to_bytes(&chan6, &USBD_CDC_IF_tx_buffer[20]);
+				USB_TX(24)
 			}
 			
 			// Convert command into gyro rate
@@ -1416,13 +1447,13 @@ int main()
 				error_yaw_i = -error_yaw_i_max;
 			
 			// PID
-			/*if (chan6_raw < 1250)
+			/*if (chan6 < 0.33)
 			{
 				pitch = (error_pitch * REG_PITCH_P);
 				roll  = (error_roll  * REG_ROLL_P );
 				yaw   = (error_yaw   * REG_YAW_P  );
 			}
-			else if (chan6_raw < 1750)
+			else if (chan6 < 0.66)
 			{
 				pitch = (error_pitch * REG_PITCH_P) + ((error_pitch - error_pitch_z) * REG_PITCH_D);
 				roll  = (error_roll  * REG_ROLL_P ) + ((error_roll  - error_roll_z ) * REG_ROLL_D);
@@ -1441,15 +1472,12 @@ int main()
 			yaw = yaw * pid_gain * yaw_gain;
 			
 			// Send pitch/roll/yaw to host
-			if (REG_DEBUG == 6)
+			if ((REG_DEBUG__CASE == 6) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				USBD_CDC_IF_tx_buffer[0] = (uint8_t) mpu_sample_count;
-				USBD_CDC_IF_tx_buffer[1] = (uint8_t)(mpu_sample_count >> 8);
-				float_to_bytes(&pitch, &USBD_CDC_IF_tx_buffer[2]);
-				float_to_bytes(&roll, &USBD_CDC_IF_tx_buffer[6]);
-				float_to_bytes(&yaw, &USBD_CDC_IF_tx_buffer[10]);
-				USB_TX(14)
-				REG_DEBUG = 0;
+				float_to_bytes(&pitch, &USBD_CDC_IF_tx_buffer[0]);
+				float_to_bytes(&roll, &USBD_CDC_IF_tx_buffer[4]);
+				float_to_bytes(&yaw, &USBD_CDC_IF_tx_buffer[8]);
+				USB_TX(12)
 			}
 			
 			// Motor matrix
@@ -1459,14 +1487,11 @@ int main()
 			motor[3] = throttle_rate - roll + pitch + yaw;
 			
 			// Send motor actions to host
-			if (REG_DEBUG == 7)
+			if ((REG_DEBUG__CASE == 7) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				USBD_CDC_IF_tx_buffer[0] = (uint8_t) mpu_sample_count;
-				USBD_CDC_IF_tx_buffer[1] = (uint8_t)(mpu_sample_count >> 8);
 				for (i=0; i<4; i++)
-					float_to_bytes(&motor[i], &USBD_CDC_IF_tx_buffer[i*4+2]);
-				USB_TX(18)
-				REG_DEBUG = 0;
+					float_to_bytes(&motor[i], &USBD_CDC_IF_tx_buffer[i*4]);
+				USB_TX(16)
 			}
 			
 			// Offset and clip motor value
@@ -1491,17 +1516,14 @@ int main()
 			flag_motor = 1;
 			
 			// Send motor command to host
-			if (REG_DEBUG == 8)
+			if ((REG_DEBUG__CASE == 8) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				USBD_CDC_IF_tx_buffer[0] = (uint8_t) mpu_sample_count;
-				USBD_CDC_IF_tx_buffer[1] = (uint8_t)(mpu_sample_count >> 8);
 				for (i=0; i<4; i++)
 				{
-					USBD_CDC_IF_tx_buffer[i*2+2] = (uint8_t) motor_raw[i];
-					USBD_CDC_IF_tx_buffer[i*2+3] = (uint8_t)(motor_raw[i] >> 8);
+					USBD_CDC_IF_tx_buffer[i*2+0] = (uint8_t) motor_raw[i];
+					USBD_CDC_IF_tx_buffer[i*2+1] = (uint8_t)(motor_raw[i] >> 8);
 				}
-				USB_TX(10)
-				REG_DEBUG = 0;
+				USB_TX(8)
 			}
 			
 			// Toggle LED at rate of MPU flag
@@ -1555,13 +1577,10 @@ int main()
 			ADC2->CR |= ADC_CR_ADSTART;
 			
 			// Send VBAT to host
-			if (REG_DEBUG == 3)
+			if ((REG_DEBUG__CASE == 3) && ((vbat_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				USBD_CDC_IF_tx_buffer[0] = (uint8_t) vbat_sample_count;
-				USBD_CDC_IF_tx_buffer[1] = (uint8_t)(vbat_sample_count >> 8);
-				float_to_bytes(&vbat, &USBD_CDC_IF_tx_buffer[2]);
-				USB_TX(6)
-				REG_DEBUG = 0;
+				float_to_bytes(&vbat, &USBD_CDC_IF_tx_buffer[0]);
+				USB_TX(4)
 			}
 			
 			// Beep if VBAT too low
@@ -1657,52 +1676,6 @@ int main()
 					break;
 				}
 			}
-		}
-		
-		/* Actions only needed on a register write ---------------------------------------------------*/
-		
-		if (flag_reg)
-		{
-			flag_reg = 0;
-		
-		#ifdef MPU_SPI
-			// Adapt SPI clock frequency
-			if (REG_CTRL__MPU_HOST_CTRL)
-				SPI2->CR1 |= (5 << SPI_CR1_BR_Pos); // 562.5kHz
-			else
-				SPI2->CR1 &= ~SPI_CR1_BR_Msk; // 18MHz
-		#endif
-			
-			// Manual contol of LED
-			if (REG_CTRL__LED_SELECT == 0)
-				GPIOB->BSRR = GPIO_BSRR_BS_5;
-			else if (REG_CTRL__LED_SELECT == 1)
-				GPIOB->BSRR = GPIO_BSRR_BR_5;
-			
-			// Expo
-			x = REG_EXPO;
-			expo_scale = x;
-			x = x * REG_EXPO;
-			expo_scale += x / 2.0f;
-			x = x * REG_EXPO;
-			expo_scale += x / 6.0f;
-			x = x * REG_EXPO;
-			expo_scale += x / 24.0f;
-			x = x * REG_EXPO;
-			expo_scale += x / 120.0f;
-			x = x * REG_EXPO;
-			expo_scale += x / 720.0f;
-			
-			// Max value of integral term
-			error_pitch_i_max = INTEGRAL_MAX / REG_PITCH_I;
-			error_roll_i_max = INTEGRAL_MAX / REG_ROLL_I;
-			error_yaw_i_max = INTEGRAL_MAX / REG_YAW_I;
-			
-			// Beep test
-			if (REG_CTRL__BEEP_TEST)
-				flag_beep_host = 1;
-			else
-				flag_beep_host = 0;
 		}
 		
 		/*------------------------------------------------------------------*/

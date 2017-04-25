@@ -100,6 +100,24 @@ classdef fc_reg
 				obj.write(3,x);
 			end
 		end
+		function y = DEBUG__CASE(obj,x)
+			r = obj.read(3);
+			if nargin < 2
+				y = bitshift(bitand(r, 255), 0);
+			else
+				w = bitand(bitshift(x, 0), 255) + bitand(r, 4294967040);
+				obj.write(3,w);
+			end
+		end
+		function y = DEBUG__MASK(obj,x)
+			r = obj.read(3);
+			if nargin < 2
+				y = bitshift(bitand(r, 16776960), -8);
+			else
+				w = bitand(bitshift(x, 8), 16776960) + bitand(r, 4278190335);
+				obj.write(3,w);
+			end
+		end
 		function y = ERROR(obj,x)
 			if nargin < 2
 				y = obj.read(4);

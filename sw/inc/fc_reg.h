@@ -13,6 +13,8 @@
 #define REG_MOTOR_TEST__VALUE (uint16_t)((reg[2] & 65535U) >> 0)
 #define REG_MOTOR_TEST__SELECT (uint8_t)((reg[2] & 983040U) >> 16)
 #define REG_DEBUG reg[3]
+#define REG_DEBUG__CASE (uint8_t)((reg[3] & 255U) >> 0)
+#define REG_DEBUG__MASK (uint16_t)((reg[3] & 16776960U) >> 8)
 #define REG_ERROR reg[4]
 #define REG_ERROR__MPU (uint16_t)((reg[4] & 65535U) >> 0)
 #define REG_ERROR__RADIO (uint16_t)((reg[4] & 4294901760U) >> 16)
