@@ -221,7 +221,7 @@ void SystemInit(void)
 	RCC->CFGR |= RCC_CFGR_SW_PLL;
 	while ((RCC->CFGR & RCC_CFGR_SWS_PLL) == 0) {}
 	
-	// Set APB1 at 38MHz
+	// Set APB1 at 36MHz
 	RCC->CFGR |= RCC_CFGR_PPRE1_DIV2;
 	
 	// Select system clock as UART2/3/4/5 clock

@@ -81,10 +81,13 @@ f = fopen('fc_reg.m','w');
 fprintf(f,'classdef fc_reg\n');
 fprintf(f,'\tmethods\n');
 fprintf(f,'\t\tfunction data = read(obj,addr)\n');
-fprintf(f,'\t\t\t%% WRAP YOUR READ FUNCTION HERE\n');
+fprintf(f,'\t\t\tglobal ser\n');
+fprintf(f,'\t\t\tfwrite(ser,[0,addr,0,0,0,0]);\n');
+fprintf(f,'\t\t\tdata = sum(fread(ser,4) .* 2.^(24:-8:0)'');\n');
 fprintf(f,'\t\tend\n');
 fprintf(f,'\t\tfunction write(obj,addr,data)\n');
-fprintf(f,'\t\t\t%% WRAP YOUR WRITE FUNCTION HERE\n');
+fprintf(f,'\t\t\tglobal ser\n');
+fprintf(f,'\t\t\tfwrite(ser,[1,addr,floor(mod(double(data) ./ 2.^(24:-8:0),2^8))]);\n');
 fprintf(f,'\t\tend\n');
 
 for n = 1:length(reg)

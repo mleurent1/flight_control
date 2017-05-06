@@ -64,10 +64,16 @@ reg(n).flash = 1;
 reg(n).subf{1} = {'RECEIVER_BIND',0,0,'uint8',0};
 
 n = n + 1;
-reg(n).name = 'EXPO';
+reg(n).name = 'PITCH_ROLL_EXPO';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'EXPO',31,0,'float',4};
+reg(n).subf{1} = {'PITCH_ROLL_EXPO',31,0,'float',4};
+
+n = n + 1;
+reg(n).name = 'YAW_EXPO';
+reg(n).read_only = 0;
+reg(n).flash = 1;
+reg(n).subf{1} = {'YAW_EXPO',31,0,'float',3};
 
 n = n + 1;
 reg(n).name = 'MOTOR_START';
@@ -82,10 +88,16 @@ reg(n).flash = 1;
 reg(n).subf{1} = {'MOTOR_ARMED',15,0,'uint16',150};
 
 n = n + 1;
-reg(n).name = 'COMMAND_RATE';
+reg(n).name = 'PITCH_ROLL_RATE';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'COMMAND_RATE',15,0,'float',1200};
+reg(n).subf{1} = {'PITCH_ROLL_RATE',15,0,'float',1200};
+
+n = n + 1;
+reg(n).name = 'YAW_RATE';
+reg(n).read_only = 0;
+reg(n).flash = 1;
+reg(n).subf{1} = {'YAW_RATE',15,0,'float',600};
 
 n = n + 1;
 reg(n).name = 'THROTTLE_RANGE';

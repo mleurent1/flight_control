@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#define NB_REG 25
+#define NB_REG 27
 
 #define REG_VERSION reg[0]
 #define REG_CTRL reg[1]
@@ -24,22 +24,24 @@
 #define REG_VBAT regf[6]
 #define REG_VBAT_MIN regf[7]
 #define REG_RECEIVER_BIND reg[8]
-#define REG_EXPO regf[9]
-#define REG_MOTOR_START reg[10]
-#define REG_MOTOR_ARMED reg[11]
-#define REG_COMMAND_RATE regf[12]
-#define REG_THROTTLE_RANGE regf[13]
-#define REG_PITCH_P regf[14]
-#define REG_PITCH_I regf[15]
-#define REG_PITCH_D regf[16]
-#define REG_ROLL_P regf[17]
-#define REG_ROLL_I regf[18]
-#define REG_ROLL_D regf[19]
-#define REG_YAW_P regf[20]
-#define REG_YAW_I regf[21]
-#define REG_YAW_D regf[22]
-#define REG_THROTTLE_PID_ATTEN regf[23]
-#define REG_RATE_PID_ATTEN regf[24]
+#define REG_PITCH_ROLL_EXPO regf[9]
+#define REG_YAW_EXPO regf[10]
+#define REG_MOTOR_START reg[11]
+#define REG_MOTOR_ARMED reg[12]
+#define REG_PITCH_ROLL_RATE regf[13]
+#define REG_YAW_RATE regf[14]
+#define REG_THROTTLE_RANGE regf[15]
+#define REG_PITCH_P regf[16]
+#define REG_PITCH_I regf[17]
+#define REG_PITCH_D regf[18]
+#define REG_ROLL_P regf[19]
+#define REG_ROLL_I regf[20]
+#define REG_ROLL_D regf[21]
+#define REG_YAW_P regf[22]
+#define REG_YAW_I regf[23]
+#define REG_YAW_D regf[24]
+#define REG_THROTTLE_PID_ATTEN regf[25]
+#define REG_RATE_PID_ATTEN regf[26]
 
 typedef struct
 {

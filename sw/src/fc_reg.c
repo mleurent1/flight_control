@@ -14,10 +14,12 @@ reg_properties_t reg_properties[NB_REG] =
 	{1, 0, 1, 0}, // VBAT
 	{0, 1, 1, 1097229926}, // VBAT_MIN
 	{0, 1, 0, 0}, // RECEIVER_BIND
-	{0, 1, 1, 1082130432}, // EXPO
+	{0, 1, 1, 1082130432}, // PITCH_ROLL_EXPO
+	{0, 1, 1, 1077936128}, // YAW_EXPO
 	{0, 1, 0, 50}, // MOTOR_START
 	{0, 1, 0, 150}, // MOTOR_ARMED
-	{0, 1, 1, 1150681088}, // COMMAND_RATE
+	{0, 1, 1, 1150681088}, // PITCH_ROLL_RATE
+	{0, 1, 1, 1142292480}, // YAW_RATE
 	{0, 1, 1, 1155186688}, // THROTTLE_RANGE
 	{0, 1, 1, 1082130432}, // PITCH_P
 	{0, 1, 1, 1000593162}, // PITCH_I

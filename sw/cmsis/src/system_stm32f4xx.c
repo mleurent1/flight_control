@@ -207,26 +207,26 @@ void SystemInit(void)
 	RCC->CR |= RCC_CR_HSEON;
 	while ((RCC->CR & RCC_CR_HSERDY) == 0) {}
 	
-	// Set VCO at 336 MHz = XTAL(8MHz) * (N=336) / (M=8)
-	// PLL system = VCO / ((P=0,default)+2) = 168 MHz , PLL USB = VCO / (Q=7) = 48 MHz
+	// Set VCO at 192 MHz = XTAL(8MHz) * (N=192) / (M=8)
+	// PLL system = VCO / ((P=0,default)+2) = 96 MHz , PLL USB = VCO / (Q=4) = 48 MHz
 	RCC->PLLCFGR &= ~(RCC_PLLCFGR_PLLM_Msk | RCC_PLLCFGR_PLLN_Msk | RCC_PLLCFGR_PLLQ_Msk);
-	RCC->PLLCFGR |= (8 << RCC_PLLCFGR_PLLM_Pos) | (336 << RCC_PLLCFGR_PLLN_Pos) | RCC_PLLCFGR_PLLSRC | (7 << RCC_PLLCFGR_PLLQ_Pos);
+	RCC->PLLCFGR |= (8 << RCC_PLLCFGR_PLLM_Pos) | (192 << RCC_PLLCFGR_PLLN_Pos) | RCC_PLLCFGR_PLLSRC | (4 << RCC_PLLCFGR_PLLQ_Pos);
 	RCC->CR |= RCC_CR_PLLON;
 	while ((RCC->CR & RCC_CR_PLLRDY) == 0) {}
 	
 	// Select PLL as system clock
-	FLASH->ACR |= (5 << FLASH_ACR_LATENCY_Pos);// | FLASH_ACR_PRFTEN; // Inrease Flash latency + Prefetch?
+	FLASH->ACR |= (3 << FLASH_ACR_LATENCY_Pos);// | FLASH_ACR_PRFTEN; // Inrease Flash latency + Prefetch?
 	RCC->CFGR |= RCC_CFGR_SW_PLL;
 	while ((RCC->CFGR & RCC_CFGR_SWS_PLL) == 0) {}
 	
 	// Disable internal high-speed RC
 	RCC->CR &= ~RCC_CR_HSION;
-		
-	// Set APB1 at 42 MHz and APB2 at 84 MHz
+	
+	// Set APB1 at 24 MHz (96/4) and APB2 at 48 MHz (96/2)
 	RCC->CFGR |= RCC_CFGR_PPRE1_DIV4 | RCC_CFGR_PPRE2_DIV2;
 	
 	// Configure SysTick to generate interrrupt every 1ms
-	SysTick_Config(168000);
+	SysTick_Config(96000);
 }
 
 /**
