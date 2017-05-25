@@ -16,7 +16,7 @@ div{
 }
 div[id="console"]{
 	width:350px;
-	height:100px;
+	height:130px;
 	background:#FFF;
 	color:#000;
 	overflow:scroll;
@@ -25,7 +25,7 @@ div[id="console"]{
 }
 div[id="col"]{
 	width:700px;
-	height:350px;
+	height:400px;
 	-moz-column-count:2;
 	-webkit-column-width:350px;
 	-webkit-column-gap:0px;

@@ -7,7 +7,7 @@
 
 /* Private defines ------------------------------------*/
 
-#define VERSION 22
+#define VERSION 23
 
 #define ESC_DSHOT
 
@@ -37,7 +37,7 @@ volatile uint8_t spi1_rx_buffer[16];
 volatile uint8_t spi1_tx_buffer[16];
 uint16_t time[4];
 float armed;
-uint32_t motor_raw[4];
+volatile uint32_t motor_raw[4];
 uint16_t mpu_error_count;
 uint16_t radio_error_count;
 
@@ -88,6 +88,8 @@ volatile _Bool flag_beep_vbat;
 	DMA1_Stream2->CR &= ~DMA_SxCR_EN; \
 	DMA1_Stream3->CR &= ~DMA_SxCR_EN; \
 	DMA1_Stream4->CR &= ~DMA_SxCR_EN; \
+	DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_1 | DMA_CLEAR_ALL_FLAGS_2 | DMA_CLEAR_ALL_FLAGS_3; \
+	DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_4; \
 	DMA1_Stream1->NDTR = 17; \
 	DMA1_Stream2->NDTR = 17; \
 	DMA1_Stream3->NDTR = 17; \
@@ -159,20 +161,20 @@ void MpuRead(uint8_t addr, uint8_t size)
 	SPI1->CR1 |= SPI_CR1_SPE;
 }
 
-void dshot_encode(uint32_t* val, volatile uint32_t buf[17])
+void dshot_encode(volatile uint32_t* val, volatile uint32_t buf[17])
 {
 	int i;
 	uint8_t bit[11];
 	for (i=0; i<11; i++)
 	{
-		buf[i] = (*val & (1 << (10-i))) ? 30 : 15;
+		buf[i] = (*val & (1 << (10-i))) ? 60 : 30;
 		bit[i] = (*val & (1 << i)) ? 1 : 0;
 	}
-	buf[11] = 15;
-	buf[12] = (bit[10]^bit[6]^bit[2]) ? 30 : 15;
-    buf[13] = (bit[ 9]^bit[5]^bit[1]) ? 30 : 15;
-    buf[14] = (bit[ 8]^bit[4]^bit[0]) ? 30 : 15;
-    buf[15] = (bit[ 7]^bit[3])        ? 30 : 15;
+	buf[11] = 30;
+	buf[12] = (bit[10]^bit[6]^bit[2]) ? 60 : 30;
+    buf[13] = (bit[ 9]^bit[5]^bit[1]) ? 60 : 30;
+    buf[14] = (bit[ 8]^bit[4]^bit[0]) ? 60 : 30;
+    buf[15] = (bit[ 7]^bit[3])        ? 60 : 30;
 	buf[16] = 0;
 }
 
@@ -572,7 +574,7 @@ int main()
 	/* Clock enable --------------------------------------------------*/
 	
 	// UART clock enable
-	RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
+	RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
 	// SPI clock enable
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
 	// Timer clock enable
@@ -652,6 +654,7 @@ int main()
 	GPIOB->MODER |= GPIO_MODER_MODER12_0 | GPIO_MODER_MODER13_0 | GPIO_MODER_MODER14_0 | GPIO_MODER_MODER15_0;
 #endif
 	// C0 : SBUS invert
+	GPIOC->MODER |= GPIO_MODER_MODER0_0;
 	// C1 : Current sensor
 	// C2 : Voltage sensor, ADC1
 	GPIOC->MODER |= GPIO_MODER_MODER2;
@@ -707,21 +710,21 @@ int main()
 	/* Timers --------------------------------------------------------------------------*/
 	
 #ifdef ESC_DSHOT
-	// DMA driven timer for DShot600, 24Mhz, 0:15, 1:30, T:40
+	// DMA driven timer for DShot600, 12Mhz, 0:15, 1:30, T:40
 	TIM2->PSC = 0;
-	TIM2->ARR = 40;
+	TIM2->ARR = 80;
 	TIM2->DIER = TIM_DIER_CC3DE;
 	TIM2->CCER = TIM_CCER_CC3E;
 	TIM2->CCMR2 = (6 << TIM_CCMR2_OC3M_Pos) | TIM_CCMR2_OC3PE;
 	
 	TIM3->PSC = 0;
-	TIM3->ARR = 40;
+	TIM3->ARR = 80;
 	TIM3->DIER = TIM_DIER_CC4DE;
 	TIM3->CCER = TIM_CCER_CC4E;
 	TIM3->CCMR2 = (6 << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC4PE;
 	
 	TIM5->PSC = 0;
-	TIM5->ARR = 40;
+	TIM5->ARR = 80;
 	TIM5->DIER = TIM_DIER_CC2DE | TIM_DIER_CC4DE;
 	TIM5->CCER = TIM_CCER_CC2E | TIM_CCER_CC4E;
 	TIM5->CCMR1 = (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
@@ -729,19 +732,19 @@ int main()
 #else	
 	// One-pulse mode for OneShot125
 	TIM2->CR1 = TIM_CR1_OPM;
-	TIM2->PSC = 2; // 0.125us
+	TIM2->PSC = 5;
 	TIM2->ARR = MOTOR_MAX + 1;
 	TIM2->CCER = TIM_CCER_CC3E;
 	TIM2->CCMR2 = 7 << TIM_CCMR2_OC3M_Pos;
 	
 	TIM3->CR1 = TIM_CR1_OPM;
-	TIM3->PSC = 2;
+	TIM3->PSC = 5;
 	TIM3->ARR = MOTOR_MAX + 1;
 	TIM3->CCER = TIM_CCER_CC4E;
 	TIM3->CCMR2 = 7 << TIM_CCMR2_OC4M_Pos;
 	
 	TIM5->CR1 = TIM_CR1_OPM;
-	TIM5->PSC = 2;
+	TIM5->PSC = 5;
 	TIM5->ARR = MOTOR_MAX + 1;
 	TIM5->CCER = TIM_CCER_CC2E | TIM_CCER_CC4E;
 	TIM5->CCMR1 = 7 << TIM_CCMR1_OC2M_Pos;
@@ -780,14 +783,14 @@ int main()
 	/* UART ---------------------------------------------------*/
 
 #if (RADIO_TYPE == 2)
+	GPIOC->BSRR = GPIO_BSRR_BS_0; // Invert Rx
 	USART1->BRR = 480; // 48MHz/100000bps
+	USART1->CR1 = USART_CR1_RE | (1 << USART_CR1_M_Pos) | USART_CR1_PCE;
+	USART1->CR2 = (2 << USART_CR2_STOP_Pos);// | USART_CR2_MSBFIRST ??;
 #else
+	GPIOC->BSRR = GPIO_BSRR_BR_0; // Do not invert Rx
 	USART1->BRR = 417; // 48MHz/115200bps
-#endif
 	USART1->CR1 = USART_CR1_RE;
-#if (RADIO_TYPE == 2)
-	USART1->CR1 |= (1 << USART_CR1_M_Pos) | USART_CR1_PCE;
-	USART1->CR2 = (2 << USART_CR2_STOP_Pos) | USART_CR2_RXINV | USART_CR2_MSBFIRST;
 #endif
 	USART1->CR3 = USART_CR3_EIE | USART_CR3_DMAR;
 	
@@ -899,9 +902,20 @@ int main()
 			
 			// Manual contol of LED
 			if (REG_CTRL__LED_SELECT == 0)
+			{
+				GPIOB->BSRR = GPIO_BSRR_BS_4;
 				GPIOB->BSRR = GPIO_BSRR_BS_5;
+			}
 			else if (REG_CTRL__LED_SELECT == 1)
+			{
+				GPIOB->BSRR = GPIO_BSRR_BS_4;
 				GPIOB->BSRR = GPIO_BSRR_BR_5;
+			}
+			else if (REG_CTRL__LED_SELECT == 3)
+			{
+				GPIOB->BSRR = GPIO_BSRR_BR_4;
+				GPIOB->BSRR = GPIO_BSRR_BS_5;
+			}
 			
 			// Expo
 			x = REG_PITCH_ROLL_EXPO;
@@ -954,6 +968,8 @@ int main()
 			USART1->CR1 |= USART_CR1_UE;
 			
 			// Synchonise on IDLE character
+			USART1->SR;
+			USART1->DR;
 			while ((USART1->SR & USART_SR_IDLE) == 0)
 				USART1->DR;
 			
@@ -1096,12 +1112,12 @@ int main()
 				flag_beep_user = 0;
 			
 			// Toggle LED at rate of Radio flag
-			if (REG_CTRL__LED_SELECT == 3)
+			if (REG_CTRL__LED_SELECT == 2)
 			{
 				if ((radio_frame_count & 0x7F) == 0)
-					GPIOB->BSRR = GPIO_BSRR_BR_5;
+					GPIOB->BSRR = GPIO_BSRR_BR_4;
 				else if ((radio_frame_count & 0x7F) == 64)
-					GPIOB->BSRR = GPIO_BSRR_BS_5;
+					GPIOB->BSRR = GPIO_BSRR_BS_4;
 			}
 		}
 		
@@ -1283,24 +1299,9 @@ int main()
 				error_yaw_i = -error_yaw_i_max;
 			
 			// PID
-			/*if (chan6 < 0.33)
-			{
-				pitch = (error_pitch * REG_PITCH_P);
-				roll  = (error_roll  * REG_ROLL_P );
-				yaw   = (error_yaw   * REG_YAW_P  );
-			}
-			else if (chan6 < 0.66)
-			{
-				pitch = (error_pitch * REG_PITCH_P) + ((error_pitch - error_pitch_z) * REG_PITCH_D);
-				roll  = (error_roll  * REG_ROLL_P ) + ((error_roll  - error_roll_z ) * REG_ROLL_D);
-				yaw   = (error_yaw   * REG_YAW_P  ) + ((error_yaw   - error_yaw_z  ) * REG_YAW_D);
-			}
-			else
-			{*/
-				pitch = (error_pitch * REG_PITCH_P) + (error_pitch_i * REG_PITCH_I) + ((error_pitch - error_pitch_z) * REG_PITCH_D);
-				roll  = (error_roll  * REG_ROLL_P ) + (error_roll_i  * REG_ROLL_I ) + ((error_roll  - error_roll_z ) * REG_ROLL_D);
-				yaw   = (error_yaw   * REG_YAW_P  ) + (error_yaw_i   * REG_YAW_I  ) + ((error_yaw   - error_yaw_z  ) * REG_YAW_D);
-			//}
+			pitch = (error_pitch * REG_PITCH_P) + (error_pitch_i * REG_PITCH_I) + ((error_pitch - error_pitch_z) * REG_PITCH_D);
+			roll  = (error_roll  * REG_ROLL_P ) + (error_roll_i  * REG_ROLL_I ) + ((error_roll  - error_roll_z ) * REG_ROLL_D);
+			yaw   = (error_yaw   * REG_YAW_P  ) + (error_yaw_i   * REG_YAW_I  ) + ((error_yaw   - error_yaw_z  ) * REG_YAW_D);
 			
 			// PID adjustement
 			pitch = pitch * pid_gain * pitch_gain;
@@ -1385,13 +1386,14 @@ int main()
 				dshot_encode(&motor_raw[3], motor4_dshot);
 				TIM_DMA_EN
 			#else
-				TIM2->CCR2 = MOTOR_MAX + 1 - MOTOR_MIN - (motor_raw[0]>>1);
-				TIM2->CCR3 = MOTOR_MAX + 1 - MOTOR_MIN - (motor_raw[1]>>1);
-				TIM3->CCR3 = MOTOR_MAX + 1 - MOTOR_MIN - (motor_raw[2]>>1);
-				TIM3->CCR4 = MOTOR_MAX + 1 - MOTOR_MIN - (motor_raw[3]>>1);
+				TIM3->CCR4 = MOTOR_MAX + 1 - MOTOR_MIN - (motor_raw[0]>>1);
+				TIM5->CCR4 = MOTOR_MAX + 1 - MOTOR_MIN - (motor_raw[1]>>1);
+				TIM2->CCR3 = MOTOR_MAX + 1 - MOTOR_MIN - (motor_raw[2]>>1);
+				TIM5->CCR2 = MOTOR_MAX + 1 - MOTOR_MIN - (motor_raw[3]>>1);
 			#endif
 			TIM2->CR1 |= TIM_CR1_CEN;
 			TIM3->CR1 |= TIM_CR1_CEN;
+			TIM5->CR1 |= TIM_CR1_CEN;
 		}
 		
 		/* VBAT ---------------------------------------------------------------------*/

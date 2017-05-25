@@ -22,23 +22,25 @@ onload = function(){
 		chrome.serial.send(conHandle.connectionId, txBuf, function(){});
 		log('Updated Receiver Bind');
 	};
-	document.getElementById('motorstart').onchange = function(){ regUint32Write(10,parseInt(this.value)); log('Updated Motor Start'); };
-	document.getElementById('motorarmed').onchange = function(){ regUint32Write(11,parseInt(this.value)); log('Updated Motor Armed'); };
-	document.getElementById('throttle').onchange = function(){ regFloat32Write(13,parseFloat(this.value)); log('Updated Throttle Range'); };
+	document.getElementById('motorstart').onchange = function(){ regUint32Write(11,parseInt(this.value)); log('Updated Motor Start'); };
+	document.getElementById('motorarmed').onchange = function(){ regUint32Write(12,parseInt(this.value)); log('Updated Motor Armed'); };
+	document.getElementById('throttle').onchange = function(){ regFloat32Write(15,parseFloat(this.value)); log('Updated Throttle Range'); };
 	document.getElementById('vbatmin').onchange = function(){ regFloat32Write(7,parseFloat(this.value)); log('Updated VBAT Min'); };
-	document.getElementById('rate').onchange = function(){ regFloat32Write(12,parseFloat(this.value)); log('Updated Expo'); };
-	document.getElementById('expo').onchange = function(){ regFloat32Write(9,parseFloat(this.value)); log('Updated Rate'); };
-	document.getElementById('pitchp').onchange = function(){ regFloat32Write(14,parseFloat(this.value)); log('Updated Pitch P'); };
-	document.getElementById('pitchi').onchange = function(){ regFloat32Write(15,parseFloat(this.value)); log('Updated Pitch I'); };
-	document.getElementById('pitchd').onchange = function(){ regFloat32Write(16,parseFloat(this.value)); log('Updated Pitch D'); };
-	document.getElementById('rollp').onchange = function(){ regFloat32Write(17,parseFloat(this.value)); log('Updated Roll P'); };
-	document.getElementById('rolli').onchange = function(){ regFloat32Write(18,parseFloat(this.value)); log('Updated Roll I'); };
-	document.getElementById('rolld').onchange = function(){ regFloat32Write(19,parseFloat(this.value)); log('Updated Roll D'); };
-	document.getElementById('yawp').onchange = function(){ regFloat32Write(20,parseFloat(this.value)); log('Updated Yaw P'); };
-	document.getElementById('yawi').onchange = function(){ regFloat32Write(21,parseFloat(this.value)); log('Updated Yaw I'); };
-	document.getElementById('yawd').onchange = function(){ regFloat32Write(22,parseFloat(this.value)); log('Updated Yaw D'); };
-	document.getElementById('tpa').onchange = function(){ regFloat32Write(23,parseFloat(this.value)); log('Updated Throttle PID Atten'); };
-	document.getElementById('rpa').onchange = function(){ regFloat32Write(24,parseFloat(this.value)); log('Updated Rate PID Atten'); };
+	document.getElementById('ratepr').onchange = function(){ regFloat32Write(13,parseFloat(this.value)); log('Updated Expo'); };
+	document.getElementById('expopr').onchange = function(){ regFloat32Write(9,parseFloat(this.value)); log('Updated Rate'); };
+	document.getElementById('ratey').onchange = function(){ regFloat32Write(14,parseFloat(this.value)); log('Updated Expo'); };
+	document.getElementById('expoy').onchange = function(){ regFloat32Write(10,parseFloat(this.value)); log('Updated Rate'); };
+	document.getElementById('pitchp').onchange = function(){ regFloat32Write(16,parseFloat(this.value)); log('Updated Pitch P'); };
+	document.getElementById('pitchi').onchange = function(){ regFloat32Write(17,parseFloat(this.value)); log('Updated Pitch I'); };
+	document.getElementById('pitchd').onchange = function(){ regFloat32Write(18,parseFloat(this.value)); log('Updated Pitch D'); };
+	document.getElementById('rollp').onchange = function(){ regFloat32Write(19,parseFloat(this.value)); log('Updated Roll P'); };
+	document.getElementById('rolli').onchange = function(){ regFloat32Write(20,parseFloat(this.value)); log('Updated Roll I'); };
+	document.getElementById('rolld').onchange = function(){ regFloat32Write(21,parseFloat(this.value)); log('Updated Roll D'); };
+	document.getElementById('yawp').onchange = function(){ regFloat32Write(22,parseFloat(this.value)); log('Updated Yaw P'); };
+	document.getElementById('yawi').onchange = function(){ regFloat32Write(23,parseFloat(this.value)); log('Updated Yaw I'); };
+	document.getElementById('yawd').onchange = function(){ regFloat32Write(24,parseFloat(this.value)); log('Updated Yaw D'); };
+	document.getElementById('tpa').onchange = function(){ regFloat32Write(25,parseFloat(this.value)); log('Updated Throttle PID Atten'); };
+	document.getElementById('rpa').onchange = function(){ regFloat32Write(26,parseFloat(this.value)); log('Updated Rate PID Atten'); };
 	document.getElementById('motorsel1').onclick = motorTest;
 	document.getElementById('motorsel2').onclick = motorTest;
 	document.getElementById('motorsel3').onclick = motorTest;
@@ -163,24 +165,26 @@ function readConfig(){
 	setTimeout(function(){ document.getElementById('bind').checked = (rxBufUint32[0]) ? true : false; }, timeout);
 	timeout += timeoutIncr;
 	
-	regUint32Read(10,'motorstart');
-	regUint32Read(11,'motorarmed');
+	regUint32Read(11,'motorstart');
+	regUint32Read(12,'motorarmed');
 	
 	regFloat32Read(7,'vbatmin');
-	regFloat32Read(9,'expo');
-	regFloat32Read(12,'rate');
-	regFloat32Read(13,'throttle');
-	regFloat32Read(14,'pitchp');
-	regFloat32Read(15,'pitchi');
-	regFloat32Read(16,'pitchd');
-	regFloat32Read(17,'rollp');
-	regFloat32Read(18,'rolli');
-	regFloat32Read(19,'rolld');
-	regFloat32Read(20,'yawp');
-	regFloat32Read(21,'yawi');
-	regFloat32Read(22,'yawd');
-	regFloat32Read(23,'tpa');
-	regFloat32Read(24,'rpa');
+	regFloat32Read(9,'expopr');
+	regFloat32Read(13,'ratepr');
+	regFloat32Read(10,'expoy');
+	regFloat32Read(14,'ratey');
+	regFloat32Read(15,'throttle');
+	regFloat32Read(16,'pitchp');
+	regFloat32Read(17,'pitchi');
+	regFloat32Read(18,'pitchd');
+	regFloat32Read(19,'rollp');
+	regFloat32Read(20,'rolli');
+	regFloat32Read(21,'rolld');
+	regFloat32Read(22,'yawp');
+	regFloat32Read(23,'yawi');
+	regFloat32Read(24,'yawd');
+	regFloat32Read(25,'tpa');
+	regFloat32Read(26,'rpa');
 	
 	setTimeout(function(){ log('Read config DONE');}, timeout);
 }
@@ -193,13 +197,13 @@ function writeConfig(){
 	
 	regUint32Flash(0);
 	regUint32Flash(8);
-	regUint32Flash(10);
 	regUint32Flash(11);
+	regUint32Flash(12);
 	
 	regFloat32Flash(7);
 	regFloat32Flash(9);
-	regFloat32Flash(12);
 	regFloat32Flash(13);
+	regFloat32Flash(10);
 	regFloat32Flash(14);
 	regFloat32Flash(15);
 	regFloat32Flash(16);
@@ -211,6 +215,8 @@ function writeConfig(){
 	regFloat32Flash(22);
 	regFloat32Flash(23);
 	regFloat32Flash(24);
+	regFloat32Flash(25);
+	regFloat32Flash(26);
 	
 	setTimeout(function(){ log('Write config DONE');}, timeout);
 }
@@ -238,8 +244,10 @@ function clearElements(){
 	document.getElementById('motorarmed').value = [];
 	document.getElementById('throttle').value = [];
 	document.getElementById('vbatmin').value = [];
-	document.getElementById('rate').value = [];
-	document.getElementById('expo').value = [];
+	document.getElementById('ratepr').value = [];
+	document.getElementById('expopr').value = [];
+	document.getElementById('ratey').value = [];
+	document.getElementById('expoy').value = [];
 	document.getElementById('pitchp').value = [];
 	document.getElementById('pitchi').value = [];
 	document.getElementById('pitchd').value = [];

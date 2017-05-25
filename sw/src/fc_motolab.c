@@ -7,7 +7,7 @@
 
 /* Private defines ------------------------------------*/
 
-#define VERSION 22
+#define VERSION 23
 
 #define MPU_SPI
 #define ESC_DSHOT
@@ -41,7 +41,7 @@ volatile uint8_t i2c2_rx_buffer[15];
 volatile uint8_t i2c2_tx_buffer[2];
 uint16_t time[4];
 float armed;
-uint32_t motor_raw[4];
+volatile uint32_t motor_raw[4];
 uint16_t mpu_error_count;
 uint16_t radio_error_count;
 
@@ -193,7 +193,7 @@ void wait_ms(uint32_t t)
 
 #endif
 
-void dshot_encode(uint32_t* val, volatile uint32_t buf[17])
+void dshot_encode(volatile uint32_t* val, volatile uint32_t buf[17])
 {
 	int i;
 	uint8_t bit[11];
@@ -1102,11 +1102,10 @@ int main()
 			USART2->CR1 |= USART_CR1_UE;
 			
 			// Synchonise on IDLE character
-			USART2->ICR = USART_ICR_ORECF | USART_ICR_IDLECF;
-			while ((USART2->ISR & USART_ISR_IDLE) == 0)
-				USART2->ICR = USART_ICR_ORECF;
-			USART2->ICR = USART_ICR_IDLECF;
 			USART2->RDR;
+			USART2->ICR = USART_ICR_IDLECF;
+			while ((USART2->ISR & USART_ISR_IDLE) == 0)
+				USART2->RDR;
 			
 			// Enable DMA
 			USART2->CR1 &= ~USART_CR1_UE;
@@ -1436,24 +1435,9 @@ int main()
 				error_yaw_i = -error_yaw_i_max;
 			
 			// PID
-			/*if (chan6 < 0.33)
-			{
-				pitch = (error_pitch * REG_PITCH_P);
-				roll  = (error_roll  * REG_ROLL_P );
-				yaw   = (error_yaw   * REG_YAW_P  );
-			}
-			else if (chan6 < 0.66)
-			{
-				pitch = (error_pitch * REG_PITCH_P) + ((error_pitch - error_pitch_z) * REG_PITCH_D);
-				roll  = (error_roll  * REG_ROLL_P ) + ((error_roll  - error_roll_z ) * REG_ROLL_D);
-				yaw   = (error_yaw   * REG_YAW_P  ) + ((error_yaw   - error_yaw_z  ) * REG_YAW_D);
-			}
-			else
-			{*/
-				pitch = (error_pitch * REG_PITCH_P) + (error_pitch_i * REG_PITCH_I) + ((error_pitch - error_pitch_z) * REG_PITCH_D);
-				roll  = (error_roll  * REG_ROLL_P ) + (error_roll_i  * REG_ROLL_I ) + ((error_roll  - error_roll_z ) * REG_ROLL_D);
-				yaw   = (error_yaw   * REG_YAW_P  ) + (error_yaw_i   * REG_YAW_I  ) + ((error_yaw   - error_yaw_z  ) * REG_YAW_D);
-			//}
+			pitch = (error_pitch * REG_PITCH_P) + (error_pitch_i * REG_PITCH_I) + ((error_pitch - error_pitch_z) * REG_PITCH_D);
+			roll  = (error_roll  * REG_ROLL_P ) + (error_roll_i  * REG_ROLL_I ) + ((error_roll  - error_roll_z ) * REG_ROLL_D);
+			yaw   = (error_yaw   * REG_YAW_P  ) + (error_yaw_i   * REG_YAW_I  ) + ((error_yaw   - error_yaw_z  ) * REG_YAW_D);
 			
 			// PID adjustement
 			pitch = pitch * pid_gain * pitch_gain;
