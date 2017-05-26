@@ -333,22 +333,13 @@ classdef fc_reg
 				obj.write(24,z);
 			end
 		end
-		function y = THROTTLE_PID_ATTEN(obj,x)
+		function y = THROTTLE_ATTEN(obj,x)
 			if nargin < 2
 				z = obj.read(25);
 				y = typecast(uint32(z), 'single');
 			else
 				z = typecast(single(x), 'uint32');
 				obj.write(25,z);
-			end
-		end
-		function y = RATE_PID_ATTEN(obj,x)
-			if nargin < 2
-				z = obj.read(26);
-				y = typecast(uint32(z), 'single');
-			else
-				z = typecast(single(x), 'uint32');
-				obj.write(26,z);
 			end
 		end
 	end
@@ -378,10 +369,9 @@ classdef fc_reg
 		YAW_P_addr = 22;
 		YAW_I_addr = 23;
 		YAW_D_addr = 24;
-		THROTTLE_PID_ATTEN_addr = 25;
-		RATE_PID_ATTEN_addr = 26;
-		flash_addr_list = [0 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26];
-		flash_float_list = [0,1,0,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1];
-		flash_name_list = {'VERSION','VBAT_MIN','RECEIVER_BIND','PITCH_ROLL_EXPO','YAW_EXPO','MOTOR_START','MOTOR_ARMED','PITCH_ROLL_RATE','YAW_RATE','THROTTLE_RANGE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D','THROTTLE_PID_ATTEN','RATE_PID_ATTEN'};
+		THROTTLE_ATTEN_addr = 25;
+		flash_addr_list = [0 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25];
+		flash_float_list = [0,1,0,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1];
+		flash_name_list = {'VERSION','VBAT_MIN','RECEIVER_BIND','PITCH_ROLL_EXPO','YAW_EXPO','MOTOR_START','MOTOR_ARMED','PITCH_ROLL_RATE','YAW_RATE','THROTTLE_RANGE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D','THROTTLE_ATTEN'};
 	end
 end

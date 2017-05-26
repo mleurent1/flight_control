@@ -18,8 +18,8 @@ reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 1, 1077936128}, // YAW_EXPO
 	{0, 1, 0, 50}, // MOTOR_START
 	{0, 1, 0, 150}, // MOTOR_ARMED
-	{0, 1, 1, 1150681088}, // PITCH_ROLL_RATE
-	{0, 1, 1, 1142292480}, // YAW_RATE
+	{0, 1, 1, 1148846080}, // PITCH_ROLL_RATE
+	{0, 1, 1, 1140457472}, // YAW_RATE
 	{0, 1, 1, 1155186688}, // THROTTLE_RANGE
 	{0, 1, 1, 1082130432}, // PITCH_P
 	{0, 1, 1, 1000593162}, // PITCH_I
@@ -30,6 +30,5 @@ reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 1, 1086324736}, // YAW_P
 	{0, 1, 1, 1008981770}, // YAW_I
 	{0, 1, 1, 0}, // YAW_D
-	{0, 1, 1, 0}, // THROTTLE_PID_ATTEN
-	{0, 1, 1, 0} // RATE_PID_ATTEN
+	{0, 1, 1, 1048576000} // THROTTLE_ATTEN
 };

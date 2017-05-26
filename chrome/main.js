@@ -39,8 +39,7 @@ onload = function(){
 	document.getElementById('yawp').onchange = function(){ regFloat32Write(22,parseFloat(this.value)); log('Updated Yaw P'); };
 	document.getElementById('yawi').onchange = function(){ regFloat32Write(23,parseFloat(this.value)); log('Updated Yaw I'); };
 	document.getElementById('yawd').onchange = function(){ regFloat32Write(24,parseFloat(this.value)); log('Updated Yaw D'); };
-	document.getElementById('tpa').onchange = function(){ regFloat32Write(25,parseFloat(this.value)); log('Updated Throttle PID Atten'); };
-	document.getElementById('rpa').onchange = function(){ regFloat32Write(26,parseFloat(this.value)); log('Updated Rate PID Atten'); };
+	document.getElementById('atten').onchange = function(){ regFloat32Write(25,parseFloat(this.value)); log('Updated Throttle Atten'); };
 	document.getElementById('motorsel1').onclick = motorTest;
 	document.getElementById('motorsel2').onclick = motorTest;
 	document.getElementById('motorsel3').onclick = motorTest;
@@ -183,8 +182,7 @@ function readConfig(){
 	regFloat32Read(22,'yawp');
 	regFloat32Read(23,'yawi');
 	regFloat32Read(24,'yawd');
-	regFloat32Read(25,'tpa');
-	regFloat32Read(26,'rpa');
+	regFloat32Read(25,'atten');
 	
 	setTimeout(function(){ log('Read config DONE');}, timeout);
 }
@@ -257,8 +255,7 @@ function clearElements(){
 	document.getElementById('yawp').value = [];
 	document.getElementById('yawi').value = [];
 	document.getElementById('yawd').value = [];
-	document.getElementById('tpa').value = [];
-	document.getElementById('rpa').value = [];
+	document.getElementById('atten').value = [];
 	document.getElementById('motorsel1').checked = 0;
 	document.getElementById('motorsel2').checked = 0;
 	document.getElementById('motorsel3').checked = 0;

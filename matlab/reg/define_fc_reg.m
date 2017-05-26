@@ -91,13 +91,13 @@ n = n + 1;
 reg(n).name = 'PITCH_ROLL_RATE';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'PITCH_ROLL_RATE',15,0,'float',1200};
+reg(n).subf{1} = {'PITCH_ROLL_RATE',15,0,'float',1000};
 
 n = n + 1;
 reg(n).name = 'YAW_RATE';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'YAW_RATE',15,0,'float',600};
+reg(n).subf{1} = {'YAW_RATE',15,0,'float',500};
 
 n = n + 1;
 reg(n).name = 'THROTTLE_RANGE';
@@ -160,13 +160,7 @@ reg(n).flash = 1;
 reg(n).subf{1} = {'YAW_D',31,0,'float',0};
 
 n = n + 1;
-reg(n).name = 'THROTTLE_PID_ATTEN';
+reg(n).name = 'THROTTLE_ATTEN';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'THROTTLE_PID_ATTEN',31,0,'float',0};
-
-n = n + 1;
-reg(n).name = 'RATE_PID_ATTEN';
-reg(n).read_only = 0;
-reg(n).flash = 1;
-reg(n).subf{1} = {'RATE_PID_ATTEN',31,0,'float',0};
+reg(n).subf{1} = {'THROTTLE_ATTEN',31,0,'float',0.25};

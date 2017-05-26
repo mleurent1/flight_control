@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#define NB_REG 27
+#define NB_REG 26
 
 #define REG_VERSION reg[0]
 #define REG_CTRL reg[1]
@@ -40,8 +40,7 @@
 #define REG_YAW_P regf[22]
 #define REG_YAW_I regf[23]
 #define REG_YAW_D regf[24]
-#define REG_THROTTLE_PID_ATTEN regf[25]
-#define REG_RATE_PID_ATTEN regf[26]
+#define REG_THROTTLE_ATTEN regf[25]
 
 typedef struct
 {

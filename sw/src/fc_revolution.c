@@ -7,7 +7,7 @@
 
 /* Private defines ------------------------------------*/
 
-#define VERSION 23
+#define VERSION 24
 
 #define ESC_DSHOT
 
@@ -23,7 +23,7 @@
 #define VBAT_PERIOD 10 // ms
 #define VBAT_THRESHOLD 8.0f
 #define INTEGRAL_MAX 200.0f
-#define COMMAND_ALPHA 0.5f
+#define COMMAND_ALPHA 0.1f
 #define REG_FLASH_ADDR 0x080E0000
 
 //#define DEBUG
@@ -437,10 +437,7 @@ int main()
 	float pitch_rate;
 	float roll_rate;
 	float yaw_rate;
-	float pid_gain;
-	float pitch_gain;
-	float roll_gain;
-	float yaw_gain;
+	float throttle_gain;
 	float throttle_acc;
 	float aileron_acc;
 	float elevator_acc;
@@ -1249,17 +1246,6 @@ int main()
 			roll_rate = aileron_s * REG_PITCH_ROLL_RATE;
 			yaw_rate = rudder_s * REG_YAW_RATE;
 			
-			// Convert throttle into motor command
-			throttle_rate = throttle_s * REG_THROTTLE_RANGE;
-			
-			// PID attenuation when high throttle
-			pid_gain = 1.0f - (throttle_s *  REG_THROTTLE_PID_ATTEN);
-			
-			// PID attenuation when high rate
-			pitch_gain = 1.0f - (REG_RATE_PID_ATTEN * abs(elevator));
-			roll_gain = 1.0f - (REG_RATE_PID_ATTEN * abs(aileron));
-			yaw_gain = 1.0f - (REG_RATE_PID_ATTEN * abs(rudder));
-			
 			// Previous error
 			error_pitch_z = error_pitch;
 			error_roll_z = error_roll;
@@ -1303,11 +1289,6 @@ int main()
 			roll  = (error_roll  * REG_ROLL_P ) + (error_roll_i  * REG_ROLL_I ) + ((error_roll  - error_roll_z ) * REG_ROLL_D);
 			yaw   = (error_yaw   * REG_YAW_P  ) + (error_yaw_i   * REG_YAW_I  ) + ((error_yaw   - error_yaw_z  ) * REG_YAW_D);
 			
-			// PID adjustement
-			pitch = pitch * pid_gain * pitch_gain;
-			roll = roll * pid_gain * roll_gain;
-			yaw = yaw * pid_gain * yaw_gain;
-			
 			// Send pitch/roll/yaw to host
 			if ((REG_DEBUG__CASE == 6) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
@@ -1317,11 +1298,17 @@ int main()
 				USB_TX(12)
 			}
 			
+			// Convert throttle into motor command
+			throttle_rate = throttle_s * REG_THROTTLE_RANGE;
+			
+			// Attenuation when high throttle
+			throttle_gain = 1.0f - (throttle_s *  REG_THROTTLE_ATTEN);
+			
 			// Motor matrix
-			motor[0] = throttle_rate + roll + pitch - yaw;
-			motor[1] = throttle_rate + roll - pitch + yaw;
-			motor[2] = throttle_rate - roll - pitch - yaw;
-			motor[3] = throttle_rate - roll + pitch + yaw;
+			motor[0] = throttle_rate + ((  roll + pitch - yaw) * throttle_gain);
+			motor[1] = throttle_rate + ((  roll - pitch + yaw) * throttle_gain);
+			motor[2] = throttle_rate + ((- roll - pitch - yaw) * throttle_gain);
+			motor[3] = throttle_rate + ((- roll + pitch + yaw) * throttle_gain);
 			
 			// Send motor actions to host
 			if ((REG_DEBUG__CASE == 7) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
