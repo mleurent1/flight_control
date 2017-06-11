@@ -9,7 +9,6 @@
 
 #define VERSION 25
 
-#define ESC_DSHOT
 #define RADIO_TYPE 0 // 0:IBUS, 1:SUMD, 2:SBUS
 
 #define SERVO_MAX 2000 // us
@@ -146,28 +145,6 @@ volatile _Bool flag_beep_vbat;
 #define DMA_CLEAR_ALL_FLAGS_6 (DMA_HIFCR_CTCIF6 | DMA_HIFCR_CHTIF6 | DMA_HIFCR_CTEIF6 |DMA_HIFCR_CDMEIF6 |DMA_HIFCR_CFEIF6)
 #define DMA_CLEAR_ALL_FLAGS_7 (DMA_HIFCR_CTCIF7 | DMA_HIFCR_CHTIF7 | DMA_HIFCR_CTEIF7 |DMA_HIFCR_CDMEIF7 |DMA_HIFCR_CFEIF7)
 
-#define TIM_DMA_EN \
-	TIM2->CR1 = 0; \
-	TIM3->CR1 = 0; \
-	TIM5->CR1 = 0; \
-	TIM2->CNT = 0; \
-	TIM3->CNT = 0; \
-	TIM5->CNT = 0; \
-	DMA1_Stream1->CR &= ~DMA_SxCR_EN; \
-	DMA1_Stream2->CR &= ~DMA_SxCR_EN; \
-	DMA1_Stream3->CR &= ~DMA_SxCR_EN; \
-	DMA1_Stream4->CR &= ~DMA_SxCR_EN; \
-	DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_1 | DMA_CLEAR_ALL_FLAGS_2 | DMA_CLEAR_ALL_FLAGS_3; \
-	DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_4; \
-	DMA1_Stream1->NDTR = 17; \
-	DMA1_Stream2->NDTR = 17; \
-	DMA1_Stream3->NDTR = 17; \
-	DMA1_Stream4->NDTR = 17; \
-	DMA1_Stream1->CR |= DMA_SxCR_EN; \
-	DMA1_Stream2->CR |= DMA_SxCR_EN; \
-	DMA1_Stream3->CR |= DMA_SxCR_EN; \
-	DMA1_Stream4->CR |= DMA_SxCR_EN;
-
 #define ABORT_MPU \
 	DMA2_Stream0->CR &= ~DMA_SxCR_EN; \
 	DMA2_Stream3->CR &= ~DMA_SxCR_EN; \
@@ -215,23 +192,6 @@ void MpuRead(uint8_t addr, uint8_t size)
 	DMA2_Stream0->CR |= DMA_SxCR_EN;
 	DMA2_Stream3->CR |= DMA_SxCR_EN;
 	SPI1->CR1 |= SPI_CR1_SPE;
-}
-
-void dshot_encode(volatile uint32_t* val, volatile uint32_t buf[17])
-{
-	int i;
-	uint8_t bit[11];
-	for (i=0; i<11; i++)
-	{
-		buf[i] = (*val & (1 << (10-i))) ? 60 : 30;
-		bit[i] = (*val & (1 << i)) ? 1 : 0;
-	}
-	buf[11] = 30;
-	buf[12] = (bit[10]^bit[6]^bit[2]) ? 60 : 30;
-    buf[13] = (bit[ 9]^bit[5]^bit[1]) ? 60 : 30;
-    buf[14] = (bit[ 8]^bit[4]^bit[0]) ? 60 : 30;
-    buf[15] = (bit[ 7]^bit[3])        ? 60 : 30;
-	buf[16] = 0;
 }
 
 void uint32_to_float(uint32_t* b, float* f)
@@ -488,13 +448,13 @@ int main()
 	float roll;
 	float yaw;
 	
-	float motor[4];
-	int32_t motor_clip[4];
-	uint32_t motor_raw[4];
-	volatile uint32_t motor1_dshot[17];
-	volatile uint32_t motor2_dshot[17];
-	volatile uint32_t motor3_dshot[17];
-	volatile uint32_t motor4_dshot[17];
+	float motor[3];
+	int32_t motor_clip[3];
+	uint32_t motor_raw[3];
+	float servo;
+	int32_t servo_clip;
+	uint32_t servo_raw;
+	uint8_t servo_count;
 	
 	volatile float vbat_acc;
 	float vbat;
@@ -573,6 +533,8 @@ int main()
 	vbat_sample_count = 0;
 	
 	armed_unlock_step1 = 0;
+	
+	servo_count = 0;
 	
 	/* Register init -----------------------------------*/
 	
@@ -716,46 +678,8 @@ int main()
 	DMA2_Stream5->M0AR = (uint32_t)&radio_frame;
 	DMA2_Stream5->PAR = (uint32_t)&(USART1->DR);
 	
-	// Timers for DSHOT
-	DMA1_Stream2->CR = (5 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
-	DMA1_Stream2->M0AR = (uint32_t)motor1_dshot;
-	DMA1_Stream2->PAR = (uint32_t)&(TIM3->CCR4);
-	
-	DMA1_Stream3->CR = (6 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
-	DMA1_Stream3->M0AR = (uint32_t)motor2_dshot;
-	DMA1_Stream3->PAR = (uint32_t)&(TIM5->CCR4);
-	
-	DMA1_Stream1->CR = (3 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
-	DMA1_Stream1->M0AR = (uint32_t)motor3_dshot;
-	DMA1_Stream1->PAR = (uint32_t)&(TIM2->CCR3);
-	
-	DMA1_Stream4->CR = (6 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
-	DMA1_Stream4->M0AR = (uint32_t)motor4_dshot;
-	DMA1_Stream4->PAR = (uint32_t)&(TIM5->CCR2);
-	
 	/* Timers --------------------------------------------------------------------------*/
 	
-#ifdef ESC_DSHOT
-	// DMA driven timer for DShot600, 12Mhz, 0:15, 1:30, T:40
-	TIM2->PSC = 0;
-	TIM2->ARR = 80;
-	TIM2->DIER = TIM_DIER_CC3DE;
-	TIM2->CCER = TIM_CCER_CC3E;
-	TIM2->CCMR2 = (6 << TIM_CCMR2_OC3M_Pos) | TIM_CCMR2_OC3PE;
-	
-	TIM3->PSC = 0;
-	TIM3->ARR = 80;
-	TIM3->DIER = TIM_DIER_CC4DE;
-	TIM3->CCER = TIM_CCER_CC4E;
-	TIM3->CCMR2 = (6 << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC4PE;
-	
-	TIM5->PSC = 0;
-	TIM5->ARR = 80;
-	TIM5->DIER = TIM_DIER_CC2DE | TIM_DIER_CC4DE;
-	TIM5->CCER = TIM_CCER_CC2E | TIM_CCER_CC4E;
-	TIM5->CCMR1 = (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
-	TIM5->CCMR2 = (6 << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC4PE;
-#else	
 	// One-pulse mode for OneShot125
 	TIM2->CR1 = TIM_CR1_OPM;
 	TIM2->PSC = 2;
@@ -764,7 +688,7 @@ int main()
 	TIM2->CCMR2 = 7 << TIM_CCMR2_OC3M_Pos;
 	
 	TIM3->CR1 = TIM_CR1_OPM;
-	TIM3->PSC = 2;
+	TIM3->PSC = 23;
 	TIM3->ARR = SERVO_MAX*2 + 1;
 	TIM3->CCER = TIM_CCER_CC4E;
 	TIM3->CCMR2 = 7 << TIM_CCMR2_OC4M_Pos;
@@ -775,7 +699,6 @@ int main()
 	TIM5->CCER = TIM_CCER_CC2E | TIM_CCER_CC4E;
 	TIM5->CCMR1 = 7 << TIM_CCMR1_OC2M_Pos;
 	TIM5->CCMR2 = 7 << TIM_CCMR2_OC4M_Pos;
-#endif
 
 	// Beeper
 	TIM4->PSC = 23999; // 1ms
@@ -1329,20 +1252,24 @@ int main()
 			throttle_gain = 1.0f - (throttle_s *  REG_THROTTLE_ATTEN);
 			
 			// Motor matrix
-			motor[0] = throttle_rate + ((  roll + pitch - yaw) * throttle_gain);
-			motor[1] = throttle_rate + ((  roll - pitch + yaw) * throttle_gain);
-			motor[2] = throttle_rate + ((- roll - pitch - yaw) * throttle_gain);
-			motor[3] = throttle_rate + ((- roll + pitch + yaw) * throttle_gain);
+			motor[0] = throttle_rate + ((  roll - pitch) * throttle_gain);
+			motor[1] = throttle_rate + ((       + pitch) * throttle_gain);
+			motor[2] = throttle_rate + ((- roll - pitch) * throttle_gain);
+			servo = -yaw;
 			
 			// Send motor actions to host
 			if ((REG_DEBUG__CASE == 7) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				USBD_CDC_SetTxBuffer(&USBD_device_handler, (uint8_t *)motor, 4*4);
+				usb_buffer_tx.f[0] = motor[0];
+				usb_buffer_tx.f[1] = motor[1];
+				usb_buffer_tx.f[2] = motor[2];
+				usb_buffer_tx.f[3] = servo;
+				USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 4*4);
 				USBD_CDC_TransmitPacket(&USBD_device_handler);
 			}
 			
 			// Offset and clip motor value
-			for (i=0; i<4; i++)
+			for (i=0; i<3; i++)
 			{
 				motor_clip[i] = (int32_t)motor[i] + (int32_t)REG_MOTOR_ARMED;
 				
@@ -1354,6 +1281,14 @@ int main()
 				motor_raw[i] = (uint32_t)motor_clip[i];
 			}
 			
+			servo_clip = (int32_t)servo + 1000;
+			
+			if (servo_clip < 0)
+				servo_clip = 0;
+			else if (servo_clip > (int32_t)SERVO_MAX)
+				servo_clip = (int32_t)SERVO_MAX;
+			
+			servo_raw = (uint32_t)servo_clip;
 			
 			// Raise flag for motor command ready
 			flag_motor = 1;
@@ -1361,7 +1296,11 @@ int main()
 			// Send motor command to host
 			if ((REG_DEBUG__CASE == 8) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				USBD_CDC_SetTxBuffer(&USBD_device_handler, (uint8_t *)motor_raw, 4*2);
+				usb_buffer_tx.u16[0] = motor_raw[0];
+				usb_buffer_tx.u16[1] = motor_raw[1];
+				usb_buffer_tx.u16[2] = motor_raw[2];
+				usb_buffer_tx.u16[3] = servo_raw;
+				USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 4*2);
 				USBD_CDC_TransmitPacket(&USBD_device_handler);
 			}
 			
@@ -1380,33 +1319,32 @@ int main()
 		if (flag_motor)
 		{
 			flag_motor = 0;
-						
+			
+			servo_count++;
+			
 			if (REG_MOTOR_TEST__SELECT)
 			{
-				for (i=0; i<4; i++)
+				for (i=0; i<3; i++)
 					motor_raw[i] = (REG_MOTOR_TEST__SELECT & (1 << i)) ? (uint32_t)REG_MOTOR_TEST__VALUE : 0;
+				servo_raw = (REG_MOTOR_TEST__SELECT & (1 << 3)) ? (uint32_t)REG_MOTOR_TEST__VALUE : 1000;
+				
 			}
 			else if ((armed < 0.5f) || (flag_mpu_timeout))
 			{
-				for (i=0; i<4; i++)
+				for (i=0; i<3; i++)
 					motor_raw[i] = 0;
+				servo_raw = 1000;
 			}
 			
-			#ifdef ESC_DSHOT
-				dshot_encode(&motor_raw[0], motor1_dshot);
-				dshot_encode(&motor_raw[1], motor2_dshot);
-				dshot_encode(&motor_raw[2], motor3_dshot);
-				dshot_encode(&motor_raw[3], motor4_dshot);
-				TIM_DMA_EN
-			#else
-				TIM3->CCR4 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (motor_raw[0]>>1); // Motor 2
-				TIM5->CCR4 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (motor_raw[1]>>1); // Motor 3
-				TIM2->CCR3 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (motor_raw[2]>>1); // Motor 4
-				TIM5->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (motor_raw[3]>>1); // Motor 5
-			#endif
+			TIM5->CCR4 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[0]; // Motor 3
+			TIM2->CCR3 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[1]; // Motor 4
+			TIM5->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[2]; // Motor 5
+			TIM3->CCR4 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - servo_raw; // Motor 2
+			
 			TIM2->CR1 |= TIM_CR1_CEN;
-			TIM3->CR1 |= TIM_CR1_CEN;
 			TIM5->CR1 |= TIM_CR1_CEN;
+			if ((servo_count & 0x03) == 0)
+				TIM3->CR1 |= TIM_CR1_CEN;
 		}
 		
 		/* VBAT ---------------------------------------------------------------------*/

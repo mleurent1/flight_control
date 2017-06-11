@@ -32,10 +32,10 @@ switch DebugCase
          a{n}.YLim = [-2^15,2^15];
 		end
 		for n = 1:3
-			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
-			l{3+n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
+			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
+			l{4+n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end
-		l{7} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{3},'Color',c(1));
+		l{4} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{3},'Color',c(1));
 	case 2 % scaled sensors
 		dlen = 7;
 		dtype = 'float';
@@ -57,7 +57,7 @@ switch DebugCase
 		l{1} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(1));
 	case 4 % raw commands
 		dlen = 6;
-		dtype = 'int16';
+		dtype = 'uint16';
 		a{1} = axes;
 		for n = 1:6
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
@@ -105,7 +105,7 @@ end
 
 d = nan(dlen,WindowSize);
 switch dtype
-	case 'int16'
+	case {'uint16','int16'}
 		r1 = 2*dlen;
 	case 'float'
 		r1 = 4*dlen;
@@ -132,6 +132,8 @@ while (n < NbSamples)
 
 		for m = 1:dlen
 			switch dtype
+            case 'uint16'
+					d(m,WindowSize) = 2^8*r((m-1)*2+2) + r((m-1)*2+1);
 				case 'int16'
 					d(m,WindowSize) = c2s(2^8*r((m-1)*2+2) + r((m-1)*2+1), 16);
 				case 'float'

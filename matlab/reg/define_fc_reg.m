@@ -42,8 +42,8 @@ n = n + 1;
 reg(n).name = 'TIME';
 reg(n).read_only = 1;
 reg(n).flash = 0;
-reg(n).subf{1} = {'SPI',15,0,'uint16',0};
-reg(n).subf{2} = {'PROCESS',31,16,'uint16',0};
+reg(n).subf{1} = {'MPU',15,0,'uint16',0};
+reg(n).subf{2} = {'LOOP',31,16,'uint16',0};
 
 n = n + 1;
 reg(n).name = 'VBAT';

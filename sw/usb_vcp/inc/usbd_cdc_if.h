@@ -37,15 +37,10 @@
 #include "usbd_cdc.h"
 
 /* Defines -------------------------------------------------------------------*/
-
-#define USBD_CDC_IF_RX_SIZE  6
-#define USBD_CDC_IF_TX_SIZE  32
-
 /* Exported types ------------------------------------------------------------*/
 /* Exported variables --------------------------------------------------------*/
 
 extern USBD_CDC_ItfTypeDef USBD_CDC_IF_fops;
-extern uint8_t USBD_CDC_IF_tx_buffer[USBD_CDC_IF_TX_SIZE];
 
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */

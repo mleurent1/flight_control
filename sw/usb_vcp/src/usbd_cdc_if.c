@@ -84,15 +84,12 @@ USBD_CDC_ItfTypeDef USBD_CDC_IF_fops =
 };
 
 USBD_CDC_LineCodingTypeDef linecoding =
-  {
-    115200, /* baud rate*/
-    0x00,   /* stop bits-1*/
-    0x00,   /* parity - none*/
-    0x08    /* nb. of bits 8*/
-  };
-
-uint8_t USBD_CDC_IF_tx_buffer[USBD_CDC_IF_TX_SIZE];
-uint8_t USBD_CDC_IF_rx_buffer[USBD_CDC_IF_RX_SIZE];
+{
+	115200, /* baud rate*/
+	0x00,   /* stop bits-1*/
+	0x00,   /* parity - none*/
+	0x08    /* nb. of bits 8*/
+};
 
 /* Private functions ---------------------------------------------------------*/
 
@@ -104,8 +101,8 @@ uint8_t USBD_CDC_IF_rx_buffer[USBD_CDC_IF_RX_SIZE];
   */
 static int8_t USBD_CDC_IF_Init(void)
 {
-	USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_IF_tx_buffer, 0);
-	USBD_CDC_SetRxBuffer(&USBD_device_handler, USBD_CDC_IF_rx_buffer);
+	USBD_CDC_SetRxBuffer(&USBD_device_handler, (uint8_t *)&usb_buffer_rx);
+	USBD_CDC_ReceivePacket(&USBD_device_handler);
 	return (0);
 }
 
@@ -211,7 +208,6 @@ static int8_t USBD_CDC_IF_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length)
   */
 static int8_t USBD_CDC_IF_Receive (uint8_t* Buf, uint32_t *Len)
 {
-	memcpy(host_rx_buffer, Buf, 6);
 	flag_host = 1;
 	USBD_CDC_ReceivePacket(&USBD_device_handler);
 	return (0);

@@ -5,6 +5,7 @@ var conStatus = 0;
 var txBuf = new ArrayBuffer(6);
 var txBufUint8 = new Uint8Array(txBuf);
 var rxBuf = new ArrayBuffer(4);
+var rxBufUint8 = new Uint8Array(rxBuf);
 var rxBufUint32 = new Uint32Array(rxBuf,0,1);
 var rxBufFloat32 = new Float32Array(rxBuf,0,1);
 var precisionFloat = 1e6;
@@ -106,7 +107,12 @@ function serOpen(conInfo){
 }
 
 function serRead(info){
-	changeEndianness(info.data, rxBuf);
+	//changeEndianness(info.data, rxBuf);
+	var x = new Uint8Array(info.data);
+	rxBufUint8[0] = x[0];
+	rxBufUint8[1] = x[1];
+	rxBufUint8[2] = x[2];
+	rxBufUint8[3] = x[3];
 }
 
 function openPlot(){
@@ -191,7 +197,7 @@ function writeConfig(){
 	// Erase Flash
 	txBufUint8[0] = 6;
 	chrome.serial.send(conHandle.connectionId, txBuf, function(){});
-	timeout = timeoutIncr;
+	timeout = 3000;
 	
 	regUint32Flash(0);
 	regUint32Flash(8);
@@ -214,7 +220,6 @@ function writeConfig(){
 	regFloat32Flash(23);
 	regFloat32Flash(24);
 	regFloat32Flash(25);
-	regFloat32Flash(26);
 	
 	setTimeout(function(){ log('Write config DONE');}, timeout);
 }
@@ -340,10 +345,10 @@ function setTxBufValUint32(data){
 	var txBufValUint8 = new Uint8Array(txBufVal);
 	var txBufValUint32 = new Uint32Array(txBufVal);
 	txBufValUint32[0] = data;
-	txBufUint8[2] = txBufValUint8[3];
-	txBufUint8[3] = txBufValUint8[2];
-	txBufUint8[4] = txBufValUint8[1];
-	txBufUint8[5] = txBufValUint8[0];
+	txBufUint8[2] = txBufValUint8[0];
+	txBufUint8[3] = txBufValUint8[1];
+	txBufUint8[4] = txBufValUint8[2];
+	txBufUint8[5] = txBufValUint8[3];
 }
 
 function setTxBufValFloat32(data){
@@ -351,10 +356,10 @@ function setTxBufValFloat32(data){
 	var txBufValUint8 = new Uint8Array(txBufVal);
 	var txBufValFloat32 = new Float32Array(txBufVal);
 	txBufValFloat32[0] = data;
-	txBufUint8[2] = txBufValUint8[3];
-	txBufUint8[3] = txBufValUint8[2];
-	txBufUint8[4] = txBufValUint8[1];
-	txBufUint8[5] = txBufValUint8[0];
+	txBufUint8[2] = txBufValUint8[0];
+	txBufUint8[3] = txBufValUint8[1];
+	txBufUint8[4] = txBufValUint8[2];
+	txBufUint8[5] = txBufValUint8[3];
 }
 
 function changeEndianness(bufIn, bufOut) {

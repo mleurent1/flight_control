@@ -19,8 +19,8 @@
 #define REG_ERROR__MPU (uint16_t)((reg[4] & 65535U) >> 0)
 #define REG_ERROR__RADIO (uint16_t)((reg[4] & 4294901760U) >> 16)
 #define REG_TIME reg[5]
-#define REG_TIME__SPI (uint16_t)((reg[5] & 65535U) >> 0)
-#define REG_TIME__PROCESS (uint16_t)((reg[5] & 4294901760U) >> 16)
+#define REG_TIME__MPU (uint16_t)((reg[5] & 65535U) >> 0)
+#define REG_TIME__LOOP (uint16_t)((reg[5] & 4294901760U) >> 16)
 #define REG_VBAT regf[6]
 #define REG_VBAT_MIN regf[7]
 #define REG_RECEIVER_BIND reg[8]

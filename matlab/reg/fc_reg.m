@@ -3,11 +3,11 @@ classdef fc_reg
 		function data = read(obj,addr)
 			global ser
 			fwrite(ser,[0,addr,0,0,0,0]);
-			data = sum(fread(ser,4) .* 2.^(24:-8:0)');
+			data = sum(fread(ser,4) .* 2.^(0:8:24)');
 		end
 		function write(obj,addr,data)
 			global ser
-			fwrite(ser,[1,addr,floor(mod(double(data) ./ 2.^(24:-8:0),2^8))]);
+			fwrite(ser,[1,addr,floor(mod(double(data) ./ 2.^(0:8:24),2^8))]);
 		end
 		function y = VERSION(obj,x)
 			if nargin < 2
@@ -150,7 +150,7 @@ classdef fc_reg
 				obj.write(5,x);
 			end
 		end
-		function y = TIME__SPI(obj,x)
+		function y = TIME__MPU(obj,x)
 			r = obj.read(5);
 			if nargin < 2
 				y = bitshift(bitand(r, 65535), 0);
@@ -159,7 +159,7 @@ classdef fc_reg
 				obj.write(5,w);
 			end
 		end
-		function y = TIME__PROCESS(obj,x)
+		function y = TIME__LOOP(obj,x)
 			r = obj.read(5);
 			if nargin < 2
 				y = bitshift(bitand(r, 4294901760), -16);
