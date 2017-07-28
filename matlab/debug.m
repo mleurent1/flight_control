@@ -15,7 +15,7 @@ switch DebugCase
 	case 3 % vbat rate (100Hz)
 		SampleMask = hex2dec('0003');
 end
-c = 'brgcmk';
+c = 'brgcmkyb';
 
 %%
 figure(DebugCase);
@@ -56,20 +56,20 @@ switch DebugCase
 		a{1} = axes;
 		l{1} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(1));
 	case 4 % raw commands
-		dlen = 6;
+		dlen = 8;
 		dtype = 'uint16';
 		a{1} = axes;
-		for n = 1:6
+		for n = 1:8
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
 		end
 	case 5 % commands
-		dlen = 6;
+		dlen = 8;
 		dtype = 'float';
 		a{1} = subplot(211);
 		a{2} = subplot(212);
 		a{1}.YLim = [-1.05,1.05];
 		a{2}.YLim = [-0.05,1.05];
-		for n = [1,5,6]
+		for n = [1,5,6,7,8]
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
 		end
 		for n = 2:4

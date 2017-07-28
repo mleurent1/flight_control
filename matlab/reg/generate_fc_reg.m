@@ -1,3 +1,6 @@
+clear
+define_fc_reg
+
 %% generate register C database
 
 f = fopen('../../sw/inc/fc_reg.h','w');

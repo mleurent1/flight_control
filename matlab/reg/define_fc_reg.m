@@ -35,8 +35,9 @@ n = n + 1;
 reg(n).name = 'ERROR';
 reg(n).read_only = 1;
 reg(n).flash = 0;
-reg(n).subf{1} = {'MPU',15,0,'uint16',0};
-reg(n).subf{2} = {'RADIO',31,16,'uint16',0};
+reg(n).subf{1} = {'MPU',7,0,'uint16',0};
+reg(n).subf{2} = {'RADIO',15,8,'uint16',0};
+reg(n).subf{3} = {'RF',23,16,'uint16',0};
 
 n = n + 1;
 reg(n).name = 'TIME';
@@ -58,10 +59,10 @@ reg(n).flash = 1;
 reg(n).subf{1} = {'VBAT_MIN',31,0,'float',14.4};
 
 n = n + 1;
-reg(n).name = 'RECEIVER_BIND';
+reg(n).name = 'RADIO_FILTER_ALPHA';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'RECEIVER_BIND',0,0,'uint8',0};
+reg(n).subf{1} = {'RADIO_FILTER_ALPHA',31,0,'float',0.1};
 
 n = n + 1;
 reg(n).name = 'PITCH_ROLL_EXPO';
@@ -158,9 +159,3 @@ reg(n).name = 'YAW_D';
 reg(n).read_only = 0;
 reg(n).flash = 1;
 reg(n).subf{1} = {'YAW_D',31,0,'float',0};
-
-n = n + 1;
-reg(n).name = 'THROTTLE_ATTEN';
-reg(n).read_only = 0;
-reg(n).flash = 1;
-reg(n).subf{1} = {'THROTTLE_ATTEN',31,0,'float',0.25};

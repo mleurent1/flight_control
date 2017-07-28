@@ -7,15 +7,15 @@
 
 /* Private defines ------------------------------------*/
 
-#define VERSION 24
+#define VERSION 26
 
-#define MPU_SPI
-#define ESC_DSHOT
+//#define MPU_SPI
+//#define ESC_DSHOT
+#define RADIO_TYPE 0 // 0:IBUS, 1:SUMD, 2:SBUS
 
-#define RADIO_TYPE 0 // 0:IBUS, 1:SUMD
-
-#define MOTOR_MAX 2000 // us
-#define MOTOR_MIN 1000 // us
+#define SERVO_MAX 2000 // us
+#define SERVO_MIN 1000 // us
+#define MOTOR_MAX 2000
 #define BEEPER_PERIOD 250 // ms
 #define TIMEOUT_RADIO 500 // ms
 #define TIMEOUT_MPU 10000 // us
@@ -24,26 +24,94 @@
 #define VBAT_PERIOD 10 // ms
 #define VBAT_THRESHOLD 8.0f
 #define INTEGRAL_MAX 200.0f
-#define COMMAND_ALPHA 0.1f
 #define REG_FLASH_ADDR 0x0803F800
 
 //#define DEBUG
-//#define DISABLE_BEEPER_ON_PA7
+#define PID_TUNING
+#define DISABLE_BEEPER_ON_PA7
+
+/* Private types --------------------------------------*/
+
+struct ibus_frame_s {
+	uint16_t header;
+	uint16_t chan[14];
+	uint16_t checksum;
+} __attribute__ ((__packed__));
+
+struct sumd_frame_s {
+	uint8_t vendor_id;
+	uint8_t status;
+	uint8_t nb_chan;
+	uint16_t chan[12];
+	uint16_t checksum;
+} __attribute__ ((__packed__));
+
+struct sbus_frame_s {
+	uint8_t header;
+	unsigned int chan0  : 11;
+	unsigned int chan1  : 11;
+	unsigned int chan2  : 11;
+	unsigned int chan3  : 11;
+	unsigned int chan4  : 11;
+	unsigned int chan5  : 11;
+	unsigned int chan6  : 11;
+	unsigned int chan7  : 11;
+	unsigned int chan8  : 11;
+	unsigned int chan9  : 11;
+	unsigned int chan10 : 11;
+	unsigned int chan11 : 11;
+	unsigned int chan12 : 11;
+	unsigned int chan13 : 11;
+	unsigned int chan14 : 11;
+	unsigned int chan15 : 11;
+	uint8_t flags;
+	uint8_t end_byte;
+} __attribute__ ((__packed__));
+
+typedef union {
+	uint8_t bytes[25];
+	struct sbus_frame_s frame;
+} sbus_frame_t;
+
+struct sensor_raw_s {
+	int16_t accel_x;
+	int16_t accel_y;
+	int16_t accel_z;
+	int16_t temperature;
+	int16_t gyro_x;
+	int16_t gyro_y;
+	int16_t gyro_z;
+} __attribute__ ((__packed__));
+
+typedef union {
+	uint8_t bytes[14];
+	struct sensor_raw_s sensor;
+} sensor_raw_t;
+
+typedef union {
+	uint8_t u8[32];
+	int8_t i8[32];
+	uint16_t u16[16];
+	int16_t i16[16];
+	uint32_t u32[8];
+	int32_t i32[8];
+	float f[8];
+} usb_buffer_tx_t;
 
 /* Private variables --------------------------------------*/
 
 volatile uint32_t tick;
 USBD_HandleTypeDef USBD_device_handler;
-uint8_t host_rx_buffer[6];
+usb_buffer_tx_t usb_buffer_tx;
+usb_buffer_rx_t usb_buffer_rx;
 volatile uint8_t spi2_rx_buffer[16];
 volatile uint8_t spi2_tx_buffer[16];
 volatile uint8_t i2c2_rx_buffer[15];
 volatile uint8_t i2c2_tx_buffer[2];
-uint16_t time[4];
-float armed;
-volatile uint32_t motor_raw[4];
-uint16_t mpu_error_count;
-uint16_t radio_error_count;
+uint16_t time[5];
+volatile float armed;
+uint8_t mpu_error_count;
+uint8_t radio_error_count;
 
 volatile _Bool flag_mpu;
 volatile _Bool flag_radio;
@@ -55,6 +123,7 @@ volatile _Bool flag_radio_synch;
 volatile _Bool flag_mpu_cal;
 volatile _Bool flag_vbat;
 volatile _Bool flag_armed_locked;
+volatile _Bool flag_mpu_timeout;
 
 volatile _Bool flag_beep_user;
 volatile _Bool flag_beep_radio;
@@ -62,78 +131,17 @@ volatile _Bool flag_beep_mpu;
 volatile _Bool flag_beep_host;
 volatile _Bool flag_beep_vbat;
 
+#if (RADIO_TYPE == 0)
+	volatile struct ibus_frame_s radio_frame;
+#elif (RADIO_TYPE == 1)
+	volatile struct sumd_frame_s radio_frame;
+#else
+	volatile sbus_frame_t radio_frame;
+#endif
+
 /* Private macros ---------------------------------------------------*/
 
-#if (RADIO_TYPE == 0)
-	#define RADIO_NB_BYTES 32
-#else
-	#define RADIO_NB_BYTES 29
-#endif
-
-#define TIM_DMA_EN \
-	TIM2->CR1 = 0; \
-	TIM3->CR1 = 0; \
-	TIM2->CNT = 0; \
-	TIM3->CNT = 0; \
-	DMA1_Channel1->CCR &= ~DMA_CCR_EN; \
-	DMA1_Channel2->CCR &= ~DMA_CCR_EN; \
-	DMA1_Channel3->CCR &= ~DMA_CCR_EN; \
-	DMA1_Channel7->CCR &= ~DMA_CCR_EN; \
-	DMA1_Channel1->CNDTR = 17; \
-	DMA1_Channel2->CNDTR = 17; \
-	DMA1_Channel3->CNDTR = 17; \
-	DMA1_Channel7->CNDTR = 17; \
-	DMA1_Channel1->CCR |= DMA_CCR_EN; \
-	DMA1_Channel2->CCR |= DMA_CCR_EN; \
-	DMA1_Channel3->CCR |= DMA_CCR_EN; \
-	DMA1_Channel7->CCR |= DMA_CCR_EN;
-
-#define USB_TX(size) \
-	USBD_CDC_SetTxBuffer(&USBD_device_handler, USBD_CDC_IF_tx_buffer, size); \
-	USBD_CDC_TransmitPacket(&USBD_device_handler);
-
-#ifdef MPU_SPI
-	#define ABORT_MPU \
-		DMA1_Channel4->CCR &= ~DMA_CCR_EN; \
-		DMA1_Channel5->CCR &= ~DMA_CCR_EN; \
-		DMA1->IFCR = DMA_IFCR_CGIF4 | DMA_IFCR_CGIF5; \
-		DMA1_Channel4->CNDTR = 0; \
-		DMA1_Channel5->CNDTR = 0; \
-		SPI2->CR1 &= ~SPI_CR1_SPE; \
-		while (SPI2->SR & SPI_SR_FRLVL) \
-			SPI2->DR; \
-		SPI2->CR1 |= SPI_CR1_MSTR; \
-		flag_mpu_host_read = 0; \
-		flag_mpu = 0; \
-		mpu_error_count++;
-#else
-	#define ABORT_MPU \
-		DMA1_Channel4->CCR &= ~DMA_CCR_EN; \
-		DMA1_Channel5->CCR &= ~DMA_CCR_EN; \
-		DMA1->IFCR = DMA_IFCR_CGIF4 | DMA_IFCR_CGIF5; \
-		DMA1_Channel4->CNDTR = 0; \
-		DMA1_Channel5->CNDTR = 0;
-		I2C2->CR1 &= ~I2C_CR1_PE; \
-		I2C2->CR1 |= I2C_CR1_PE; \
-		flag_mpu_host_read = 0; \
-		flag_mpu = 0; \
-		mpu_error_count++;
-#endif
-
-/* Private function declarations -----------------------------------*/
-
-void uint32_to_float(uint32_t* b, float* f);
-void float_to_uint32(float* f, uint32_t* b);
-void wait_ms(uint32_t t);
-void MpuWrite(uint8_t addr, uint8_t data);
-void MpuRead(uint8_t addr, uint8_t size);
-	
-/* Public functions ---------------------------------------------*/
-
-void HAL_Delay(__IO uint32_t Delay)
-{
-	wait_ms(Delay);
-}
+#define MPU_WRITE(addr,data) MpuWrite(addr, data); wait_ms(1);
 
 /* Private functions ------------------------------------------------*/
 
@@ -143,6 +151,12 @@ void wait_ms(uint32_t t)
 	next_tick = tick + t;
 	while (tick != next_tick)
 		__WFI();
+}
+
+// Redefinition of HAL function
+void HAL_Delay(__IO uint32_t Delay)
+{
+	wait_ms(Delay);
 }
 
 #ifdef MPU_SPI
@@ -199,14 +213,14 @@ void dshot_encode(volatile uint32_t* val, volatile uint32_t buf[17])
 	uint8_t bit[11];
 	for (i=0; i<11; i++)
 	{
-		buf[i] = (*val & (1 << (10-i))) ? 90 : 45;
+		buf[i] = (*val & (1 << (10-i))) ? 60 : 30;
 		bit[i] = (*val & (1 << i)) ? 1 : 0;
 	}
-	buf[11] = 45;
-	buf[12] = (bit[10]^bit[6]^bit[2]) ? 90 : 45;
-    buf[13] = (bit[ 9]^bit[5]^bit[1]) ? 90 : 45;
-    buf[14] = (bit[ 8]^bit[4]^bit[0]) ? 90 : 45;
-    buf[15] = (bit[ 7]^bit[3])        ? 90 : 45;
+	buf[11] = 30;
+	buf[12] = (bit[10]^bit[6]^bit[2]) ? 60 : 30;
+	buf[13] = (bit[ 9]^bit[5]^bit[1]) ? 60 : 30;
+	buf[14] = (bit[ 8]^bit[4]^bit[0]) ? 60 : 30;
+	buf[15] = (bit[ 7]^bit[3])        ? 60 : 30;
 	buf[16] = 0;
 }
 
@@ -218,29 +232,6 @@ void uint32_to_float(uint32_t* b, float* f)
 	} f2b;
 	f2b.b = *b;
 	*f = f2b.f;
-}
-
-void float_to_bytes(float* f, uint8_t* b)
-{
-	union {
-		float f;
-		uint8_t b[4];
-	} f2b;
-	f2b.f = *f;
-	b[0] = f2b.b[0];
-	b[1] = f2b.b[1];
-	b[2] = f2b.b[2];
-	b[3] = f2b.b[3];
-}
-
-void float_to_uint32(float* f, uint32_t* b)
-{
-	union {
-		float f;
-		uint32_t b;
-	} f2b;
-	f2b.f = *f;
-	*b = f2b.b;
 }
 
 float expo(float linear, float scale, float expo_val)
@@ -264,7 +255,7 @@ float expo(float linear, float scale, float expo_val)
 
 /* Interrupt routines --------------------------------*/
 
-/*--- System timer 1ms ---*/
+/*--- System timer ---*/
 void SysTick_Handler()
 {
 	tick++;
@@ -292,13 +283,22 @@ void EXTI15_10_IRQHandler()
 	}
 }
 
-/*--- I2C error ---*/
+/*--- MPU I2C error ---*/
 void I2C2_ER_IRQHandler()
 {
-	ABORT_MPU
+	// Disable DMA
+	DMA1_Channel4->CCR &= ~DMA_CCR_EN;
+	DMA1_Channel5->CCR &= ~DMA_CCR_EN;
+	DMA1->IFCR = DMA_IFCR_CGIF4 | DMA_IFCR_CGIF5;
+	
+	// Reset I2C
+	I2C2->CR1 &= ~I2C_CR1_PE;
+	I2C2->CR1 |= I2C_CR1_PE;
+	
+	mpu_error_count++;
 }
 
-/*--- I2C R/W management ---*/
+/*--- MPU I2C R/W management ---*/
 void I2C2_EV_IRQHandler()
 {
 	// Disable DMA for Tx
@@ -325,27 +325,50 @@ void I2C2_EV_IRQHandler()
 	}
 }
 
-/*--- SPI error ---*/
+/*--- MPU SPI error ---*/
 void SPI2_IRQHandler() 
 {
-	ABORT_MPU
+	// Disable DMA
+	DMA1_Channel4->CCR &= ~DMA_CCR_EN;
+	DMA1_Channel5->CCR &= ~DMA_CCR_EN;
+	DMA1->IFCR = DMA_IFCR_CGIF4 | DMA_IFCR_CGIF5;
+	
+	// Disable SPI
+	SPI2->CR1 &= ~SPI_CR1_SPE;
+	while (SPI2->SR & SPI_SR_FRLVL)
+		SPI2->DR;
+	
+	// Set master bit that could be reset after a SPI error
+	SPI2->CR1 |= SPI_CR1_MSTR;
+	
+	mpu_error_count++;
 }
 
 #ifdef MPU_SPI
 
-	/*--- End of SPI receive ---*/
+	/*--- End of MPU SPI receive ---*/
 	void DMA1_Channel4_IRQHandler() 
 	{
 		// Check DMA transfer error
 		if (DMA1->ISR & DMA_ISR_TEIF4)
 			mpu_error_count++;
-		else
+		else if (REG_CTRL__MPU_HOST_CTRL == 0)
+		{
 			flag_mpu = 1; // Raise flag for sample ready
+			flag_mpu_timeout = 0; // Clear timeout flag
+		}
+		else if (flag_mpu_host_read)
+		{
+			flag_mpu_host_read = 0;
+			usb_buffer_tx.u8[0] = spi2_rx_buffer[1];
+			USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 1);
+			USBD_CDC_TransmitPacket(&USBD_device_handler);
+		}
 		
 		// Disable DMA
 		DMA1_Channel4->CCR &= ~DMA_CCR_EN;
 		DMA1_Channel5->CCR &= ~DMA_CCR_EN;
-		DMA1->IFCR = DMA_IFCR_CGIF4 | DMA_IFCR_CGIF5; // clear all flags
+		DMA1->IFCR = DMA_IFCR_CGIF4 | DMA_IFCR_CGIF5;
 		
 		// Disable SPI
 		SPI2->CR1 &= ~SPI_CR1_SPE;
@@ -358,28 +381,57 @@ void SPI2_IRQHandler()
 		#endif
 	}
 
-	/*--- DMA Transfer error ---*/
+	/*--- MPU SPI DMA Transfer error ---*/
 	void DMA1_Channel5_IRQHandler() 
 	{
-		ABORT_MPU
+		// Disable DMA
+		DMA1_Channel4->CCR &= ~DMA_CCR_EN;
+		DMA1_Channel5->CCR &= ~DMA_CCR_EN;
+		DMA1->IFCR = DMA_IFCR_CGIF4 | DMA_IFCR_CGIF5;
+		
+		// Disable SPI
+		SPI2->CR1 &= ~SPI_CR1_SPE;
+		while (SPI2->SR & SPI_SR_FRLVL)
+			SPI2->DR;
+		
+		mpu_error_count++;
 	}
 
 #else
 
-	/*--- DMA Transfer error ---*/
+	/*--- MPU I2C DMA Transfer error ---*/
 	void DMA1_Channel4_IRQHandler() 
 	{
-		ABORT_MPU
+		// Disable DMA
+		DMA1_Channel4->CCR &= ~DMA_CCR_EN;
+		DMA1_Channel5->CCR &= ~DMA_CCR_EN;
+		DMA1->IFCR = DMA_IFCR_CGIF4 | DMA_IFCR_CGIF5;
+		
+		// Reset I2C
+		I2C2->CR1 &= ~I2C_CR1_PE;
+		I2C2->CR1 |= I2C_CR1_PE;
+		
+		mpu_error_count++;
 	}
 
-	/*--- End of I2C receive ---*/
+	/*--- End of MPU I2C receive ---*/
 	void DMA1_Channel5_IRQHandler() 
 	{
 		// Check DMA transfer error
 		if (DMA1->ISR & DMA_ISR_TEIF5)
 			mpu_error_count++;
-		else
+		else if (REG_CTRL__MPU_HOST_CTRL == 0)
+		{
 			flag_mpu = 1; // Raise flag for sample ready
+			flag_mpu_timeout = 0; // Clear timeout flag
+		}
+		else if (flag_mpu_host_read)
+		{
+			flag_mpu_host_read = 0;
+			usb_buffer_tx.u8[0] = i2c2_rx_buffer[0];
+			USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 1);
+			USBD_CDC_TransmitPacket(&USBD_device_handler);
+		}
 		
 		// Disable DMA
 		DMA1->IFCR = DMA_IFCR_CGIF5; // clear all flags
@@ -395,22 +447,21 @@ void SPI2_IRQHandler()
 
 #endif
 
-/*--- UART error ---*/
+/*--- Radio UART error ---*/
 void USART2_IRQHandler()
 {
+	// Disable DMA
 	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
-	DMA1->IFCR = DMA_IFCR_CGIF6; // clear all flags
-	DMA1_Channel6->CNDTR = 0;
+	DMA1->IFCR = DMA_IFCR_CGIF6;
 	
-	USART1->CR1 &= ~USART_CR1_UE;
+	// Disable UART
+	USART2->CR1 &= ~USART_CR1_UE;
 	
-	flag_radio = 0;
 	flag_radio_synch = 1;
-	
 	radio_error_count++;
 }
 
-/*--- End of UART receive ---*/
+/*--- End of radio UART receive ---*/
 void DMA1_Channel6_IRQHandler()
 {
 	// Check DMA transfer error
@@ -421,10 +472,10 @@ void DMA1_Channel6_IRQHandler()
 	
 	// Disable DMA
 	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
-	DMA1->IFCR = DMA_IFCR_CGIF6; // clear all flags
+	DMA1->IFCR = DMA_IFCR_CGIF6;
 	
 	// Enable DMA
-	DMA1_Channel6->CNDTR = RADIO_NB_BYTES;
+	DMA1_Channel6->CNDTR = sizeof(radio_frame);
 	DMA1_Channel6->CCR |= DMA_CCR_EN;
 }
 
@@ -459,13 +510,10 @@ void TIM6_DAC_IRQHandler()
 /*--- MPU timeout ---*/
 void TIM1_BRK_TIM15_IRQHandler()
 {
-	int i;
-	
 	TIM15->SR &= ~TIM_SR_UIF;
 	
 	// Stop motors!
-	for (i=0; i<4; i++)
-		motor_raw[i] = 0;
+	flag_mpu_timeout = 1;
 	flag_motor = 1;
 	
 	// Beep!
@@ -494,13 +542,7 @@ int main()
 	float x;
 	
 	uint16_t mpu_sample_count;
-	int16_t gyro_x_raw;
-	int16_t gyro_y_raw;
-	int16_t gyro_z_raw;
-	int16_t accel_x_raw;
-	int16_t accel_y_raw;
-	int16_t accel_z_raw;
-	int16_t temperature_raw;
+	sensor_raw_t sensor_raw;
 	//uint16_t mpu_error_count; // Moved to global because shared by interrupt
 	float gyro_x;
 	float gyro_y;
@@ -519,15 +561,13 @@ int main()
 	float accel_z_scale;
 	float temperature;
 	
-	volatile uint8_t uart2_rx_buffer[32];
-	
 	uint16_t radio_frame_count;
 	uint16_t throttle_raw;
 	uint16_t aileron_raw;
 	uint16_t elevator_raw;
 	uint16_t rudder_raw;
 	uint16_t armed_raw;
-	uint16_t chan6_raw;
+	uint16_t aux_raw[3];
 	//uint16_t radio_error_count; // Moved to global because shared by interrupt
 	float throttle;
 	float aileron;
@@ -535,14 +575,13 @@ int main()
 	float rudder;
 	//float armed; // Moved to global because shared by interrupt
 	float armed1;
-	float chan6;
+	float aux[3];
 	float pitch_roll_expo_scale;
 	float yaw_expo_scale;
 	float throttle_rate;
 	float pitch_rate;
 	float roll_rate;
 	float yaw_rate;
-	float throttle_gain;
 	float throttle_acc;
 	float aileron_acc;
 	float elevator_acc;
@@ -570,7 +609,7 @@ int main()
 	
 	float motor[4];
 	int32_t motor_clip[4];
-	//uint32_t motor_raw[4]; // Moved to global because shared by interrupt
+	uint32_t motor_raw[4];
 	volatile uint32_t motor1_dshot[17];
 	volatile uint32_t motor2_dshot[17];
 	volatile uint32_t motor3_dshot[17];
@@ -580,8 +619,7 @@ int main()
 	float vbat;
 	uint16_t vbat_sample_count;
 	
-	uint8_t reg_addr;
-	uint32_t val;
+	uint8_t addr;
 	
 	_Bool reg_flash_valid;
 	uint32_t* flash_r;
@@ -593,6 +631,13 @@ int main()
 	uint16_t time_process;
 	
 	_Bool armed_unlock_step1;
+	_Bool radio_check;
+	
+#ifdef PID_TUNING
+	float p_tune;
+	float i_tune;
+	float d_tune;
+#endif
 	
 	/* Variable init ---------------------------------------*/
 	
@@ -606,6 +651,7 @@ int main()
 	flag_mpu_cal = 1;
 	flag_vbat = 0;
 	flag_armed_locked = 1;
+	flag_mpu_timeout = 0;
 
 	flag_beep_user = 0;
 	flag_beep_radio = 0;
@@ -621,7 +667,9 @@ int main()
 	elevator = 0;
 	rudder = 0;
 	armed = 0;
-	chan6 = 0;
+	aux[0] = 0;
+	aux[1] = 0;
+	aux[2] = 0;
 	
 	mpu_sample_count = 0;
 	mpu_error_count = 0;
@@ -641,15 +689,25 @@ int main()
 	elevator_acc = 0;
 	rudder_acc = 0;
 	
+	error_pitch = 0;
+	error_roll = 0;
+	error_yaw = 0;
 	error_pitch_i = 0;
 	error_roll_i = 0;
 	error_yaw_i = 0;
 	
+	vbat = 15.0f;
 	vbat_acc = 15.0f / VBAT_ALPHA;
 	vbat_sample_count = 0;
 	
 	armed_unlock_step1 = 0;
 	
+#ifdef PID_TUNING
+	p_tune = REG_PITCH_P;
+	i_tune = REG_PITCH_I;
+	d_tune = REG_PITCH_D;
+#endif
+
 	/* Register init -----------------------------------*/
 	
 	flash_r = (uint32_t*)REG_FLASH_ADDR;
@@ -751,6 +809,10 @@ int main()
 	GPIOA->MODER |= GPIO_MODER_MODER11_1 | GPIO_MODER_MODER12_1;
 	GPIOA->AFR[1] |= (14 << GPIO_AFRH_AFRH3_Pos) | (14 << GPIO_AFRH_AFRH4_Pos);
 	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR11 | GPIO_OSPEEDER_OSPEEDR12;
+	// A13: SWDIO, AF0
+	// A14: SWCLK, AF0
+	GPIOA->MODER |= GPIO_MODER_MODER13_1 | GPIO_MODER_MODER14_1;
+	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR13 | GPIO_OSPEEDER_OSPEEDR14;
 	// A15: MPU interrupt
 	// B0 : Motor 3, to TIM3_CH3, AF2
 	// B1 : Motor 4, to TIM3_CH4, AF2
@@ -806,7 +868,7 @@ int main()
 	
 	// UART2 Rx
 	DMA1_Channel6->CCR = DMA_CCR_TCIE | DMA_CCR_MINC | DMA_CCR_TEIE;
-	DMA1_Channel6->CMAR = (uint32_t)uart2_rx_buffer;
+	DMA1_Channel6->CMAR = (uint32_t)&radio_frame;
 	DMA1_Channel6->CPAR = (uint32_t)&(USART2->RDR);
 
 	// Timers for DSHOT
@@ -831,67 +893,72 @@ int main()
 #ifdef ESC_DSHOT
 	// DMA driven timer for DShot600, 24Mhz, 0:15, 1:30, T:40
 	TIM2->PSC = 0;
-	TIM2->ARR = 120;
+	TIM2->ARR = 80;
 	TIM2->DIER = TIM_DIER_CC2DE | TIM_DIER_CC3DE;
 	TIM2->CCER = TIM_CCER_CC2E | TIM_CCER_CC3E;
 	TIM2->CCMR1 = (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
 	TIM2->CCMR2 = (6 << TIM_CCMR2_OC3M_Pos) | TIM_CCMR2_OC3PE;
 	
 	TIM3->PSC = 0;
-	TIM3->ARR = 120;
+	TIM3->ARR = 80;
 	TIM3->DIER = TIM_DIER_CC3DE | TIM_DIER_CC4DE;
 	TIM3->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;
 	TIM3->CCMR2 = (6 << TIM_CCMR2_OC3M_Pos) | (6 << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC3PE | TIM_CCMR2_OC4PE;
 #else	
 	// One-pulse mode for OneShot125
 	TIM2->CR1 = TIM_CR1_OPM;
-	TIM2->PSC = 8; // 0.125us (2 for OneShot42, 0.042us)
-	TIM2->ARR = MOTOR_MAX + 1;
+	TIM2->PSC = 3-1;
+	TIM2->ARR = SERVO_MAX*2 + 1;
 	TIM2->CCER = TIM_CCER_CC2E | TIM_CCER_CC3E;
 	TIM2->CCMR1 = (7 << TIM_CCMR1_OC2M_Pos);
 	TIM2->CCMR2 = (7 << TIM_CCMR2_OC3M_Pos);
 	
 	TIM3->CR1 = TIM_CR1_OPM;
-	TIM3->PSC = 8;
-	TIM3->ARR = MOTOR_MAX + 1;
+	TIM3->PSC = 3-1;
+	TIM3->ARR = SERVO_MAX*2 + 1;;
 	TIM3->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;
 	TIM3->CCMR2 = (7 << TIM_CCMR2_OC3M_Pos) | (7 << TIM_CCMR2_OC4M_Pos);
 #endif
 
 	// Beeper
-	TIM4->PSC = 35999; // 0.5ms
-	TIM4->ARR = BEEPER_PERIOD*2;
+	TIM4->PSC = 48000-1; // 1ms
+	TIM4->ARR = BEEPER_PERIOD;
 	TIM4->DIER = TIM_DIER_UIE;
 	TIM4->CR1 = TIM_CR1_CEN;
 	
 	// Receiver timeout
-	TIM6->PSC = 35999; // 0.5ms
-	TIM6->ARR = TIMEOUT_RADIO*2;
+	TIM6->PSC = 48000-1; // 1ms
+	TIM6->ARR = TIMEOUT_RADIO;
 	TIM6->DIER = TIM_DIER_UIE;
 	TIM6->CR1 = TIM_CR1_CEN;
 	
-	// Sensor to motor processing time
-	TIM7->PSC = 71; // 1us
+	// Processing time
+	TIM7->PSC = 48-1; // 1us
 	TIM7->ARR = 65535;
 	TIM7->CR1 = TIM_CR1_CEN;
 	
-	// MPU transaction time
-	TIM15->PSC = 71; // 1us
+	// MPU timeout
+	TIM15->PSC = 48-1; // 1us
 	TIM15->ARR = TIMEOUT_MPU;
 	TIM15->DIER = TIM_DIER_UIE;
 	TIM15->CR1 = TIM_CR1_CEN;
 	
 	// VBAT
-	TIM16->PSC = 35999; // 0.5ms
-	TIM16->ARR = VBAT_PERIOD*2;
+	TIM16->PSC = 48000-1; // 1ms
+	TIM16->ARR = VBAT_PERIOD;
 	TIM16->DIER = TIM_DIER_UIE;
 	TIM16->CR1 = TIM_CR1_CEN;
 	
 	/* UART ---------------------------------------------------*/
 	
-	USART2->BRR = 625; // 72MHz/115200bps
+#if (RADIO_TYPE == 2)
+	USART2->BRR = 480; // 48MHz/100000bps
+	USART2->CR1 = USART_CR1_RE | USART_CR1_M0 | USART_CR1_PCE;
+	USART2->CR2 = (2 << USART_CR2_STOP_Pos) | USART_CR2_RXINV;
+#else
+	USART2->BRR = 417; // 48MHz/115200bps
 	USART2->CR1 = USART_CR1_RE;
-	//USART2->CR2 = (2 << USART_CR2_STOP_Pos);
+#endif
 	USART2->CR3 = USART_CR3_EIE | USART_CR3_DMAR;
 
 #ifdef MPU_SPI
@@ -983,28 +1050,22 @@ int main()
 	
 	/* MPU init ----------------------------------------------------*/
 	
-	MpuWrite(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__DEVICE_RST);
+	MPU_WRITE(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__DEVICE_RST);
 	wait_ms(100);
 #ifdef MPU_SPI
-	MpuWrite(MPU_SIGNAL_PATH_RST, MPU_SIGNAL_PATH_RST__ACCEL_RST | MPU_SIGNAL_PATH_RST__GYRO_RST | MPU_SIGNAL_PATH_RST__TEMP_RST);
+	MPU_WRITE(MPU_SIGNAL_PATH_RST, MPU_SIGNAL_PATH_RST__ACCEL_RST | MPU_SIGNAL_PATH_RST__GYRO_RST | MPU_SIGNAL_PATH_RST__TEMP_RST);
 	wait_ms(100);
-	MpuWrite(MPU_USER_CTRL, MPU_USER_CTRL__I2C_IF_DIS);
-	wait_ms(1);
+	MPU_WRITE(MPU_USER_CTRL, MPU_USER_CTRL__I2C_IF_DIS);
 #endif
-	MpuWrite(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1));// | MPU_PWR_MGMT_1__TEMP_DIS); // Get MPU out of sleep, set CLK = gyro X clock, and disable temperature sensor
+	MPU_WRITE(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1));// | MPU_PWR_MGMT_1__TEMP_DIS); // Get MPU out of sleep, set CLK = gyro X clock, and disable temperature sensor
 	wait_ms(100);
-	//MpuWrite(MPU_PWR_MGMT_2, MPU_PWR_MGMT_2__STDBY_XA | MPU_PWR_MGMT_2__STDBY_YA | MPU_PWR_MGMT_2__STDBY_ZA); // Disable accelerometers
-	//wait_ms(1);
-	//MpuWrite(MPU_SMPLRT_DIV, 7); // Sample rate = Fs/(x+1)
-	//wait_ms(1);
-	MpuWrite(MPU_CFG, MPU_CFG__DLPF_CFG(1)); // Filter ON => Fs=1kHz, else 8kHz
-	wait_ms(1);
-	MpuWrite(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
-	wait_ms(1);
-	MpuWrite(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
+	//MPU_WRITE(MPU_PWR_MGMT_2, MPU_PWR_MGMT_2__STDBY_XA | MPU_PWR_MGMT_2__STDBY_YA | MPU_PWR_MGMT_2__STDBY_ZA); // Disable accelerometers
+	//MPU_WRITE(MPU_SMPLRT_DIV, 7); // Sample rate = Fs/(x+1)
+	MPU_WRITE(MPU_CFG, MPU_CFG__DLPF_CFG(3)); // Filter ON => Fs=1kHz, else 8kHz
+	MPU_WRITE(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
+	MPU_WRITE(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
 	wait_ms(100); // wait for filter to settle
-	MpuWrite(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
-	wait_ms(1);
+	MPU_WRITE(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
 
 	/* -----------------------------------------------------------------------------------*/
 	
@@ -1037,7 +1098,7 @@ int main()
 		#ifdef MPU_SPI
 			// Adapt SPI clock frequency
 			if (REG_CTRL__MPU_HOST_CTRL)
-				SPI2->CR1 |= (5 << SPI_CR1_BR_Pos); // 562.5kHz
+				SPI2->CR1 |= 5 << SPI_CR1_BR_Pos; // 562.5kHz
 			else
 				SPI2->CR1 &= ~SPI_CR1_BR_Msk; // 18MHz
 		#endif
@@ -1101,14 +1162,15 @@ int main()
 			// Synchonise on IDLE character
 			USART2->RDR;
 			USART2->ICR = USART_ICR_IDLECF;
-			while ((USART2->ISR & USART_ISR_IDLE) == 0)
+			time[4] = TIM7->CNT + 15000;
+			while (((USART2->ISR & USART_ISR_IDLE) == 0) && (TIM7->CNT < time[4]))
 				USART2->RDR;
 			
 			// Enable DMA
 			USART2->CR1 &= ~USART_CR1_UE;
 			USART2->CR3 |= USART_CR3_DMAR;
 			USART2->CR1 |= USART_CR1_UE;
-			DMA1_Channel6->CNDTR = RADIO_NB_BYTES;
+			DMA1_Channel6->CNDTR = sizeof(radio_frame);
 			DMA1_Channel6->CCR |= DMA_CCR_EN;
 		}
 		
@@ -1118,39 +1180,61 @@ int main()
 		{
 			flag_radio = 0;
 			
+			#if (RADIO_TYPE == 2)
+				radio_frame.frame.header = (uint8_t)(__RBIT((uint32_t)radio_frame.frame.header) >> 24);
+			#endif
+			
 			// Check header
 			// TODO: verify checksum
-		#if (RADIO_TYPE == 0)
-			if ((uart2_rx_buffer[0] != 0x20) || (uart2_rx_buffer[1] != 0x40))
-		#else
-			if ((uart2_rx_buffer[0] != 0xA8) || ((uart2_rx_buffer[1] != 0x01) && (uart2_rx_buffer[1] != 0x81)))
-		#endif
-			{
-				flag_radio_synch = 1;
-				radio_error_count++;
-			}
-			else
+			#if (RADIO_TYPE == 0)
+				radio_check = (radio_frame.header == 0x4020);
+			#elif (RADIO_TYPE == 1)
+				radio_check = (radio_frame.vendor_id == 0xA8) && ((radio_frame.status == 0x01) || (radio_frame.status += 0x81));
+			#else
+				radio_check = ((radio_frame.frame.header == 0xF0) || (radio_frame.frame.header == 0xF1)) && (radio_frame.frame.end_byte == 0x00);
+			#endif
+			
+			if (radio_check)
 			{
 				// Reset timeout
 				TIM6->CNT = 0;
 				flag_beep_radio = 0;
 				
 				radio_frame_count++;
+				
 				#if (RADIO_TYPE == 0)
-					aileron_raw  = (uint16_t)uart2_rx_buffer[ 2] | ((uint16_t)uart2_rx_buffer[ 3] << 8);
-					elevator_raw = (uint16_t)uart2_rx_buffer[ 4] | ((uint16_t)uart2_rx_buffer[ 5] << 8);
-					throttle_raw = (uint16_t)uart2_rx_buffer[ 6] | ((uint16_t)uart2_rx_buffer[ 7] << 8);
-					rudder_raw   = (uint16_t)uart2_rx_buffer[ 8] | ((uint16_t)uart2_rx_buffer[ 9] << 8);
-					armed_raw    = (uint16_t)uart2_rx_buffer[10] | ((uint16_t)uart2_rx_buffer[11] << 8);
-					chan6_raw    = (uint16_t)uart2_rx_buffer[12] | ((uint16_t)uart2_rx_buffer[13] << 8);
+					throttle_raw = radio_frame.chan[2];
+					aileron_raw  = radio_frame.chan[0];
+					elevator_raw = radio_frame.chan[1];
+					rudder_raw   = radio_frame.chan[3];
+					armed_raw    = radio_frame.chan[4];
+					aux_raw[0]   = radio_frame.chan[5];
+					aux_raw[1]   = radio_frame.chan[6];
+					aux_raw[2]   = radio_frame.chan[7];
+				#elif (RADIO_TYPE == 1)
+					throttle_raw = radio_frame.chan[0];
+					aileron_raw  = radio_frame.chan[1];
+					elevator_raw = radio_frame.chan[2];
+					rudder_raw   = radio_frame.chan[3];
+					armed_raw    = radio_frame.chan[4];
+					aux_raw[0]   = radio_frame.chan[5];
+					aux_raw[1]   = radio_frame.chan[6];
+					aux_raw[2]   = radio_frame.chan[7];
 				#else
-					aileron_raw  = (uint16_t)uart2_rx_buffer[ 4] | ((uint16_t)uart2_rx_buffer[ 3] << 8);
-					elevator_raw = (uint16_t)uart2_rx_buffer[ 6] | ((uint16_t)uart2_rx_buffer[ 5] << 8);
-					throttle_raw = (uint16_t)uart2_rx_buffer[ 8] | ((uint16_t)uart2_rx_buffer[ 7] << 8);
-					rudder_raw   = (uint16_t)uart2_rx_buffer[10] | ((uint16_t)uart2_rx_buffer[ 9] << 8);
-					armed_raw    = (uint16_t)uart2_rx_buffer[12] | ((uint16_t)uart2_rx_buffer[11] << 8);
-					chan6_raw    = (uint16_t)uart2_rx_buffer[14] | ((uint16_t)uart2_rx_buffer[13] << 8);
+					throttle_raw = radio_frame.frame.chan2;
+					aileron_raw  = radio_frame.frame.chan0;
+					elevator_raw = radio_frame.frame.chan1;
+					rudder_raw   = radio_frame.frame.chan3;
+					armed_raw    = radio_frame.frame.chan4;
+					aux_raw[0]   = radio_frame.frame.chan5;
+					aux_raw[1]   = radio_frame.frame.chan6;
+					aux_raw[2]   = radio_frame.frame.chan7;
 				#endif
+			}
+			else
+			{
+				flag_radio_synch = 1;
+				radio_error_count++;
 			}
 			
 			#if (RADIO_TYPE == 0)
@@ -1159,14 +1243,27 @@ int main()
 				elevator = (float)((int16_t)elevator_raw - 1500) / 500.0f;
 				rudder = (float)((int16_t)rudder_raw - 1500) / 500.0f;
 				armed1 = (float)(armed_raw - 1000) / 1000.0f;
-				chan6 = (float)(chan6_raw - 1000) / 1000.0f;
-			#else
+				aux[0] = (float)(aux_raw[0] - 1000) / 1000.0f;
+				aux[1] = (float)(aux_raw[1] - 1000) / 1000.0f;
+				aux[2] = (float)(aux_raw[2] - 1000) / 1000.0f;
+			#elif (RADIO_TYPE == 1)
 				throttle = (float)(throttle_raw - 8800) / 6400.0f;
 				aileron = (float)((int16_t)aileron_raw - 12000) / 3200.0f;
 				elevator = (float)((int16_t)elevator_raw - 12000) / 3200.0f;
 				rudder = (float)((int16_t)rudder_raw - 12000) / 3200.0f;
 				armed1 = (float)(armed_raw - 8800) / 6400.0f;
-				chan6 = (float)(chan6_raw - 8800) / 6400.0f;
+				aux[0] = (float)(aux_raw[0] - 8800) / 6400.0f;
+				aux[1] = (float)(aux_raw[1] - 8800) / 6400.0f;
+				aux[2] = (float)(aux_raw[2] - 8800) / 6400.0f;
+			#else
+				throttle = (float)(throttle_raw - 368) / 1312.0f;
+				aileron = (float)((int16_t)aileron_raw - 1024) / 656.0f;
+				elevator = (float)((int16_t)elevator_raw - 1024) / 656.0f;
+				rudder = (float)((int16_t)rudder_raw - 1024) / 656.0f;
+				armed1 = (float)(armed_raw - 144) / 1760.0f;
+				aux[0] = (float)(aux_raw[0] - 144) / 1760.0f;
+				aux[1] = (float)(aux_raw[1] - 144) / 1760.0f;
+				aux[2] = (float)(aux_raw[2] - 144) / 1760.0f;
 			#endif
 			
 			if (flag_armed_locked)
@@ -1205,33 +1302,33 @@ int main()
 			// Send raw radio commands to host
 			if ((REG_DEBUG__CASE == 4) && ((radio_frame_count & REG_DEBUG__MASK) == 0))
 			{
-				USBD_CDC_IF_tx_buffer[ 0] = (uint8_t) throttle_raw;
-				USBD_CDC_IF_tx_buffer[ 1] = (uint8_t)(throttle_raw >> 8);
-				USBD_CDC_IF_tx_buffer[ 2] = (uint8_t) aileron_raw;
-				USBD_CDC_IF_tx_buffer[ 3] = (uint8_t)(aileron_raw>> 8);
-				USBD_CDC_IF_tx_buffer[ 4] = (uint8_t) elevator_raw;
-				USBD_CDC_IF_tx_buffer[ 5] = (uint8_t)(elevator_raw>> 8);
-				USBD_CDC_IF_tx_buffer[ 6] = (uint8_t) rudder_raw;
-				USBD_CDC_IF_tx_buffer[ 7] = (uint8_t)(rudder_raw >> 8);
-				USBD_CDC_IF_tx_buffer[ 8] = (uint8_t) armed_raw;
-				USBD_CDC_IF_tx_buffer[ 9] = (uint8_t)(armed_raw >> 8);
-				USBD_CDC_IF_tx_buffer[10] = (uint8_t) chan6_raw;
-				USBD_CDC_IF_tx_buffer[11] = (uint8_t)(chan6_raw >> 8);
-				USB_TX(12)
+				usb_buffer_tx.u16[0] = throttle_raw;
+				usb_buffer_tx.u16[1] = aileron_raw;
+				usb_buffer_tx.u16[2] = elevator_raw;
+				usb_buffer_tx.u16[3] = rudder_raw;
+				usb_buffer_tx.u16[4] = armed_raw;
+				usb_buffer_tx.u16[5] = aux_raw[0];
+				usb_buffer_tx.u16[6] = aux_raw[1];
+				usb_buffer_tx.u16[7] = aux_raw[2];
+				USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 8*2);
+				USBD_CDC_TransmitPacket(&USBD_device_handler);
 			}
 			
 			// Beep if requested
-			if (chan6 > 0.5f)
+		#ifndef PID_TUNING
+			if (aux[1] > 0.5f)
 				flag_beep_user = 1;
 			else
 				flag_beep_user = 0;
+		
+		#endif
 			
 			// Toggle LED at rate of Radio flag
 			if (REG_CTRL__LED_SELECT == 3)
 			{
 				if ((radio_frame_count & 0x7F) == 0)
 					GPIOB->BSRR = GPIO_BSRR_BR_5;
-				else if ((radio_frame_count & 0x7F) == 64)
+				else if ((radio_frame_count & 0x7F) == 0x3F)
 					GPIOB->BSRR = GPIO_BSRR_BS_5;
 			}
 		}
@@ -1241,16 +1338,30 @@ int main()
 		if (flag_mpu)
 		{
 			flag_mpu = 0;
+		
+		#ifdef MPU_SPI
+			for (i=0; i<7; i++)
+			{
+				sensor_raw.bytes[i*2+1] = spi2_rx_buffer[i*2+2];
+				sensor_raw.bytes[i*2+0] = spi2_rx_buffer[i*2+3];
+			}
+		#else
+			for (i=0; i<7; i++)
+			{
+				sensor_raw.bytes[i*2+1] = i2c2_rx_buffer[i*2+1];
+				sensor_raw.bytes[i*2+0] = i2c2_rx_buffer[i*2+2];
+			}
+		#endif
 			
 		#ifdef MPU_SPI
-			if ((REG_CTRL__MPU_HOST_CTRL == 0) && ((spi2_rx_buffer[1] & MPU_INT_STATUS__DATA_RDY_INT) == 0))
+			if ((spi2_rx_buffer[1] & MPU_INT_STATUS__DATA_RDY_INT) == 0)
 		#else
-			if ((REG_CTRL__MPU_HOST_CTRL == 0) && ((i2c2_rx_buffer[0] & MPU_INT_STATUS__DATA_RDY_INT) == 0))
+			if ((i2c2_rx_buffer[0] & MPU_INT_STATUS__DATA_RDY_INT) == 0)
 		#endif
 			{
 				mpu_error_count++;
 			}
-			else if (REG_CTRL__MPU_HOST_CTRL == 0)
+			else
 			{
 				// Reset timeout
 				TIM15->CNT = 0;
@@ -1258,32 +1369,14 @@ int main()
 				
 				mpu_sample_count++;
 				
-				#ifdef MPU_SPI
-					accel_x_raw     = ((int16_t)spi2_rx_buffer[ 2] << 8) | (int16_t)spi2_rx_buffer[ 3];
-					accel_y_raw     = ((int16_t)spi2_rx_buffer[ 4] << 8) | (int16_t)spi2_rx_buffer[ 5];
-					accel_z_raw     = ((int16_t)spi2_rx_buffer[ 6] << 8) | (int16_t)spi2_rx_buffer[ 7];
-					temperature_raw = ((int16_t)spi2_rx_buffer[ 8] << 8) | (int16_t)spi2_rx_buffer[ 9];
-					gyro_x_raw      = ((int16_t)spi2_rx_buffer[10] << 8) | (int16_t)spi2_rx_buffer[11];
-					gyro_y_raw      = ((int16_t)spi2_rx_buffer[12] << 8) | (int16_t)spi2_rx_buffer[13];
-					gyro_z_raw      = ((int16_t)spi2_rx_buffer[14] << 8) | (int16_t)spi2_rx_buffer[15];
-				#else
-					accel_x_raw     = ((int16_t)i2c2_rx_buffer[ 1] << 8) | (int16_t)i2c2_rx_buffer[ 2];
-					accel_y_raw     = ((int16_t)i2c2_rx_buffer[ 3] << 8) | (int16_t)i2c2_rx_buffer[ 4];
-					accel_z_raw     = ((int16_t)i2c2_rx_buffer[ 5] << 8) | (int16_t)i2c2_rx_buffer[ 6];
-					temperature_raw = ((int16_t)i2c2_rx_buffer[ 7] << 8) | (int16_t)i2c2_rx_buffer[ 8];
-					gyro_x_raw      = ((int16_t)i2c2_rx_buffer[ 9] << 8) | (int16_t)i2c2_rx_buffer[10];
-					gyro_y_raw      = ((int16_t)i2c2_rx_buffer[11] << 8) | (int16_t)i2c2_rx_buffer[12];
-					gyro_z_raw      = ((int16_t)i2c2_rx_buffer[13] << 8) | (int16_t)i2c2_rx_buffer[14];
-				#endif
-				
 				// MPU calibration
 				if (flag_mpu_cal)
 				{
 					if (mpu_sample_count <= 1000)
 					{
-						gyro_x_dc += (float)gyro_x_raw;
-						gyro_y_dc += (float)gyro_y_raw;
-						gyro_z_dc += (float)gyro_z_raw;
+						gyro_x_dc += (float)sensor_raw.sensor.gyro_x;
+						gyro_y_dc += (float)sensor_raw.sensor.gyro_y;
+						gyro_z_dc += (float)sensor_raw.sensor.gyro_z;
 					}
 					else
 					{
@@ -1293,6 +1386,11 @@ int main()
 						gyro_y_dc = gyro_y_dc / 1000.0f;
 						gyro_z_dc = gyro_z_dc / 1000.0f;
 					}
+					
+					if ((mpu_sample_count & 0x3F) == 0)
+						GPIOB->BSRR = GPIO_BSRR_BR_5;
+					else if ((mpu_sample_count & 0x3F) == 0x1F)
+						GPIOB->BSRR = GPIO_BSRR_BS_5;
 				}
 				
 				// Record SPI transaction time
@@ -1302,79 +1400,60 @@ int main()
 				if ((REG_CTRL__TIME_MAXHOLD == 0) || (((uint16_t)t > time_mpu) && REG_CTRL__TIME_MAXHOLD))
 					time_mpu = (uint16_t)t;
 			}
-			else if (flag_mpu_host_read)
-			{
-				flag_mpu_host_read = 0;
-				#ifdef MPU_SPI
-					USBD_CDC_IF_tx_buffer[0] = spi2_rx_buffer[1];
-				#else
-					USBD_CDC_IF_tx_buffer[0] = i2c2_rx_buffer[0];
-				#endif
-				USB_TX(1)
-			}
 			
 			// Send Raw sensor values to host
 			if ((REG_DEBUG__CASE == 1) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				USBD_CDC_IF_tx_buffer[ 0] = (uint8_t) gyro_x_raw;
-				USBD_CDC_IF_tx_buffer[ 1] = (uint8_t)(gyro_x_raw >> 8);
-				USBD_CDC_IF_tx_buffer[ 2] = (uint8_t) gyro_y_raw;
-				USBD_CDC_IF_tx_buffer[ 3] = (uint8_t)(gyro_y_raw >> 8);
-				USBD_CDC_IF_tx_buffer[ 4] = (uint8_t) gyro_z_raw;
-				USBD_CDC_IF_tx_buffer[ 5] = (uint8_t)(gyro_z_raw >> 8);
-				USBD_CDC_IF_tx_buffer[ 6] = (uint8_t) accel_x_raw;
-				USBD_CDC_IF_tx_buffer[ 7] = (uint8_t)(accel_x_raw >> 8);
-				USBD_CDC_IF_tx_buffer[ 8] = (uint8_t) accel_y_raw;
-				USBD_CDC_IF_tx_buffer[ 9] = (uint8_t)(accel_y_raw >> 8);
-				USBD_CDC_IF_tx_buffer[10] = (uint8_t) accel_z_raw;
-				USBD_CDC_IF_tx_buffer[11] = (uint8_t)(accel_z_raw >> 8);
-				USBD_CDC_IF_tx_buffer[12] = (uint8_t) temperature_raw;
-				USBD_CDC_IF_tx_buffer[13] = (uint8_t)(temperature_raw >> 8);
-				USB_TX(14)
+				USBD_CDC_SetTxBuffer(&USBD_device_handler, sensor_raw.bytes, 7*2);
+				USBD_CDC_TransmitPacket(&USBD_device_handler);
 			}
 			
 			// Remove DC and scale
-			gyro_x = ((float)gyro_x_raw - gyro_x_dc) * gyro_x_scale;
-			gyro_y = ((float)gyro_y_raw - gyro_y_dc) * gyro_y_scale;
-			gyro_z = ((float)gyro_z_raw - gyro_z_dc) * gyro_z_scale;
-			accel_x = (float)accel_x_raw * accel_x_scale;
-			accel_y = (float)accel_y_raw * accel_y_scale;
-			accel_z = (float)accel_z_raw * accel_z_scale;
-			temperature = (float)temperature_raw / 340.0f + 36.53f;
+			gyro_x = ((float)sensor_raw.sensor.gyro_x - gyro_x_dc) * gyro_x_scale;
+			gyro_y = ((float)sensor_raw.sensor.gyro_y - gyro_y_dc) * gyro_y_scale;
+			gyro_z = ((float)sensor_raw.sensor.gyro_z - gyro_z_dc) * gyro_z_scale;
+			accel_x = (float)sensor_raw.sensor.accel_x * accel_x_scale;
+			accel_y = (float)sensor_raw.sensor.accel_y * accel_y_scale;
+			accel_z = (float)sensor_raw.sensor.accel_z * accel_z_scale;
+			temperature = (float)sensor_raw.sensor.temperature / 340.0f + 36.53f;
 			
 			// Send scaled sensor values to host
 			if ((REG_DEBUG__CASE == 2) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				float_to_bytes(&gyro_x, &USBD_CDC_IF_tx_buffer[0]);
-				float_to_bytes(&gyro_y, &USBD_CDC_IF_tx_buffer[4]);
-				float_to_bytes(&gyro_z, &USBD_CDC_IF_tx_buffer[8]);
-				float_to_bytes(&accel_x, &USBD_CDC_IF_tx_buffer[12]);
-				float_to_bytes(&accel_y, &USBD_CDC_IF_tx_buffer[16]);
-				float_to_bytes(&accel_z, &USBD_CDC_IF_tx_buffer[20]);
-				float_to_bytes(&temperature, &USBD_CDC_IF_tx_buffer[24]);
-				USB_TX(28)
+				usb_buffer_tx.f[0] = gyro_x;
+				usb_buffer_tx.f[1] = gyro_y;
+				usb_buffer_tx.f[2] = gyro_z;
+				usb_buffer_tx.f[3] = accel_x;
+				usb_buffer_tx.f[4] = accel_y;
+				usb_buffer_tx.f[5] = accel_z;
+				usb_buffer_tx.f[6] = temperature;
+				USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 7*4);
+				USBD_CDC_TransmitPacket(&USBD_device_handler);
 			}
 			
 			// Smooth radio command
-			throttle_acc = throttle_acc *(1.0f - COMMAND_ALPHA) + throttle;
-			aileron_acc = aileron_acc *(1.0f - COMMAND_ALPHA) + aileron;
-			elevator_acc = elevator_acc *(1.0f - COMMAND_ALPHA) + elevator;
-			rudder_acc = rudder_acc *(1.0f - COMMAND_ALPHA) + rudder;
-			throttle_s = throttle_acc * COMMAND_ALPHA;
-			aileron_s = aileron_acc * COMMAND_ALPHA;
-			elevator_s = elevator_acc * COMMAND_ALPHA;
-			rudder_s = rudder_acc * COMMAND_ALPHA;
+			throttle_acc = throttle_acc *(1.0f - REG_RADIO_FILTER_ALPHA) + throttle;
+			aileron_acc = aileron_acc *(1.0f - REG_RADIO_FILTER_ALPHA) + aileron;
+			elevator_acc = elevator_acc *(1.0f - REG_RADIO_FILTER_ALPHA) + elevator;
+			rudder_acc = rudder_acc *(1.0f - REG_RADIO_FILTER_ALPHA) + rudder;
+			throttle_s = throttle_acc * REG_RADIO_FILTER_ALPHA;
+			aileron_s = aileron_acc * REG_RADIO_FILTER_ALPHA;
+			elevator_s = elevator_acc * REG_RADIO_FILTER_ALPHA;
+			rudder_s = rudder_acc * REG_RADIO_FILTER_ALPHA;
 			
 			// Send smoothed radio commands to host
 			if ((REG_DEBUG__CASE == 5) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				float_to_bytes(&throttle_s, &USBD_CDC_IF_tx_buffer[0]);
-				float_to_bytes(&aileron_s, &USBD_CDC_IF_tx_buffer[4]);
-				float_to_bytes(&elevator_s, &USBD_CDC_IF_tx_buffer[8]);
-				float_to_bytes(&rudder_s, &USBD_CDC_IF_tx_buffer[12]);
-				float_to_bytes(&armed, &USBD_CDC_IF_tx_buffer[16]);
-				float_to_bytes(&chan6, &USBD_CDC_IF_tx_buffer[20]);
-				USB_TX(24)
+				usb_buffer_tx.f[0] = throttle_s;
+				usb_buffer_tx.f[1] = aileron_s;
+				usb_buffer_tx.f[2] = elevator_s;
+				usb_buffer_tx.f[3] = rudder_s;
+				usb_buffer_tx.f[4] = armed;
+				usb_buffer_tx.f[5] = aux[0];
+				usb_buffer_tx.f[6] = aux[1];
+				usb_buffer_tx.f[7] = aux[2];
+				USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 8*4);
+				USBD_CDC_TransmitPacket(&USBD_device_handler);
 			}
 			
 			// Convert command into gyro rate
@@ -1421,38 +1500,51 @@ int main()
 				error_yaw_i = -error_yaw_i_max;
 			
 			// PID
+		#ifdef PID_TUNING
+			if (aux[0] < 0.33f)
+				p_tune = REG_PITCH_P * aux[2];
+			if ((aux[0] > 0.33f) && (aux[0] < 0.66f))
+				i_tune = (aux[1] > 0.33f) ? REG_PITCH_I * aux[2] : 0;
+			if (aux[0] > 0.66f)
+				d_tune = (aux[1] > 0.66f) ? REG_PITCH_D * aux[2] : 0;
+			pitch = (error_pitch * p_tune) + (error_pitch_i * i_tune) + ((error_pitch - error_pitch_z) * d_tune);
+			roll  = (error_roll  * p_tune) + (error_roll_i  * i_tune) + ((error_roll  - error_roll_z ) * d_tune);
+		#else
 			pitch = (error_pitch * REG_PITCH_P) + (error_pitch_i * REG_PITCH_I) + ((error_pitch - error_pitch_z) * REG_PITCH_D);
 			roll  = (error_roll  * REG_ROLL_P ) + (error_roll_i  * REG_ROLL_I ) + ((error_roll  - error_roll_z ) * REG_ROLL_D);
+		#endif
 			yaw   = (error_yaw   * REG_YAW_P  ) + (error_yaw_i   * REG_YAW_I  ) + ((error_yaw   - error_yaw_z  ) * REG_YAW_D);
 			
 			// Send pitch/roll/yaw to host
 			if ((REG_DEBUG__CASE == 6) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				float_to_bytes(&pitch, &USBD_CDC_IF_tx_buffer[0]);
-				float_to_bytes(&roll, &USBD_CDC_IF_tx_buffer[4]);
-				float_to_bytes(&yaw, &USBD_CDC_IF_tx_buffer[8]);
-				USB_TX(12)
+			#ifdef PID_TUNING
+				usb_buffer_tx.f[0] = p_tune;
+				usb_buffer_tx.f[1] = i_tune;
+				usb_buffer_tx.f[2] = d_tune;
+			#else
+				usb_buffer_tx.f[0] = pitch;
+				usb_buffer_tx.f[1] = roll;
+				usb_buffer_tx.f[2] = yaw;
+			#endif
+				USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 3*4);
+				USBD_CDC_TransmitPacket(&USBD_device_handler);
 			}
 			
 			// Convert throttle into motor command
 			throttle_rate = throttle_s * REG_THROTTLE_RANGE;
 			
-			// Attenuation when high throttle
-			throttle_gain = 1.0f - (throttle_s *  REG_THROTTLE_ATTEN);
-			
-			
 			// Motor matrix
-			motor[0] = throttle_rate + ((  roll + pitch - yaw) * throttle_gain);
-			motor[1] = throttle_rate + ((  roll - pitch + yaw) * throttle_gain);
-			motor[2] = throttle_rate + ((- roll - pitch - yaw) * throttle_gain);
-			motor[3] = throttle_rate + ((- roll + pitch + yaw) * throttle_gain);
+			motor[0] = throttle_rate + roll + pitch - yaw;
+			motor[1] = throttle_rate + roll - pitch + yaw;
+			motor[2] = throttle_rate - roll - pitch - yaw;
+			motor[3] = throttle_rate - roll + pitch + yaw;
 			
 			// Send motor actions to host
 			if ((REG_DEBUG__CASE == 7) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				for (i=0; i<4; i++)
-					float_to_bytes(&motor[i], &USBD_CDC_IF_tx_buffer[i*4]);
-				USB_TX(16)
+				USBD_CDC_SetTxBuffer(&USBD_device_handler, (uint8_t *)motor, 4*4);
+				USBD_CDC_TransmitPacket(&USBD_device_handler);
 			}
 			
 			// Offset and clip motor value
@@ -1465,12 +1557,7 @@ int main()
 				else if (motor_clip[i] > (int32_t)MOTOR_MAX)
 					motor_clip[i] = (int32_t)MOTOR_MAX;
 				
-				if (REG_MOTOR_TEST__SELECT)
-					motor_raw[i] = (REG_MOTOR_TEST__SELECT & (1 << i)) ? (uint32_t)REG_MOTOR_TEST__VALUE : 0;
-				else if (armed < 0.5f)
-					motor_raw[i] = 0;
-				else
-					motor_raw[i] = (uint32_t)motor_clip[i];
+				motor_raw[i] = (uint32_t)motor_clip[i];
 			}
 			
 			// Raise flag for motor command ready
@@ -1479,20 +1566,16 @@ int main()
 			// Send motor command to host
 			if ((REG_DEBUG__CASE == 8) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				for (i=0; i<4; i++)
-				{
-					USBD_CDC_IF_tx_buffer[i*2+0] = (uint8_t) motor_raw[i];
-					USBD_CDC_IF_tx_buffer[i*2+1] = (uint8_t)(motor_raw[i] >> 8);
-				}
-				USB_TX(8)
+				USBD_CDC_SetTxBuffer(&USBD_device_handler, (uint8_t *)motor_raw, 4*4);
+				USBD_CDC_TransmitPacket(&USBD_device_handler);
 			}
 			
 			// Toggle LED at rate of MPU flag
-			if (REG_CTRL__LED_SELECT == 2)
+			if ((REG_CTRL__LED_SELECT == 2) && !flag_mpu_cal)
 			{
 				if ((mpu_sample_count & 0x3FF) == 0)
 					GPIOB->BSRR = GPIO_BSRR_BR_5;
-				else if ((mpu_sample_count & 0x3FF) == 512)
+				else if ((mpu_sample_count & 0x3FF) == 0x1FF)
 					GPIOB->BSRR = GPIO_BSRR_BS_5;
 			}
 		}
@@ -1503,17 +1586,43 @@ int main()
 		{
 			flag_motor = 0;
 			
+			if (REG_MOTOR_TEST__SELECT)
+			{
+				for (i=0; i<4; i++)
+					motor_raw[i] = (REG_MOTOR_TEST__SELECT & (1 << i)) ? (uint32_t)REG_MOTOR_TEST__VALUE : 0;
+			}
+			else if ((armed < 0.5f) || (flag_mpu_timeout))
+			{
+				for (i=0; i<4; i++)
+					motor_raw[i] = 0;
+			}
+			
 			#ifdef ESC_DSHOT
 				dshot_encode(&motor_raw[0], motor1_dshot);
 				dshot_encode(&motor_raw[1], motor2_dshot);
 				dshot_encode(&motor_raw[2], motor3_dshot);
 				dshot_encode(&motor_raw[3], motor4_dshot);
-				TIM_DMA_EN
+				TIM2->CR1 = 0;
+				TIM3->CR1 = 0;
+				TIM2->CNT = 0;
+				TIM3->CNT = 0;
+				DMA1_Channel1->CCR &= ~DMA_CCR_EN;
+				DMA1_Channel2->CCR &= ~DMA_CCR_EN;
+				DMA1_Channel3->CCR &= ~DMA_CCR_EN;
+				DMA1_Channel7->CCR &= ~DMA_CCR_EN;
+				DMA1_Channel1->CNDTR = 17;
+				DMA1_Channel2->CNDTR = 17;
+				DMA1_Channel3->CNDTR = 17;
+				DMA1_Channel7->CNDTR = 17;
+				DMA1_Channel1->CCR |= DMA_CCR_EN;
+				DMA1_Channel2->CCR |= DMA_CCR_EN;
+				DMA1_Channel3->CCR |= DMA_CCR_EN;
+				DMA1_Channel7->CCR |= DMA_CCR_EN;
 			#else
-				TIM2->CCR2 = MOTOR_MAX + 1 - MOTOR_MIN - (motor_raw[0]>>1);
-				TIM2->CCR3 = MOTOR_MAX + 1 - MOTOR_MIN - (motor_raw[1]>>1);
-				TIM3->CCR3 = MOTOR_MAX + 1 - MOTOR_MIN - (motor_raw[2]>>1);
-				TIM3->CCR4 = MOTOR_MAX + 1 - MOTOR_MIN - (motor_raw[3]>>1);
+				TIM2->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[0];
+				TIM2->CCR3 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[1];
+				TIM3->CCR3 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[2];
+				TIM3->CCR4 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[3];
 			#endif
 			TIM2->CR1 |= TIM_CR1_CEN;
 			TIM3->CR1 |= TIM_CR1_CEN;
@@ -1540,8 +1649,9 @@ int main()
 			// Send VBAT to host
 			if ((REG_DEBUG__CASE == 3) && ((vbat_sample_count & REG_DEBUG__MASK) == 0))
 			{
-				float_to_bytes(&vbat, &USBD_CDC_IF_tx_buffer[0]);
-				USB_TX(4)
+				usb_buffer_tx.f[0] = vbat;
+				USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 4);
+				USBD_CDC_TransmitPacket(&USBD_device_handler);
 			}
 			
 			// Beep if VBAT too low
@@ -1553,39 +1663,35 @@ int main()
 		
 		/* Host command from USB -------------------------------------------------------*/
 		
-		REG_ERROR = ((uint32_t)radio_error_count << 16) | (uint32_t)mpu_error_count;
-		REG_TIME = ((uint32_t)time_process << 16) | (uint32_t)time_mpu;
-		
 		if (flag_host)
 		{
 			flag_host = 0;
 			
-			reg_addr = host_rx_buffer[1];
+			addr = usb_buffer_rx.addr;
 			
-			switch (host_rx_buffer[0])
+			switch (usb_buffer_rx.instr)
 			{
 				case 0: // REG read
 				{
-					if (reg_properties[reg_addr].is_float)
-						float_to_uint32(&regf[reg_addr], &val);
+					REG_ERROR = ((uint32_t)radio_error_count << 8) | (uint32_t)mpu_error_count;
+					REG_TIME = ((uint32_t)time_process << 16) | (uint32_t)time_mpu;
+					
+					if (reg_properties[addr].is_float)
+						usb_buffer_tx.f[0] = regf[addr];
 					else
-						val = reg[reg_addr];
-					USBD_CDC_IF_tx_buffer[0] = (uint8_t)((val >> 24) & 0xFF);
-					USBD_CDC_IF_tx_buffer[1] = (uint8_t)((val >> 16) & 0xFF);
-					USBD_CDC_IF_tx_buffer[2] = (uint8_t)((val >>  8) & 0xFF);
-					USBD_CDC_IF_tx_buffer[3] = (uint8_t)((val >>  0) & 0xFF);
-					USB_TX(4)
+						usb_buffer_tx.u32[0] = reg[addr];
+					USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 4);
+					USBD_CDC_TransmitPacket(&USBD_device_handler);
 					break;
 				}
 				case 1: // REG write
 				{
-					if (!reg_properties[reg_addr].read_only)
+					if (!reg_properties[addr].read_only)
 					{
-						val = ((uint32_t)host_rx_buffer[2] << 24) | ((uint32_t)host_rx_buffer[3] << 16) | ((uint32_t)host_rx_buffer[4] << 8) | (uint32_t)host_rx_buffer[5];
-						if (reg_properties[reg_addr].is_float)
-							uint32_to_float(&val, &regf[reg_addr]);
+						if (reg_properties[addr].is_float)
+							regf[addr] = usb_buffer_rx.data.f;
 						else
-							reg[reg_addr] = val;
+							reg[addr] = usb_buffer_rx.data.u32;
 						flag_reg = 1;
 					}
 					break;
@@ -1593,22 +1699,19 @@ int main()
 				case 2: // SPI read to MPU
 				{
 					flag_mpu_host_read = 1;
-					MpuRead(reg_addr,1);
+					MpuRead(addr,1);
 					break;
 				}
 				case 3: // SPI write to MPU
 				{
-					MpuWrite(reg_addr,host_rx_buffer[5]);
+					MpuWrite(addr,usb_buffer_rx.data.u8[3]);
 					break;
 				}
 				case 4: // Flash read
 				{
-					val = flash_r[reg_addr];
-					USBD_CDC_IF_tx_buffer[0] = (uint8_t)((val >> 24) & 0xFF);
-					USBD_CDC_IF_tx_buffer[1] = (uint8_t)((val >> 16) & 0xFF);
-					USBD_CDC_IF_tx_buffer[2] = (uint8_t)((val >>  8) & 0xFF);
-					USBD_CDC_IF_tx_buffer[3] = (uint8_t)((val >>  0) & 0xFF);
-					USB_TX(4)
+					usb_buffer_tx.u32[0] = flash_r[addr];
+					USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 4);
+					USBD_CDC_TransmitPacket(&USBD_device_handler);
 					break;
 				}
 				case 5: // Flash write
@@ -1619,8 +1722,8 @@ int main()
 						FLASH->KEYR = 0xCDEF89AB;
 					}
 					FLASH->CR |= FLASH_CR_PG;
-					flash_w[reg_addr*2] = ((uint16_t)host_rx_buffer[4] << 8) | (uint16_t)host_rx_buffer[5];
-					flash_w[reg_addr*2+1] = ((uint16_t)host_rx_buffer[2] << 8) | (uint16_t)host_rx_buffer[3];
+					flash_w[addr*2] = usb_buffer_rx.data.u16[0];
+					flash_w[addr*2+1] = usb_buffer_rx.data.u16[1];
 					while (FLASH->SR & FLASH_SR_BSY) {}
 					FLASH->CR &= ~FLASH_CR_PG;
 					break;

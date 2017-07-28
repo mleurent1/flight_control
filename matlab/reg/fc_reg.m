@@ -128,18 +128,27 @@ classdef fc_reg
 		function y = ERROR__MPU(obj,x)
 			r = obj.read(4);
 			if nargin < 2
-				y = bitshift(bitand(r, 65535), 0);
+				y = bitshift(bitand(r, 255), 0);
 			else
-				w = bitand(bitshift(x, 0), 65535) + bitand(r, 4294901760);
+				w = bitand(bitshift(x, 0), 255) + bitand(r, 4294967040);
 				obj.write(4,w);
 			end
 		end
 		function y = ERROR__RADIO(obj,x)
 			r = obj.read(4);
 			if nargin < 2
-				y = bitshift(bitand(r, 4294901760), -16);
+				y = bitshift(bitand(r, 65280), -8);
 			else
-				w = bitand(bitshift(x, 16), 4294901760) + bitand(r, 65535);
+				w = bitand(bitshift(x, 8), 65280) + bitand(r, 4294902015);
+				obj.write(4,w);
+			end
+		end
+		function y = ERROR__RF(obj,x)
+			r = obj.read(4);
+			if nargin < 2
+				y = bitshift(bitand(r, 16711680), -16);
+			else
+				w = bitand(bitshift(x, 16), 16711680) + bitand(r, 4278255615);
 				obj.write(4,w);
 			end
 		end
@@ -186,11 +195,13 @@ classdef fc_reg
 				obj.write(7,z);
 			end
 		end
-		function y = RECEIVER_BIND(obj,x)
+		function y = RADIO_FILTER_ALPHA(obj,x)
 			if nargin < 2
-				y = obj.read(8);
+				z = obj.read(8);
+				y = typecast(uint32(z), 'single');
 			else
-				obj.write(8,x);
+				z = typecast(single(x), 'uint32');
+				obj.write(8,z);
 			end
 		end
 		function y = PITCH_ROLL_EXPO(obj,x)
@@ -333,15 +344,6 @@ classdef fc_reg
 				obj.write(24,z);
 			end
 		end
-		function y = THROTTLE_ATTEN(obj,x)
-			if nargin < 2
-				z = obj.read(25);
-				y = typecast(uint32(z), 'single');
-			else
-				z = typecast(single(x), 'uint32');
-				obj.write(25,z);
-			end
-		end
 	end
 	properties
 		VERSION_addr = 0;
@@ -352,7 +354,7 @@ classdef fc_reg
 		TIME_addr = 5;
 		VBAT_addr = 6;
 		VBAT_MIN_addr = 7;
-		RECEIVER_BIND_addr = 8;
+		RADIO_FILTER_ALPHA_addr = 8;
 		PITCH_ROLL_EXPO_addr = 9;
 		YAW_EXPO_addr = 10;
 		MOTOR_START_addr = 11;
@@ -369,9 +371,8 @@ classdef fc_reg
 		YAW_P_addr = 22;
 		YAW_I_addr = 23;
 		YAW_D_addr = 24;
-		THROTTLE_ATTEN_addr = 25;
-		flash_addr_list = [0 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25];
-		flash_float_list = [0,1,0,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1];
-		flash_name_list = {'VERSION','VBAT_MIN','RECEIVER_BIND','PITCH_ROLL_EXPO','YAW_EXPO','MOTOR_START','MOTOR_ARMED','PITCH_ROLL_RATE','YAW_RATE','THROTTLE_RANGE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D','THROTTLE_ATTEN'};
+		flash_addr_list = [0 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24];
+		flash_float_list = [0,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1];
+		flash_name_list = {'VERSION','VBAT_MIN','RADIO_FILTER_ALPHA','PITCH_ROLL_EXPO','YAW_EXPO','MOTOR_START','MOTOR_ARMED','PITCH_ROLL_RATE','YAW_RATE','THROTTLE_RANGE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D'};
 	end
 end

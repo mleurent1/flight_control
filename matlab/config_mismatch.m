@@ -5,9 +5,9 @@ global ser
 
 for n = 1:length(fc.flash_addr_list)
 	fwrite(ser,[0,fc.flash_addr_list(n),0,0,0,0]);
-	r1 = sum(fread(ser,4) .* 2.^(24:-8:0)');
+	r1 = sum(fread(ser,4) .* 2.^(0:8:24)');
 	fwrite(ser,[4,fc.flash_addr_list(n),0,0,0,0]);
-	r2 = sum(fread(ser,4) .* 2.^(24:-8:0)');
+	r2 = sum(fread(ser,4) .* 2.^(0:8:24)');
 	if r1 ~= r2
 		if fc.flash_float_list(n)
 			f1 = typecast(uint32(r1),'single');

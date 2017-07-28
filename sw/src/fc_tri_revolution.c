@@ -7,7 +7,7 @@
 
 /* Private defines ------------------------------------*/
 
-#define VERSION 25
+#define VERSION 26
 
 #define RADIO_TYPE 0 // 0:IBUS, 1:SUMD, 2:SBUS
 
@@ -22,6 +22,7 @@
 #define VBAT_PERIOD 10 // ms
 #define VBAT_THRESHOLD 8.0f
 #define INTEGRAL_MAX 200.0f
+#define INTEGRAL_MAX_SERVO 500.0f
 #define COMMAND_ALPHA 0.1f
 #define REG_FLASH_ADDR 0x080E0000
 
@@ -33,7 +34,7 @@ struct ibus_frame_s {
 	uint16_t header;
 	uint16_t chan[14];
 	uint16_t checksum;
-};
+}; __attribute__ ((__packed__));
 
 struct sumd_frame_s {
 	uint8_t vendor_id;
@@ -192,6 +193,7 @@ void MpuRead(uint8_t addr, uint8_t size)
 	DMA2_Stream0->CR |= DMA_SxCR_EN;
 	DMA2_Stream3->CR |= DMA_SxCR_EN;
 	SPI1->CR1 |= SPI_CR1_SPE;
+	flag_mpu_host_read = 1;
 }
 
 void uint32_to_float(uint32_t* b, float* f)
@@ -620,6 +622,10 @@ int main()
 	GPIOA->MODER |= GPIO_MODER_MODER11_1 | GPIO_MODER_MODER12_1;
 	GPIOA->AFR[1] |= (10 << GPIO_AFRH_AFSEL11_Pos) | (10 << GPIO_AFRH_AFSEL12_Pos);
 	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR11 | GPIO_OSPEEDER_OSPEEDR12;
+	// A13: SWDIO, AF0
+	// A14: SWCLK, AF0
+	GPIOA->MODER |= GPIO_MODER_MODER13_1 | GPIO_MODER_MODER14_1;
+	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR13_1 | GPIO_OSPEEDER_OSPEEDR14_1;
 	// A15: SPI3 CS, AF6
 	// B0 : Servo 1
 	// B1 : Servo 2, TIM3_CH4, AF2, DMA1 Stream 2
@@ -896,7 +902,7 @@ int main()
 			// Max value of integral term
 			error_pitch_i_max = INTEGRAL_MAX / REG_PITCH_I;
 			error_roll_i_max = INTEGRAL_MAX / REG_ROLL_I;
-			error_yaw_i_max = INTEGRAL_MAX / REG_YAW_I;
+			error_yaw_i_max = INTEGRAL_MAX_SERVO / REG_YAW_I;
 			
 			// Beep test
 			if (REG_CTRL__BEEP_TEST)
@@ -1252,7 +1258,7 @@ int main()
 			throttle_gain = 1.0f - (throttle_s *  REG_THROTTLE_ATTEN);
 			
 			// Motor matrix
-			motor[0] = throttle_rate + ((  roll - pitch) * throttle_gain);
+			motor[0] = throttle_rate + ((+ roll - pitch) * throttle_gain);
 			motor[1] = throttle_rate + ((       + pitch) * throttle_gain);
 			motor[2] = throttle_rate + ((- roll - pitch) * throttle_gain);
 			servo = -yaw;
@@ -1417,7 +1423,6 @@ int main()
 				}
 				case 2: // SPI read to MPU
 				{
-					flag_mpu_host_read = 1;
 					MpuRead(addr,1);
 					break;
 				}

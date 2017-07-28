@@ -1,6 +1,7 @@
 //------ Include ------//
 
 #include "windows.h"
+#include "time.h"
 #include "ftd2xx.h"
 #include "mex.h"
 
@@ -18,12 +19,10 @@
 #define RETURN_ERROR   plhs[0] = mxCreateDoubleScalar(-1); return;
 #define RETURN_SUCCESS plhs[0] = mxCreateDoubleScalar(0); return;
 
-#define USB_TRANSFER_SIZE_MPSSE   65535 // in multiple of 64 bytes (default 4096)
-#define USB_TRANSFER_SIZE_SERIAL  384 // in multiple of 64 bytes (default 4096)
-#define DATA_TRANSFER_SIZE_MPSSE  (USB_TRANSFER_SIZE_MPSSE*62/64)
-#define DATA_TRANSFER_SIZE_SERIAL (USB_TRANSFER_SIZE_SERIAL*62/64)
-#define USB_LATENCY_TIMER_MPSSE   2 // in ms (default 16)
-#define USB_LATENCY_TIMER_SERIAL  4 // in ms (default 16)
+#define USB_TRANSFER_SIZE_MPSSE   65536
+#define USB_TRANSFER_SIZE_SERIAL  384
+#define USB_LATENCY_TIMER_MPSSE   2
+#define USB_LATENCY_TIMER_SERIAL  4
 
 #define DEVICES_NB_MAX 8
 
@@ -40,23 +39,28 @@
 //------ Global variables ------//
 
 static unsigned int DEVICE_INDEX = 0; // Index of current device
-static FT_HANDLE ftHandle [DEVICES_NB_MAX] = {0,0,0,0,0,0,0,0}; // Handle of FTDI devices
-static bool DEVICE_OPEN [DEVICES_NB_MAX] = {false,false,false,false,false,false,false,false}; // Devices opened
-static BYTE GPIOL_DIR [DEVICES_NB_MAX] = {0,0,0,0,0,0,0,0}; // GPIOL pin direction
-static BYTE GPIOL [DEVICES_NB_MAX] = {0,0,0,0,0,0,0,0}; // GPIOL state
-static BYTE GPIOH_DIR [DEVICES_NB_MAX] = {0,0,0,0,0,0,0,0}; // GPIOH pin direction
-static BYTE GPIOH [DEVICES_NB_MAX] = {0,0,0,0,0,0,0,0}; // GPIOH state
-static unsigned int CLOCK_DIVIDER [DEVICES_NB_MAX] = {0,0,0,0,0,0,0,0}; // Frequency = Master clock/(1+2*CLOCK_DIVIDER)
-static bool CLOCK_POLARITY [DEVICES_NB_MAX] = {false,false,false,false,false,false,false,false}; // 1: rising edge, 0: falling edge
-static bool CLOCK_PHASE [DEVICES_NB_MAX] = {false,false,false,false,false,false,false,false}; // 1: rising edge, 0: falling edge
-static bool HIGH_SPEED_DEVICE [DEVICES_NB_MAX] = {false,false,false,false,false,false,false,false};
+static FT_HANDLE    ftHandle          [DEVICES_NB_MAX] = {0,0,0,0,0,0,0,0}; // Handle of FTDI devices
+static bool         DEVICE_OPEN       [DEVICES_NB_MAX] = {false,false,false,false,false,false,false,false}; // Devices opened
+static BYTE         GPIOL_DIR         [DEVICES_NB_MAX]; // GPIOL pin direction
+static BYTE         GPIOL             [DEVICES_NB_MAX]; // GPIOL state
+static BYTE         GPIOH_DIR         [DEVICES_NB_MAX]; // GPIOH pin direction
+static BYTE         GPIOH             [DEVICES_NB_MAX]; // GPIOH state
+static unsigned int CLOCK_DIVIDER     [DEVICES_NB_MAX]; // Frequency = Master clock/(1+2*CLOCK_DIVIDER)
+static bool         CLOCK_POLARITY    [DEVICES_NB_MAX];
+static bool         CLOCK_PHASE       [DEVICES_NB_MAX];
+static bool         HIGH_SPEED_DEVICE [DEVICES_NB_MAX];
+static unsigned int BAUDRATE          [DEVICES_NB_MAX]; 
+static unsigned int USB_SIZE          [DEVICES_NB_MAX]; // USB request transfer size, in multiple of 64 bytes (default 4096)
+static unsigned int DATA_SIZE         [DEVICES_NB_MAX]; // Data request transfer size (USB transfer size*62/64)
+static unsigned int USB_LATENCY       [DEVICES_NB_MAX]; // Latency timer, in ms (default 16)
 
 //------ USB transaction function ------//
 
 int USB_transaction(FT_HANDLE ftHandle, BYTE * OutputBuffer, DWORD NumBytesToSend, BYTE * InputBuffer, DWORD NumBytesToRead, DWORD * NumBytesRead)
 {
 	FT_STATUS ftStatus;
-	unsigned long int ReadTimeoutCounter;
+	//unsigned long int ReadTimeoutCounter;
+	clock_t t0;
 	DWORD NumBytesSent;
 	DWORD NumBytesToRead1;
 	
@@ -72,13 +76,15 @@ int USB_transaction(FT_HANDLE ftHandle, BYTE * OutputBuffer, DWORD NumBytesToSen
 	}
 	
 	// Check USB Rx buffer status
-	ReadTimeoutCounter = 0;
+	//ReadTimeoutCounter = 0;
+	t0 = clock();
 	ftStatus = FT_GetQueueStatus(ftHandle, &NumBytesToRead1);
-	while ((NumBytesToRead1 != NumBytesToRead) && (ftStatus == FT_OK) && (ReadTimeoutCounter < 500))
+	//while ((NumBytesToRead1 != NumBytesToRead) && (ftStatus == FT_OK) && (ReadTimeoutCounter < 500))
+	while ((NumBytesToRead1 != NumBytesToRead) && (ftStatus == FT_OK) && ((clock()-t0) < CLOCKS_PER_SEC))
 	{
-		Sleep(1);
+		//Sleep(1);
 		ftStatus |= FT_GetQueueStatus(ftHandle, &NumBytesToRead1);
-		ReadTimeoutCounter++;
+		//ReadTimeoutCounter++;
 	}
 	if (NumBytesToRead1 != NumBytesToRead)
 	{
@@ -158,10 +164,18 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 		mexPrintf("ftdi('device', index)\n");
 		mexPrintf("	Set device identified by index as the current device in use.\n");
 		mexPrintf("	Return current device index.\n");
+		mexPrintf("ftdi('set_serial')\n");
+		mexPrintf("	Set the device in Serial mode.\n");
 		mexPrintf("ftdi('set_SyncBB')\n");
 		mexPrintf("	Set the device in Synchronous Bit Bang mode.\n");
 		mexPrintf("ftdi('set_MPSSE')\n");
 		mexPrintf("	Set the device in MPSSE mode.\n");
+		mexPrintf("ftdi('baud', baudrate)\n");
+		mexPrintf("	Set the Baudrate in bps for serial mode.\n");
+		mexPrintf("ftdi('USB_size', size)\n");
+		mexPrintf("	Set the USB IN request size in bytes (OUT request not supported, must be multiple of 64 bytes between 64 and 65536).\n");
+		mexPrintf("ftdi('USB_latency', time)\n");
+		mexPrintf("	Set the USB latency timer in ms (valid range: 2 - 255 ms).\n");
 		mexPrintf("ftdi('clock', frequency)\n");
 		mexPrintf("	Set the MPSSE clock frequency in Hz of the current device. \n");
 		mexPrintf("	Return frequency of the current device.\n");
@@ -284,6 +298,10 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 			CLOCK_DIVIDER [DEVICE_INDEX] = 0;
 			CLOCK_POLARITY[DEVICE_INDEX] = false;
 			CLOCK_PHASE   [DEVICE_INDEX] = false;
+			USB_SIZE      [DEVICE_INDEX] = 4096;
+			DATA_SIZE     [DEVICE_INDEX] = 4096*62/64;
+			USB_LATENCY   [DEVICE_INDEX] = 16;
+			BAUDRATE      [DEVICE_INDEX] = 115200;
 			
 			// Device init
 			ftStatus  = FT_ResetDevice(ftHandle[DEVICE_INDEX]); // Reset device
@@ -370,7 +388,7 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 		ERROR_IF(nrhs < 2, "Missing data to write", NULL)
 		ERROR_IF(mxGetM(prhs[1]) > 1 , "Data to write must be a line vector", NULL)
 		NumBytesToSend1 = (unsigned int) mxGetN(prhs[1]);
-		ERROR_IF(NumBytesToSend1 > DATA_TRANSFER_SIZE_SERIAL, "Write size must not exceed %d bytes", DATA_TRANSFER_SIZE_MPSSE)
+		ERROR_IF(NumBytesToSend1 > DATA_SIZE[DEVICE_INDEX], "Write size must not exceed %d bytes", DATA_SIZE[DEVICE_INDEX])
 		DataArray = mxGetPr(prhs[1]);
 		
 		NumBytesToSend = 0;
@@ -401,10 +419,13 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 	
 	else if (strcmp(CommandName, "set_serial") == 0)
 	{
-		ftStatus  = FT_SetBitMode(ftHandle[DEVICE_INDEX], 0, 0); // Reset mode to setting in EEPROM
-		ftStatus |= FT_SetUSBParameters(ftHandle[DEVICE_INDEX], USB_TRANSFER_SIZE_SERIAL, USB_TRANSFER_SIZE_SERIAL); // USB request transfer sizes
-		ftStatus |= FT_SetLatencyTimer(ftHandle[DEVICE_INDEX], USB_LATENCY_TIMER_SERIAL); // Latency timer
-		ftStatus |= FT_SetBaudRate(ftHandle[DEVICE_INDEX], 115200);
+		ftStatus  = FT_SetBitMode(ftHandle[DEVICE_INDEX], 0, FT_BITMODE_RESET); // Reset mode to setting in EEPROM
+		ftStatus |= FT_SetUSBParameters(ftHandle[DEVICE_INDEX], USB_TRANSFER_SIZE_SERIAL, 0); // USB request transfer sizes
+		USB_SIZE[DEVICE_INDEX] = USB_TRANSFER_SIZE_SERIAL;
+		DATA_SIZE[DEVICE_INDEX] = USB_TRANSFER_SIZE_SERIAL*62/64;
+		ftStatus |= FT_SetLatencyTimer(ftHandle[DEVICE_INDEX], USB_LATENCY_TIMER_SERIAL);
+		USB_LATENCY[DEVICE_INDEX] = USB_LATENCY_TIMER_SERIAL;
+		ftStatus |= FT_SetBaudRate(ftHandle[DEVICE_INDEX], BAUDRATE[DEVICE_INDEX]);
 		ftStatus |= FT_SetDataCharacteristics(ftHandle[DEVICE_INDEX], FT_BITS_8, FT_STOP_BITS_1, FT_PARITY_NONE);
 		ftStatus |= FT_SetFlowControl(ftHandle[DEVICE_INDEX], FT_FLOW_NONE, NULL, NULL);
 		ERROR_IF(ftStatus != FT_OK, "Failed to initialize Serial mode", NULL)
@@ -414,10 +435,13 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 
 	else if (strcmp(CommandName, "set_SyncBB") == 0)
 	{
-		ftStatus  = FT_SetBitMode(ftHandle[DEVICE_INDEX], 0, 0); // Reset mode to setting in EEPROM
-		ftStatus |= FT_SetBitMode(ftHandle[DEVICE_INDEX], PIN_TXD_MOSI | PIN_CTS_CSN | PIN_DTR_SCLK, 4); // Enable synchronous bit bang mode
-		ftStatus |= FT_SetUSBParameters(ftHandle[DEVICE_INDEX], USB_TRANSFER_SIZE_SERIAL, USB_TRANSFER_SIZE_SERIAL); // USB request transfer sizes
-		ftStatus |= FT_SetLatencyTimer(ftHandle[DEVICE_INDEX], USB_LATENCY_TIMER_SERIAL); // Latency timer
+		ftStatus  = FT_SetBitMode(ftHandle[DEVICE_INDEX], 0, FT_BITMODE_RESET); // Reset mode to setting in EEPROM
+		ftStatus |= FT_SetBitMode(ftHandle[DEVICE_INDEX], PIN_TXD_MOSI | PIN_CTS_CSN | PIN_DTR_SCLK, FT_BITMODE_SYNC_BITBANG); // Enable synchronous bit bang mode
+		ftStatus |= FT_SetUSBParameters(ftHandle[DEVICE_INDEX], USB_TRANSFER_SIZE_SERIAL, 0); // USB request transfer sizes
+		USB_SIZE[DEVICE_INDEX] = USB_TRANSFER_SIZE_SERIAL;
+		DATA_SIZE[DEVICE_INDEX] = USB_TRANSFER_SIZE_SERIAL*62/64;
+		ftStatus |= FT_SetLatencyTimer(ftHandle[DEVICE_INDEX], USB_LATENCY_TIMER_SERIAL);
+		USB_LATENCY[DEVICE_INDEX] = USB_LATENCY_TIMER_SERIAL;
 		ftStatus |= FT_SetDivisor(ftHandle[DEVICE_INDEX], 0); // Maximum baudrate
 		ERROR_IF(ftStatus != FT_OK, "Failed to initialize Synchronous Bit Bang mode", NULL)
 			
@@ -434,10 +458,13 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 	
 	else if (strcmp(CommandName, "set_MPSSE") == 0)
 	{
-		ftStatus  = FT_SetBitMode(ftHandle[DEVICE_INDEX], 0, 0); // Reset mode to setting in EEPROM
-		ftStatus |= FT_SetBitMode(ftHandle[DEVICE_INDEX], 0, 2); // Enable MPSSE mode
-		ftStatus |= FT_SetUSBParameters(ftHandle[DEVICE_INDEX], USB_TRANSFER_SIZE_MPSSE, USB_TRANSFER_SIZE_MPSSE); // USB request transfer sizes
-		ftStatus |= FT_SetLatencyTimer(ftHandle[DEVICE_INDEX], USB_LATENCY_TIMER_MPSSE); // Latency timer
+		ftStatus  = FT_SetBitMode(ftHandle[DEVICE_INDEX], 0, FT_BITMODE_RESET); // Reset mode to setting in EEPROM
+		ftStatus |= FT_SetBitMode(ftHandle[DEVICE_INDEX], 0, FT_BITMODE_MPSSE); // Enable MPSSE mode
+		ftStatus |= FT_SetUSBParameters(ftHandle[DEVICE_INDEX], USB_TRANSFER_SIZE_MPSSE, 0); // USB request transfer sizes
+		USB_SIZE[DEVICE_INDEX] = USB_TRANSFER_SIZE_MPSSE;
+		DATA_SIZE[DEVICE_INDEX] = USB_TRANSFER_SIZE_MPSSE*62/64;
+		ftStatus |= FT_SetLatencyTimer(ftHandle[DEVICE_INDEX], USB_LATENCY_TIMER_MPSSE);
+		USB_LATENCY[DEVICE_INDEX] = USB_LATENCY_TIMER_MPSSE;
 		ERROR_IF(ftStatus != FT_OK, "Failed to initialize MPSSE mode", NULL)
 		
 		//------ Synchronize the MPSSE by sending bad commands AA ------//
@@ -507,6 +534,49 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 		RETURN_SUCCESS
 	}
 	
+	//------ Baudrate ------//
+	
+	else if (strcmp(CommandName, "baud") == 0)
+	{
+		if (nrhs > 1)
+		{
+			BAUDRATE[DEVICE_INDEX] = (unsigned int)mxGetScalar(prhs[1]);
+			ftStatus = FT_SetBaudRate(ftHandle[DEVICE_INDEX], BAUDRATE[DEVICE_INDEX]);
+			ERROR_IF(ftStatus != FT_OK, "Failed to set Baudrate", NULL)
+		}
+		plhs[0] = mxCreateDoubleScalar(BAUDRATE[DEVICE_INDEX]);
+		return;
+	}
+	
+	//------ USB request transfer size ------//
+	
+	else if (strcmp(CommandName, "USB_size") == 0)
+	{
+		if (nrhs > 1)
+		{
+			USB_SIZE[DEVICE_INDEX] = (unsigned int)mxGetScalar(prhs[1]);
+			DATA_SIZE[DEVICE_INDEX] = USB_SIZE[DEVICE_INDEX]*62/64;
+			ftStatus = FT_SetUSBParameters(ftHandle[DEVICE_INDEX], USB_SIZE[DEVICE_INDEX], 0);
+			ERROR_IF(ftStatus != FT_OK, "Failed to set USB request transfer size", NULL)
+		}
+		plhs[0] = mxCreateDoubleScalar(USB_SIZE[DEVICE_INDEX]);
+		return;
+	}
+	
+	//------ USB latency timer ------//
+	
+	else if (strcmp(CommandName, "USB_latency") == 0)
+	{
+		if (nrhs > 1)
+		{
+			USB_LATENCY[DEVICE_INDEX] = (unsigned int)mxGetScalar(prhs[1]);
+			ftStatus = FT_SetLatencyTimer(ftHandle[DEVICE_INDEX], USB_LATENCY[DEVICE_INDEX]);
+			ERROR_IF(ftStatus != FT_OK, "Failed to set USB latency timer", NULL)
+		}
+		plhs[0] = mxCreateDoubleScalar(USB_LATENCY[DEVICE_INDEX]);
+		return;
+	}
+	
 	//------ Clock frequency ------//
 	
 	else if (strcmp(CommandName, "clock") == 0)
@@ -549,10 +619,7 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 	{
 		if (nrhs > 1)
 			CLOCK_POLARITY[DEVICE_INDEX] = (bool)mxGetScalar(prhs[1]);
-		
-		// Mex output
 		plhs[0] = mxCreateDoubleScalar((double)CLOCK_POLARITY[DEVICE_INDEX]);
-		
 		return;
 	}
 	
@@ -679,7 +746,7 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 		ERROR_IF(nrhs < 2, "Missing data to write", NULL)
 		ERROR_IF(mxGetM(prhs[1]) > 1 , "Data to write must be a line vector", NULL)
 		SpiNumBytesToSend = (unsigned int) mxGetN(prhs[1]);
-		ERROR_IF(SpiNumBytesToSend > DATA_TRANSFER_SIZE_MPSSE, "Write size must not exceed %d bytes", DATA_TRANSFER_SIZE_MPSSE)
+		ERROR_IF(SpiNumBytesToSend > DATA_SIZE[DEVICE_INDEX], "Write size must not exceed %d bytes", DATA_SIZE[DEVICE_INDEX])
 		DataArray = mxGetPr(prhs[1]);
 		
 		NumBytesToSend = 0;
@@ -774,13 +841,13 @@ void mexFunction (int nlhs, mxArray * plhs[], int nrhs, const mxArray * prhs[])
 		}
 		OutputBuffer1[NumBytesToSend1++] = PIN_CTS_CSN;
 		
-		// Divide into burst of DATA_TRANSFER_SIZE_SERIAL bytes
+		// Divide into burst of DATA_SIZE bytes
 		NumBytesToSend = 0;
 		NumBytesRead1 = 0;
 		for (i = 0; i < NumBytesToSend1; i++)
 		{
 			OutputBuffer[NumBytesToSend++] = OutputBuffer1[i];
-			if ((i == (NumBytesToSend1-1)) || ((NumBytesToSend % DATA_TRANSFER_SIZE_SERIAL) == 0))
+			if ((i == (NumBytesToSend1-1)) || ((NumBytesToSend % DATA_SIZE[DEVICE_INDEX]) == 0))
 			{
 				// USB transaction
 				Status = USB_transaction(ftHandle[DEVICE_INDEX], OutputBuffer, NumBytesToSend, InputBuffer, NumBytesToSend, &NumBytesRead);

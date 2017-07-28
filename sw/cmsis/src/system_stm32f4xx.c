@@ -201,7 +201,7 @@ void SystemInit(void)
   SCB->VTOR = FLASH_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal FLASH */
 #endif
 	
-	//######## CUSTOM PART #######
+	/* CUSTOM PART --------------------------------------------*/
 	
 	// Enable XTAL oscillator
 	RCC->CR |= RCC_CR_HSEON;
@@ -227,6 +227,8 @@ void SystemInit(void)
 	
 	// Configure SysTick to generate interrrupt every 1ms
 	SysTick_Config(96000);
+		
+	/* End of CUSTOM PART --------------------------------------------*/
 }
 
 /**

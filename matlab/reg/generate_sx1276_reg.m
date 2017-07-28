@@ -2,7 +2,7 @@ clear
 
 %% parse definitions
 
-f = fopen('../../sw/inc/mpu_reg.h','r');
+f = fopen('../../sw/inc/sx1276_reg.h','r');
 
 n = 0;
 
@@ -16,9 +16,9 @@ while ischar(l)
 
 		r = strtrim(r(8:end)); % Remove #define
 		
-      % Remove prefix MPU_
-      if strcmp(r(1:4),'MPU_')
-         r = strtrim(r(5:end));
+      % Remove prefix SX1276_
+      if strcmp(r(1:7),'SX1276_')
+         r = strtrim(r(8:end));
       end
       
 		i = strfind(r,'__'); % Subfied test
@@ -27,11 +27,11 @@ while ischar(l)
 			
 			n = n + 1;
 			
-			i = strfind(r,' ');
+			i = strfind(r,' 0x');
 			reg(n).name = strtrim(r(1:i-1));
-			r = r(i+1:end);
+			r = r(i+3:end);
 
-			reg(n).addr = str2double(strtrim(r));
+			reg(n).addr = hex2dec(strtrim(r));
 			reg(n).subf = {};
 			reg(n).mask = [];
 
@@ -64,12 +64,12 @@ while ischar(l)
 							
 			else
 				
-				i = strfind(r,'(1 <<');
+				i = strfind(r,'(0x01 <<');
 				
 				if i
 					
 					subname = strtrim(r(1:i-1));
-					r = r(i+5:end);
+					r = r(i+8:end);
 					
 					i = strfind(r,')');
 					expo = str2double(strtrim(r(1:i-1)));
@@ -95,18 +95,18 @@ fclose(f);
 
 %% generate matlab register class
 
-f = fopen('mpu_reg.m','w');
+f = fopen('sx1276_reg.m','w');
 
-fprintf(f,'classdef mpu_reg\n');
+fprintf(f,'classdef sx1276_reg\n');
 fprintf(f,'\tmethods\n');
 fprintf(f,'\t\tfunction data = read(obj,addr)\n');
 fprintf(f,'\t\t\tglobal ser\n');
-fprintf(f,'\t\t\tfwrite(ser,[2,addr,0,0,0,0]);\n');
+fprintf(f,'\t\t\tfwrite(ser,[7,addr,0,0,0,0]);\n');
 fprintf(f,'\t\t\tdata = fread(ser,1);\n');
 fprintf(f,'\t\tend\n');
 fprintf(f,'\t\tfunction write(obj,addr,data)\n');
 fprintf(f,'\t\t\tglobal ser\n');
-fprintf(f,'\t\t\tfwrite(ser,[3,addr,0,0,0,data]);\n');
+fprintf(f,'\t\t\tfwrite(ser,[8,addr,0,0,0,data]);\n');
 fprintf(f,'\t\tend\n');
 
 for n = 1:length(reg)
