@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#define NB_REG 25
+#define NB_REG 26
 
 #define REG_VERSION reg[0]
 #define REG_CTRL reg[1]
@@ -19,6 +19,7 @@
 #define REG_ERROR__MPU (uint16_t)((reg[4] & 255U) >> 0)
 #define REG_ERROR__RADIO (uint16_t)((reg[4] & 65280U) >> 8)
 #define REG_ERROR__RF (uint16_t)((reg[4] & 16711680U) >> 16)
+#define REG_ERROR__CRC (uint16_t)((reg[4] & 4278190080U) >> 24)
 #define REG_TIME reg[5]
 #define REG_TIME__MPU (uint16_t)((reg[5] & 65535U) >> 0)
 #define REG_TIME__LOOP (uint16_t)((reg[5] & 4294901760U) >> 16)
@@ -41,6 +42,7 @@
 #define REG_YAW_P regf[22]
 #define REG_YAW_I regf[23]
 #define REG_YAW_D regf[24]
+#define REG_GYRO_FILT reg[25]
 
 typedef struct
 {

@@ -2,12 +2,24 @@ classdef fc_reg
 	methods
 		function data = read(obj,addr)
 			global ser
-			fwrite(ser,[0,addr,0,0,0,0]);
-			data = sum(fread(ser,4) .* 2.^(0:8:24)');
+			if obj.method
+				r = sx1272_receive(0);
+				sx1272_send([0,addr,0,0,0,0],1);
+				sleep(300);
+				r = sx1272_receive(0);
+				data = sum(r.payload(3:6) .* 2.^(0:8:24));
+			else
+				fwrite(ser,[0,addr,0,0,0,0]);
+				data = sum(fread(ser,4) .* 2.^(0:8:24)');
+			end
 		end
 		function write(obj,addr,data)
 			global ser
-			fwrite(ser,[1,addr,floor(mod(double(data) ./ 2.^(0:8:24),2^8))]);
+			if obj.method
+				sx1272_send([1,addr,floor(mod(double(data) ./ 2.^(0:8:24),2^8))],1);
+			else
+				fwrite(ser,[1,addr,floor(mod(double(data) ./ 2.^(0:8:24),2^8))]);
+			end
 		end
 		function y = VERSION(obj,x)
 			if nargin < 2
@@ -149,6 +161,15 @@ classdef fc_reg
 				y = bitshift(bitand(r, 16711680), -16);
 			else
 				w = bitand(bitshift(x, 16), 16711680) + bitand(r, 4278255615);
+				obj.write(4,w);
+			end
+		end
+		function y = ERROR__CRC(obj,x)
+			r = obj.read(4);
+			if nargin < 2
+				y = bitshift(bitand(r, 4278190080), -24);
+			else
+				w = bitand(bitshift(x, 24), 4278190080) + bitand(r, 16777215);
 				obj.write(4,w);
 			end
 		end
@@ -344,8 +365,16 @@ classdef fc_reg
 				obj.write(24,z);
 			end
 		end
+		function y = GYRO_FILT(obj,x)
+			if nargin < 2
+				y = obj.read(25);
+			else
+				obj.write(25,x);
+			end
+		end
 	end
 	properties
+		method = 0;
 		VERSION_addr = 0;
 		CTRL_addr = 1;
 		MOTOR_TEST_addr = 2;
@@ -371,8 +400,9 @@ classdef fc_reg
 		YAW_P_addr = 22;
 		YAW_I_addr = 23;
 		YAW_D_addr = 24;
-		flash_addr_list = [0 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24];
-		flash_float_list = [0,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1];
-		flash_name_list = {'VERSION','VBAT_MIN','RADIO_FILTER_ALPHA','PITCH_ROLL_EXPO','YAW_EXPO','MOTOR_START','MOTOR_ARMED','PITCH_ROLL_RATE','YAW_RATE','THROTTLE_RANGE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D'};
+		GYRO_FILT_addr = 25;
+		flash_addr_list = [0 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25];
+		flash_float_list = [0,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,0];
+		flash_name_list = {'VERSION','VBAT_MIN','RADIO_FILTER_ALPHA','PITCH_ROLL_EXPO','YAW_EXPO','MOTOR_START','MOTOR_ARMED','PITCH_ROLL_RATE','YAW_RATE','THROTTLE_RANGE','PITCH_P','PITCH_I','PITCH_D','ROLL_P','ROLL_I','ROLL_D','YAW_P','YAW_I','YAW_D','GYRO_FILT'};
 	end
 end

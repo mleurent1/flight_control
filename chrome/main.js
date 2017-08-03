@@ -6,12 +6,26 @@ var txBuf = new ArrayBuffer(6);
 var txBufUint8 = new Uint8Array(txBuf);
 var rxBuf = new ArrayBuffer(4);
 var rxBufUint8 = new Uint8Array(rxBuf);
-var rxBufUint32 = new Uint32Array(rxBuf,0,1);
-var rxBufFloat32 = new Float32Array(rxBuf,0,1);
+var rxBufUint32 = new Uint32Array(rxBuf);
+var rxBufFloat32 = new Float32Array(rxBuf);
 var precisionFloat = 1e6;
 var motorTestOn = false;
 var currentPlot = 0;
 var canvas;
+var ctx;
+var histLen = 0;
+var sensorBuf = new ArrayBuffer(7*4);
+var sensorBufPrev = new ArrayBuffer(7*4);
+var sensorBufFloat32 = new Float32Array(sensorBuf);
+var sensorBufPrevFloat32 = new Float32Array(sensorBufPrev);
+var receiverBuf = new ArrayBuffer(8*4);
+var receiverBufPrev = new ArrayBuffer(8*4);
+var receiverBufFloat32 = new Float32Array(receiverBuf);
+var receiverBufPrevFloat32 = new Float32Array(receiverBufPrev);
+var motorBuf = new ArrayBuffer(4*4);
+var motorBufPrev = new ArrayBuffer(4*4);
+var motorBufInt32 = new Int32Array(motorBuf);
+var motorBufPrevInt32 = new Int32Array(motorBufPrev);
 
 onload = function(){
 	document.getElementById('readcfg').onclick = readConfig;
@@ -35,6 +49,7 @@ onload = function(){
 	document.getElementById('yawp').onchange = function(){ regFloat32Write(22,parseFloat(this.value)); log('Updated Yaw P'); };
 	document.getElementById('yawi').onchange = function(){ regFloat32Write(23,parseFloat(this.value)); log('Updated Yaw I'); };
 	document.getElementById('yawd').onchange = function(){ regFloat32Write(24,parseFloat(this.value)); log('Updated Yaw D'); };
+	document.getElementById('gyrofilt').onchange = function(){ regUint32Write(25,parseInt(this.value)); log('Updated Gyro/Accel Filter'); };
 	document.getElementById('motorsel1').onclick = motorTest;
 	document.getElementById('motorsel2').onclick = motorTest;
 	document.getElementById('motorsel3').onclick = motorTest;
@@ -42,10 +57,33 @@ onload = function(){
 	document.getElementById('motortest').value = 0;
 	document.getElementById('motortest').onchange = motorTest;
 	
-	canvas = document.getElementById("plot").getContext("2d");
+	canvas = document.getElementById("plot");
+	ctx = canvas.getContext("2d");
 	
 	chrome.serial.getDevices(openPort);
-	openPlot();
+	
+	document.getElementById('plotsel').innerHTML = '';
+	
+	var sel = document.createElement('select');
+	sel.id = 'plotselin';
+	
+	var opt = document.createElement('option');
+	opt.value = 'Gyros';
+	opt.innerHTML = 'Gyros';
+	sel.appendChild(opt);
+	opt = document.createElement('option');
+	opt.value = 'Receiver';
+	opt.innerHTML = 'Receiver';
+	sel.appendChild(opt);
+	opt = document.createElement('option');
+	opt.value = 'Motors';
+	opt.innerHTML = 'Motors';
+	sel.appendChild(opt);
+	
+	document.getElementById('plotsel').appendChild(sel);
+	
+	document.getElementById('plotstart').value = 'Plot';
+	document.getElementById('plotstart').onclick = startPlot;
 }
 
 onclose = function(){
@@ -111,46 +149,153 @@ function serRead(info){
 	rxBufUint8[3] = x[3];
 }
 
-function openPlot(){
-	document.getElementById('plotsel').innerHTML = '';
+function updatePlotSensor(info){
+	var i;
+	var x = new Float32Array(info.data);
+	var c = ["rgb(255,0,0)", "rgb(0,255,0)", "rgb(0,0,255)"]
 	
-	var sel = document.createElement('select');
-	sel.onchange = function(){
-		currentPlot = this.value;
+	for (i=0; i<3; i++){
+		sensorBufPrevFloat32[i] = sensorBufFloat32[i];
+		sensorBufFloat32[i] = -(x[i] / 4000) * canvas.height;
+	}
+	
+	if (histLen < canvas.width){
 		
-		document.getElementById('plotsel').removeChild(document.getElementById('plotselin'));
-		document.getElementById('plotsel').innerHTML = currentPlot;
+		for (i=0; i<3; i++){
+			ctx.beginPath();
+			ctx.strokeStyle = c[i];
+			ctx.moveTo(histLen, sensorBufPrevFloat32[i] + canvas.height/2);
+			ctx.lineTo(histLen+1, sensorBufFloat32[i] + canvas.height/2);
+			ctx.stroke();
+		}
 		
-		document.getElementById('plotstart').value = 'Stop';
-		document.getElementById('plotstart').onclick = openPlot;
-	};
-	sel.id = 'plotselin';
+		histLen = histLen + 1;
+		
+	} else {
+		
+		var imgData = ctx.getImageData(1,0,canvas.width-1,canvas.height);
+		ctx.clearRect(canvas.width-1,0,1,canvas.height);
+		ctx.putImageData(imgData,0,0);
+		
+		for (i=0; i<3; i++){
+			ctx.beginPath();
+			ctx.strokeStyle = c[i];
+			ctx.moveTo(canvas.width-2, sensorBufPrevFloat32[i] + canvas.height/2);
+			ctx.lineTo(canvas.width-1, sensorBufFloat32[i] + canvas.height/2);
+			ctx.stroke();
+		}
+		
+	}
+}
+
+function updatePlotReceiver(info){
+	var i;
+	var x = new Float32Array(info.data);
+	var c = ["rgb(255,0,0)", "rgb(0,255,0)", "rgb(0,0,255)", "rgb(255,255,0)", "rgb(0,255,255)", "rgb(255,0,255)", "rgb(0,0,0)", "rgb(128,128,128)"];
 	
-	var opt = document.createElement('option');
-	opt.value = '';
-	opt.innerHTML = 'Select Plot';
-	sel.appendChild(opt);
-	opt = document.createElement('option');
-	opt.value = 'Gyros';
-	opt.innerHTML = 'Gyros';
-	sel.appendChild(opt);
-	opt = document.createElement('option');
-	opt.value = 'Accel';
-	opt.innerHTML = 'Accel';
-	sel.appendChild(opt);
-	opt = document.createElement('option');
-	opt.value = 'Receiver';
-	opt.innerHTML = 'Receiver';
-	sel.appendChild(opt);
-	opt = document.createElement('option');
-	opt.value = 'Motors';
-	opt.innerHTML = 'Motors';
-	sel.appendChild(opt);
+	for (i=0; i<8; i++){
+		receiverBufPrevFloat32[i] = receiverBufFloat32[i];
+		receiverBufFloat32[i] = -x[i] * (canvas.height/2);
+	}
 	
-	document.getElementById('plotsel').appendChild(sel);
+	if (histLen < canvas.width){
+		
+		for (i=0; i<8; i++){
+			ctx.beginPath();
+			ctx.strokeStyle = c[i];
+			ctx.moveTo(histLen, receiverBufPrevFloat32[i] + canvas.height/2);
+			ctx.lineTo(histLen+1, receiverBufFloat32[i] + canvas.height/2);
+			ctx.stroke();
+		}
+		
+		histLen = histLen + 1;
+		
+	} else {
+		
+		var imgData = ctx.getImageData(1,0,canvas.width-1,canvas.height);
+		ctx.clearRect(canvas.width-1,0,1,canvas.height);
+		ctx.putImageData(imgData,0,0);
+		
+		for (i=0; i<8; i++){
+			ctx.beginPath();
+			ctx.strokeStyle = c[i];
+			ctx.moveTo(canvas.width-2, receiverBufPrevFloat32[i] + canvas.height/2);
+			ctx.lineTo(canvas.width-1, receiverBufFloat32[i] + canvas.height/2);
+			ctx.stroke();
+		}
+		
+	}
+}
+
+function updatePlotMotor(info){
+	var i;
+	var x = new Int32Array(info.data);
+	var c = ["rgb(255,0,0)", "rgb(0,255,0)", "rgb(0,0,255)", "rgb(0,255,255)"];
+	
+	for (i=0; i<4; i++){
+		motorBufPrevInt32[i] = motorBufInt32[i];
+		motorBufInt32[i] = -(x[i] / 2000) * (canvas.height/4);
+	}
+	
+	if (histLen < canvas.width){
+		
+		for (i=0; i<4; i++){
+			ctx.beginPath();
+			ctx.strokeStyle = c[i];
+			ctx.moveTo(histLen, motorBufPrevInt32[i] + (canvas.height*(i+1)/4));
+			ctx.lineTo(histLen+1, motorBufInt32[i] + (canvas.height*(i+1)/4));
+			ctx.stroke();
+		}
+		
+		histLen = histLen + 1;
+		
+	} else {
+		
+		var imgData = ctx.getImageData(1,0,canvas.width-1,canvas.height);
+		ctx.clearRect(canvas.width-1,0,1,canvas.height);
+		ctx.putImageData(imgData,0,0);
+		
+		for (i=0; i<4; i++){
+			ctx.beginPath();
+			ctx.strokeStyle = c[i];
+			ctx.moveTo(canvas.width-2, motorBufPrevInt32[i] + (canvas.height*(i+1)/4));
+			ctx.lineTo(canvas.width-1, motorBufInt32[i] + (canvas.height*(i+1)/4));
+			ctx.stroke();
+		}
+		
+	}
+}
+
+function startPlot(){
+	document.getElementById('plotstart').value = 'Stop';
+	document.getElementById('plotstart').onclick = stopPlot;
+	
+	ctx.clearRect(0,0,canvas.width,canvas.height);
+	
+	histLen = 0;
+	chrome.serial.onReceive.removeListener(serRead);
+	if (document.getElementById('plotselin').value == 'Gyros'){
+		chrome.serial.onReceive.addListener(updatePlotSensor);
+		regUint32Write(3,2+(31<<8));
+	} else if (document.getElementById('plotselin').value == 'Receiver'){
+		chrome.serial.onReceive.addListener(updatePlotReceiver);
+		regUint32Write(3,5+(31<<8));
+	}
+	else if (document.getElementById('plotselin').value == 'Motors'){
+		chrome.serial.onReceive.addListener(updatePlotMotor);
+		regUint32Write(3,8+(31<<8));
+	}
+}
+
+function stopPlot(){
+	regUint32Write(3,0);
+	chrome.serial.onReceive.removeListener(updatePlotSensor);
+	chrome.serial.onReceive.removeListener(updatePlotReceiver);
+	chrome.serial.onReceive.removeListener(updatePlotMotor);
+	chrome.serial.onReceive.addListener(serRead);
 	
 	document.getElementById('plotstart').value = 'Plot';
-	document.getElementById('plotstart').onclick = function(){  };
+	document.getElementById('plotstart').onclick = startPlot;
 }
 
 function readConfig(){
@@ -179,6 +324,7 @@ function readConfig(){
 	regFloat32Read(22,'yawp');
 	regFloat32Read(23,'yawi');
 	regFloat32Read(24,'yawd');
+	regUint32Read(25,'gyrofilt');
 	
 	setTimeout(function(){ log('Read config DONE');}, timeout);
 }
@@ -208,6 +354,7 @@ function writeConfig(){
 	regFloat32Flash(22);
 	regFloat32Flash(23);
 	regFloat32Flash(24);
+	regUint32Flash(25);
 	
 	setTimeout(function(){ log('Write config DONE');}, timeout);
 }
@@ -248,6 +395,7 @@ function clearElements(){
 	document.getElementById('yawp').value = [];
 	document.getElementById('yawi').value = [];
 	document.getElementById('yawd').value = [];
+	document.getElementById('gyrofilt').value = [];
 	document.getElementById('motorsel1').checked = 0;
 	document.getElementById('motorsel2').checked = 0;
 	document.getElementById('motorsel3').checked = 0;

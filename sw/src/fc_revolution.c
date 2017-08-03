@@ -8,9 +8,9 @@
 
 /* Private defines ------------------------------------*/
 
-#define VERSION 26
+#define VERSION 27
 
-#define ESC_DSHOT
+//#define ESC_DSHOT
 #define RADIO_TYPE 0 // 0:IBUS, 1:SUMD, 2:SBUS
 
 #define SERVO_MAX 2000 // us
@@ -96,6 +96,22 @@ typedef union {
 	float f[8];
 } usb_buffer_tx_t;
 
+struct rf_buffer_s{
+	uint8_t instr;
+	uint8_t addr;
+	union { 
+		uint8_t u8[4];
+		uint16_t u16[2];
+		uint32_t u32;
+		float f;
+	} data;
+} __attribute__ ((__packed__));
+
+typedef union {
+	uint8_t bytes[6];
+	struct rf_buffer_s buf;
+} rf_buffer_t;
+
 /* Private variables --------------------------------------*/
 
 volatile uint32_t tick;
@@ -104,14 +120,15 @@ usb_buffer_tx_t usb_buffer_tx;
 usb_buffer_rx_t usb_buffer_rx;
 volatile uint8_t spi1_rx_buffer[16];
 volatile uint8_t spi1_tx_buffer[16];
-volatile uint8_t spi3_rx_buffer[32];
-volatile uint8_t spi3_tx_buffer[32];
-uint16_t time[5];
+volatile uint8_t spi3_rx_buffer[7];
+volatile uint8_t spi3_tx_buffer[7];
+uint16_t time[4];
 volatile float armed;
 uint8_t mpu_error_count;
 uint8_t radio_error_count;
 uint8_t rf_error_count;
-uint8_t spi_read_val;
+uint8_t mpu_data_w[15];
+uint8_t rf_data_w[6];
 
 volatile _Bool flag_mpu;
 volatile _Bool flag_radio;
@@ -124,11 +141,9 @@ volatile _Bool flag_mpu_cal;
 volatile _Bool flag_vbat;
 volatile _Bool flag_armed_locked;
 volatile _Bool flag_mpu_timeout;
-
-volatile _Bool flag_rf_rx_done;
+volatile _Bool flag_rf_rxtx_done;
 volatile _Bool flag_rf_host_read;
 volatile _Bool flag_rf;
-volatile uint8_t flag_rf_read;
 
 volatile _Bool flag_beep_user;
 volatile _Bool flag_beep_radio;
@@ -155,8 +170,10 @@ volatile _Bool flag_beep_vbat;
 #define DMA_CLEAR_ALL_FLAGS_6 (DMA_HIFCR_CTCIF6 | DMA_HIFCR_CHTIF6 | DMA_HIFCR_CTEIF6 |DMA_HIFCR_CDMEIF6 |DMA_HIFCR_CFEIF6)
 #define DMA_CLEAR_ALL_FLAGS_7 (DMA_HIFCR_CTCIF7 | DMA_HIFCR_CHTIF7 | DMA_HIFCR_CTEIF7 |DMA_HIFCR_CDMEIF7 |DMA_HIFCR_CFEIF7)
 
-#define MPU_WRITE(addr,data) MpuWrite(addr, data); wait_ms(1);
-#define RF_WRITE(addr,data) RfWrite(addr, data); wait_ms(1);
+#define MPU_WRITE(addr,data) mpu_data_w[0] = data; MpuWrite(addr, mpu_data_w, 1); wait_ms(1);
+#define RF_WRITE(addr,data) rf_data_w[0] = data; RfWrite(addr, rf_data_w, 1); wait_ms(1);
+#define MPU_WRITE_1(addr,data) mpu_data_w[0] = data; MpuWrite(addr, mpu_data_w, 1);
+#define RF_WRITE_1(addr,data) rf_data_w[0] = data; RfWrite(addr, rf_data_w, 1);
 
 /* Private functions ------------------------------------------------*/
 
@@ -174,12 +191,12 @@ void HAL_Delay(__IO uint32_t Delay)
 	wait_ms(Delay);
 }
 
-void MpuWrite(uint8_t addr, uint8_t data)
+void MpuWrite(uint8_t addr, uint8_t * data, uint8_t size)
 {
 	spi1_tx_buffer[0] = addr & 0x7F;
-	spi1_tx_buffer[1] = data;
-	DMA2_Stream0->NDTR = 2;
-	DMA2_Stream3->NDTR = 2;
+	memcpy((uint8_t *)&spi1_tx_buffer[1], data, size);
+	DMA2_Stream0->NDTR = size+1;
+	DMA2_Stream3->NDTR = size+1;
 	DMA2_Stream0->CR |= DMA_SxCR_EN;
 	DMA2_Stream3->CR |= DMA_SxCR_EN;
 	SPI1->CR1 |= SPI_CR1_SPE;
@@ -195,12 +212,12 @@ void MpuRead(uint8_t addr, uint8_t size)
 	SPI1->CR1 |= SPI_CR1_SPE;
 }
 
-void RfWrite(uint8_t addr, uint8_t data)
+void RfWrite(uint8_t addr, uint8_t * data, uint8_t size)
 {
 	spi3_tx_buffer[0] = 0x80 | (addr & 0x7F);
-	spi3_tx_buffer[1] = data;
-	DMA1_Stream0->NDTR = 2;
-	DMA1_Stream7->NDTR = 2;
+	memcpy((uint8_t *)&spi3_tx_buffer[1], data, size);
+	DMA1_Stream0->NDTR = size+1;
+	DMA1_Stream7->NDTR = size+1;
 	DMA1_Stream0->CR |= DMA_SxCR_EN;
 	DMA1_Stream7->CR |= DMA_SxCR_EN;
 	SPI3->CR1 |= SPI_CR1_SPE;
@@ -214,6 +231,28 @@ void RfRead(uint8_t addr, uint8_t size)
 	DMA1_Stream0->CR |= DMA_SxCR_EN;
 	DMA1_Stream7->CR |= DMA_SxCR_EN;
 	SPI3->CR1 |= SPI_CR1_SPE;
+}
+
+void radio_synch(void)
+{
+	// Disable DMA and error interrupt
+	USART1->CR1 &= ~USART_CR1_UE;			
+	USART1->CR3 = 0;
+	USART1->CR1 |= USART_CR1_UE;
+	
+	// Synchonise on IDLE character
+	USART1->SR;
+	USART1->DR;
+	TIM7->CNT = 0;
+	while (((USART1->SR & USART_SR_IDLE) == 0) && (TIM7->CNT < 50000))
+		USART1->DR;
+	
+	// Enable DMA and error interrupt
+	USART1->CR1 &= ~USART_CR1_UE;
+	USART1->CR3 = USART_CR3_DMAR | USART_CR3_EIE;
+	USART1->CR1 |= USART_CR1_UE;
+	DMA2_Stream5->NDTR = sizeof(radio_frame);
+	DMA2_Stream5->CR |= DMA_SxCR_EN;
 }
 
 void dshot_encode(volatile uint32_t* val, volatile uint32_t buf[17])
@@ -274,10 +313,7 @@ void SysTick_Handler()
 void EXTI0_IRQHandler() 
 {
 	EXTI->PR = EXTI_PR_PR0; // Clear pending request
-	
-	flag_rf_rx_done = 1;
-	
-	RfRead(SX1276_IRQ_FLAGS,1);
+	flag_rf_rxtx_done = 1;
 }
 
 /*--- Sample valid from MPU ---*/
@@ -385,14 +421,18 @@ void SPI3_IRQHandler()
 /*--- End of RF SPI receive ---*/
 void DMA1_Stream0_IRQHandler() 
 {
-	_Bool error = 0;
-	
 	// Check DMA transfer error
 	if (DMA1->LISR & DMA_LISR_TEIF0)
-	{
 		rf_error_count++;
-		error = 1;
+	else if (flag_rf_host_read)
+	{
+		flag_rf_host_read = 0;
+		usb_buffer_tx.u8[0] = spi3_rx_buffer[1];
+		USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 1);
+		USBD_CDC_TransmitPacket(&USBD_device_handler);
 	}
+	else
+		flag_rf = 1;
 	
 	// Disable DMA
 	DMA1_Stream0->CR &= ~DMA_SxCR_EN;
@@ -402,49 +442,6 @@ void DMA1_Stream0_IRQHandler()
 	
 	// Disable SPI
 	SPI3->CR1 &= ~SPI_CR1_SPE;
-	
-	if (!error)
-	{
-		if (flag_rf_rx_done)
-		{
-			flag_rf_rx_done = 0;
-			if (spi3_rx_buffer[1] & SX1276_IRQ_FLAGS__PAYLOAD_CRC_ERROR)
-			{
-				rf_error_count++;
-				flag_rf_read = 0;
-			}
-			else
-				flag_rf_read = 1;
-			RfWrite(SX1276_IRQ_FLAGS, 0xFF);
-		}
-		else if (flag_rf_read == 1)
-		{
-			flag_rf_read = 2;
-			RfRead(SX1276_FIFO_RX_CURRENT_ADDR,1);
-		}
-		else if (flag_rf_read == 2)
-		{
-			flag_rf_read = 3;
-			RfWrite(SX1276_FIFO_ADDR_PTR, spi3_rx_buffer[1]);
-		}
-		else if (flag_rf_read == 3)
-		{
-			flag_rf_read = 4;
-			RfRead(SX1276_FIFO,16);
-		}
-		else if (flag_rf_read == 4)
-		{
-			flag_rf_read = 0;
-			flag_rf = 1;
-		}
-		else if (flag_rf_host_read)
-		{
-			flag_rf_host_read = 0;
-			usb_buffer_tx.u8[0] = spi3_rx_buffer[1];
-			USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 1);
-			USBD_CDC_TransmitPacket(&USBD_device_handler);
-		}
-	}
 }
 
 /*--- RF SPI DMA Transfer error ---*/
@@ -542,6 +539,16 @@ void TIM8_UP_TIM13_IRQHandler()
 	flag_vbat = 1;
 }
 
+/*--- RF tempo ---*/
+void TIM8_TRG_COM_TIM14_IRQHandler()
+{
+	TIM14->SR &= ~TIM_SR_UIF;
+	TIM14->CNT = 0;
+	TIM14->CR1 = 0;
+	
+	RF_WRITE_1(SX1276_OP_MODE, SX1276_OP_MODE__MODE(3) | SX1276_OP_MODE__LONG_RANGE_MODE);
+}
+
 /*--- USB interrupt ---*/
 void OTG_FS_IRQHandler(void)
 {
@@ -630,7 +637,7 @@ int main()
 	volatile uint32_t motor3_dshot[17];
 	volatile uint32_t motor4_dshot[17];
 	
-	volatile float vbat_acc;
+	float vbat_acc;
 	float vbat;
 	uint16_t vbat_sample_count;
 	
@@ -648,6 +655,10 @@ int main()
 	_Bool armed_unlock_step1;
 	_Bool radio_check;
 	
+	uint8_t sx1276_sequence;
+	rf_buffer_t rf_buffer;
+	uint8_t crc_error_count;
+	
 	/* Variable init ---------------------------------------*/
 	
 	flag_mpu = 0;
@@ -656,16 +667,14 @@ int main()
 	flag_host = 0;
 	flag_reg = 1;
 	flag_mpu_host_read = 0;
-	flag_radio_synch = 1;
+	flag_radio_synch = 0;
 	flag_mpu_cal = 1;
 	flag_vbat = 0;
 	flag_armed_locked = 1;
 	flag_mpu_timeout = 0;
-	
-	flag_rf_rx_done = 0;
+	flag_rf_rxtx_done = 0;
 	flag_rf_host_read = 0;
 	flag_rf = 0;
-	flag_rf_read = 0;
 
 	flag_beep_user = 0;
 	flag_beep_radio = 0;
@@ -717,6 +726,8 @@ int main()
 	armed_unlock_step1 = 0;
 	
 	rf_error_count = 0;
+	sx1276_sequence = 0;
+	crc_error_count = 0;
 	
 	/* Register init -----------------------------------*/
 	
@@ -749,7 +760,7 @@ int main()
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
 	RCC->APB1ENR |= RCC_APB1ENR_SPI3EN;
 	// Timer clock enable
-	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM4EN | RCC_APB1ENR_TIM5EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN | RCC_APB1ENR_TIM12EN | RCC_APB1ENR_TIM13EN;
+	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM4EN | RCC_APB1ENR_TIM5EN | RCC_APB1ENR_TIM6EN | RCC_APB1ENR_TIM7EN | RCC_APB1ENR_TIM12EN | RCC_APB1ENR_TIM13EN | RCC_APB1ENR_TIM14EN;
 	// System configuration controller clock enable (to manage external interrupt line connection to GPIOs)
 	RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
 	// DMA clock enable
@@ -933,7 +944,7 @@ int main()
 	TIM5->CCER = TIM_CCER_CC2E | TIM_CCER_CC4E;
 	TIM5->CCMR1 = (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
 	TIM5->CCMR2 = (6 << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC4PE;
-#else	
+#else
 	// One-pulse mode for OneShot125
 	TIM2->CR1 = TIM_CR1_OPM;
 	TIM2->PSC = 3-1;
@@ -983,6 +994,11 @@ int main()
 	TIM13->ARR = VBAT_PERIOD;
 	TIM13->DIER = TIM_DIER_UIE;
 	//TIM13->CR1 = TIM_CR1_CEN;
+	
+	// RF tempo
+	TIM14->PSC = 48000-1; // 1ms
+	TIM14->ARR = 200;
+	TIM14->DIER = TIM_DIER_UIE;
 	
 	/* UART ---------------------------------------------------*/
 
@@ -1035,6 +1051,7 @@ int main()
 	NVIC_EnableIRQ(TIM6_DAC_IRQn);
 	NVIC_EnableIRQ(TIM8_BRK_TIM12_IRQn);
 	NVIC_EnableIRQ(TIM8_UP_TIM13_IRQn);
+	NVIC_EnableIRQ(TIM8_TRG_COM_TIM14_IRQn);
 	NVIC_EnableIRQ(OTG_FS_IRQn);
 	
 	NVIC_SetPriority(EXTI0_IRQn,0);
@@ -1051,6 +1068,7 @@ int main()
 	NVIC_SetPriority(TIM6_DAC_IRQn,0);
 	NVIC_SetPriority(TIM8_BRK_TIM12_IRQn,0);
 	NVIC_SetPriority(TIM8_UP_TIM13_IRQn,0);
+	NVIC_SetPriority(TIM8_TRG_COM_TIM14_IRQn,0);
 	NVIC_SetPriority(OTG_FS_IRQn,16);
 
 	/* USB ----------------------------------------------------------*/
@@ -1071,11 +1089,16 @@ int main()
 	wait_ms(100);
 	//MPU_WRITE(MPU_PWR_MGMT_2, MPU_PWR_MGMT_2__STDBY_XA | MPU_PWR_MGMT_2__STDBY_YA | MPU_PWR_MGMT_2__STDBY_ZA); // Disable accelerometers
 	//MPU_WRITE(MPU_SMPLRT_DIV, 7); // Sample rate = Fs/(x+1)
-	MPU_WRITE(MPU_CFG, MPU_CFG__DLPF_CFG(3)); // Filter ON => Fs=1kHz, else 8kHz
+	if ((REG_GYRO_FILT < 1) || (REG_GYRO_FILT > 6))
+		REG_GYRO_FILT = 1;
+	MPU_WRITE(MPU_CFG, MPU_CFG__DLPF_CFG(REG_GYRO_FILT)); // Filter ON => Fs=1kHz, else 8kHz
 	MPU_WRITE(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
 	MPU_WRITE(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
 	wait_ms(100); // wait for filter to settle
 	MPU_WRITE(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
+	
+	SPI1->CR1 &= ~SPI_CR1_BR_Msk;
+	SPI1->CR1 |= 1 << SPI_CR1_BR_Pos; // SPI clock = clock APB2/2 = 48MHz/4 = 12MHz
 	
 	/* RF init -----------------------------------------------------*/
 	
@@ -1091,21 +1114,22 @@ int main()
 	RF_WRITE(SX1276_FR_MSB, 216);
 	RF_WRITE(SX1276_FR_MID, 64);
 	RF_WRITE(SX1276_FR_LSB, 0);
-	//RF_WRITE(SX1276_PA_CONFIG, SX1276_PA_CONFIG__OUTPUT_POWER() | SX1276_PA_CONFIG__MAX_POWER() | SX1276_PA_CONFIG__PA_SELECT);
+	RF_WRITE(SX1276_PA_CONFIG, SX1276_PA_CONFIG__OUTPUT_POWER(0) | SX1276_PA_CONFIG__PA_SELECT);
 	RF_WRITE(SX1276_PA_RAMP, 3);
 	RF_WRITE(SX1276_LNA, SX1276_LNA__LNA_BOOST_HF(2) | SX1276_LNA__LNA_GAIN(1));
-	//RF_WRITE(SX1276_MODEM_CONFIG_1, SX1276_MODEM_CONFIG_1__CODING_RATE(1) | SX1276_MODEM_CONFIG_1__BW(7));
+	RF_WRITE(SX1276_MODEM_CONFIG_1, SX1276_MODEM_CONFIG_1__IMPLICIT_HEADER_MODE_ON | SX1276_MODEM_CONFIG_1__CODING_RATE(1) | SX1276_MODEM_CONFIG_1__BW(7));
 	RF_WRITE(SX1276_MODEM_CONFIG_2, SX1276_MODEM_CONFIG_2__RX_PAYLOAD_CRC_ON | SX1276_MODEM_CONFIG_2__SPREADING_FACTOR(7));
+	RF_WRITE(SX1276_PAYLOAD_LENGTH, 6);
 	RF_WRITE(SX1276_MODEM_CONFIG_3, SX1276_MODEM_CONFIG_3__AGC_AUTO_ON);
 	RF_WRITE(SX1276_OP_MODE, SX1276_OP_MODE__LONG_RANGE_MODE | SX1276_OP_MODE__MODE(5));
-
+	
+	/* Radio frame synchronisation -------------------------------------------------*/
+	
+	radio_synch();
+	
 	/* -----------------------------------------------------------------------------------*/
 	
-	SPI1->CR1 &= ~SPI_CR1_BR_Msk;
-	SPI1->CR1 |= 1 << SPI_CR1_BR_Pos; // SPI clock = clock APB2/2 = 48MHz/4 = 12MHz
-	
 	EXTI->IMR = EXTI_IMR_MR4 | EXTI_IMR_MR0; // Enable external interrupts now
-	
 	SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk; // Disable Systick interrupt, not needed anymore (but can still use COUNTFLAG)
 
 	/* Main loop ---------------------------------------------------------------------
@@ -1199,25 +1223,7 @@ int main()
 		if (flag_radio_synch)
 		{
 			flag_radio_synch = 0;
-			
-			// Disable DMA
-			USART1->CR1 &= ~USART_CR1_UE;			
-			USART1->CR3 &= ~USART_CR3_DMAR;
-			USART1->CR1 |= USART_CR1_UE;
-			
-			// Synchonise on IDLE character
-			USART1->SR;
-			USART1->DR;
-			time[4] = TIM7->CNT + 15000;
-			while (((USART1->SR & USART_SR_IDLE) == 0) && (TIM7->CNT < time[4]))
-				USART1->DR;
-			
-			// Enable DMA
-			USART1->CR1 &= ~USART_CR1_UE;
-			USART1->CR3 |= USART_CR3_DMAR;
-			USART1->CR1 |= USART_CR1_UE;
-			DMA2_Stream5->NDTR = sizeof(radio_frame);
-			DMA2_Stream5->CR |= DMA_SxCR_EN;
+			radio_synch();
 		}
 		
 		/* Process radio commands -----------------------------------------------------*/
@@ -1361,7 +1367,7 @@ int main()
 			}
 			
 			// Beep if requested
-			if (aux[1] > 0.5f)
+			if (aux[0] > 0.5f)
 				flag_beep_user = 1;
 			else
 				flag_beep_user = 0;
@@ -1692,7 +1698,7 @@ int main()
 			{
 				case 0: // REG read
 				{
-					REG_ERROR = ((uint32_t)rf_error_count << 16) | ((uint32_t)radio_error_count << 8) | (uint32_t)mpu_error_count;
+					REG_ERROR = ((uint32_t)crc_error_count << 24) | ((uint32_t)rf_error_count << 16) | ((uint32_t)radio_error_count << 8) | (uint32_t)mpu_error_count;
 					REG_TIME = ((uint32_t)time_process << 16) | (uint32_t)time_mpu;
 					
 					if (reg_properties[addr].is_float)
@@ -1723,7 +1729,7 @@ int main()
 				}
 				case 3: // SPI write to MPU
 				{
-					MpuWrite(addr,usb_buffer_rx.data.u8[3]);
+					MPU_WRITE_1(addr, usb_buffer_rx.data.u8[3]);
 					break;
 				}
 				case 4: // Flash read
@@ -1767,20 +1773,127 @@ int main()
 				}
 				case 8: // SPI write to RF
 				{
-					RfWrite(addr,usb_buffer_rx.data.u8[3]);
+					RF_WRITE_1(addr, usb_buffer_rx.data.u8[3]);
 					break;
 				}
 			}
 		}
 		
-		/* Rf receive -------------------------------------------------------*/
+		/* RF receive -------------------------------------------------------*/
+		
+		if (flag_rf_rxtx_done)
+		{
+			flag_rf_rxtx_done = 0;
+			
+			if (sx1276_sequence == 0)
+			{
+				RfRead(SX1276_IRQ_FLAGS, 1);
+				sx1276_sequence = 1;
+			}
+			else
+			{
+				RF_WRITE_1(SX1276_IRQ_FLAGS, 0xFF);
+				sx1276_sequence = 8;
+			}
+		}
 		
 		if (flag_rf)
 		{
 			flag_rf = 0;
 			
-			USBD_CDC_SetTxBuffer(&USBD_device_handler, (uint8_t *)&spi3_rx_buffer[1], 16);
-			USBD_CDC_TransmitPacket(&USBD_device_handler);
+			switch (sx1276_sequence)
+			{
+				case 1:
+				{
+					if (spi3_rx_buffer[1] & SX1276_IRQ_FLAGS__PAYLOAD_CRC_ERROR)
+					{
+						crc_error_count++;
+						sx1276_sequence = 0;
+					}
+					else
+						sx1276_sequence = 2;
+					RF_WRITE_1(SX1276_IRQ_FLAGS, 0xFF);
+					break;
+				}
+				case 2:
+				{
+					RfRead(SX1276_FIFO_RX_CURRENT_ADDR, 1);
+					sx1276_sequence = 3;
+					break;
+				}
+				case 3:
+				{
+					RF_WRITE_1(SX1276_FIFO_ADDR_PTR, spi3_rx_buffer[1]);
+					sx1276_sequence = 4;
+					break;
+				}
+				case 4:
+				{
+					RfRead(SX1276_FIFO, 6);
+					sx1276_sequence = 5;
+					break;
+				}
+				case 5:
+				{
+					for (i=0; i<6; i++)
+						rf_buffer.bytes[i] = spi3_rx_buffer[i+1];
+					addr = rf_buffer.buf.addr;
+					
+					if (rf_buffer.buf.instr == 0)
+					{
+						REG_ERROR = ((uint32_t)crc_error_count << 24) | ((uint32_t)rf_error_count << 16) | ((uint32_t)radio_error_count << 8) | (uint32_t)mpu_error_count;
+						REG_TIME = ((uint32_t)time_process << 16) | (uint32_t)time_mpu;
+						
+						if (reg_properties[addr].is_float)
+							rf_buffer.buf.data.f = regf[addr];
+						else
+							rf_buffer.buf.data.u32 = reg[addr];
+						RF_WRITE_1(SX1276_FIFO_ADDR_PTR, 0x80);
+						sx1276_sequence = 6;
+					}
+					else if (rf_buffer.buf.instr == 1)
+					{
+						if (!reg_properties[addr].read_only)
+						{
+							if (reg_properties[addr].is_float)
+								regf[addr] = rf_buffer.buf.data.f;
+							else
+								reg[addr] = rf_buffer.buf.data.u32;
+						}
+						sx1276_sequence = 0;
+						flag_reg = 1;
+					}
+					else
+						sx1276_sequence = 0;
+					
+					break;
+				}
+				case 6:
+				{
+					RfWrite(SX1276_FIFO, rf_buffer.bytes, 6);
+					sx1276_sequence = 7;
+					break;
+				}
+				case 7:
+				{
+					RF_WRITE_1(SX1276_DIO_MAPPING_1, SX1276_DIO_MAPPING_1__DIO0_MAPPING(1));
+					TIM14->CR1 = TIM_CR1_CEN;
+					sx1276_sequence = 255;
+					break;
+				}
+				case 8:
+				{
+					RF_WRITE_1(SX1276_DIO_MAPPING_1, SX1276_DIO_MAPPING_1__DIO0_MAPPING(0));
+					sx1276_sequence = 9;
+					break;
+				}
+				case 9:
+				{
+					RF_WRITE_1(SX1276_OP_MODE, SX1276_OP_MODE__MODE(5) | SX1276_OP_MODE__LONG_RANGE_MODE);
+					sx1276_sequence = 0;
+					break;
+				}
+			}
 		}
 		
 		/*------------------------------------------------------------------*/

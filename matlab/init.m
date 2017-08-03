@@ -15,12 +15,17 @@ mpu = mpu_reg;
 rf = sx1276_reg;
 
 delete(instrfindall);
-ser = serial('COM11');
+ser = serial('COM19');
 ser.BaudRate = 115200;
 ser.Timeout = 1;
 fopen(ser);
 
-ftdi('close');
+% ftdi('close');
 % ftdi('open',0);
-% ftdi('set_MPSSE');
+% n = 1;
+% while (ftdi('set_MPSSE') < 0) && (n <= 3)
+%    n = n + 1;
+% end
 % ftdi('clock',1e6);
+% 
+% sx1272_start;

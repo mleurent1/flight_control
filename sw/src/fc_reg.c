@@ -12,7 +12,7 @@ reg_properties_t reg_properties[NB_REG] =
 	{1, 0, 0, 0}, // ERROR
 	{1, 0, 0, 0}, // TIME
 	{1, 0, 1, 0}, // VBAT
-	{0, 1, 1, 1097229926}, // VBAT_MIN
+	{0, 1, 1, 1097649357}, // VBAT_MIN
 	{0, 1, 1, 1036831949}, // RADIO_FILTER_ALPHA
 	{0, 1, 1, 1082130432}, // PITCH_ROLL_EXPO
 	{0, 1, 1, 1077936128}, // YAW_EXPO
@@ -29,5 +29,6 @@ reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 1, 0}, // ROLL_D
 	{0, 1, 1, 1086324736}, // YAW_P
 	{0, 1, 1, 1008981770}, // YAW_I
-	{0, 1, 1, 0} // YAW_D
+	{0, 1, 1, 0}, // YAW_D
+	{0, 1, 0, 1} // GYRO_FILT
 };

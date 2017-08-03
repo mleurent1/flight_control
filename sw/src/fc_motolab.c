@@ -7,10 +7,10 @@
 
 /* Private defines ------------------------------------*/
 
-#define VERSION 26
+#define VERSION 27
 
-//#define MPU_SPI
-//#define ESC_DSHOT
+#define MPU_SPI
+#define ESC_DSHOT
 #define RADIO_TYPE 0 // 0:IBUS, 1:SUMD, 2:SBUS
 
 #define SERVO_MAX 2000 // us
@@ -27,8 +27,8 @@
 #define REG_FLASH_ADDR 0x0803F800
 
 //#define DEBUG
-#define PID_TUNING
-#define DISABLE_BEEPER_ON_PA7
+//#define PID_TUNING
+//#define DISABLE_BEEPER_ON_PA7
 
 /* Private types --------------------------------------*/
 
@@ -108,10 +108,11 @@ volatile uint8_t spi2_rx_buffer[16];
 volatile uint8_t spi2_tx_buffer[16];
 volatile uint8_t i2c2_rx_buffer[15];
 volatile uint8_t i2c2_tx_buffer[2];
-uint16_t time[5];
+uint16_t time[4];
 volatile float armed;
 uint8_t mpu_error_count;
 uint8_t radio_error_count;
+uint8_t mpu_data_w[15];
 
 volatile _Bool flag_mpu;
 volatile _Bool flag_radio;
@@ -141,7 +142,8 @@ volatile _Bool flag_beep_vbat;
 
 /* Private macros ---------------------------------------------------*/
 
-#define MPU_WRITE(addr,data) MpuWrite(addr, data); wait_ms(1);
+#define MPU_WRITE(addr,data) mpu_data_w[0] = data; MpuWrite(addr, mpu_data_w, 1); wait_ms(1);
+#define MPU_WRITE_1(addr,data) mpu_data_w[0] = data; MpuWrite(addr, mpu_data_w, 1);
 
 /* Private functions ------------------------------------------------*/
 
@@ -161,12 +163,12 @@ void HAL_Delay(__IO uint32_t Delay)
 
 #ifdef MPU_SPI
 
-	void MpuWrite(uint8_t addr, uint8_t data)
+	void MpuWrite(uint8_t addr, uint8_t * data, uint8_t size)
 	{
 		spi2_tx_buffer[0] = addr & 0x7F;
-		spi2_tx_buffer[1] = data;
-		DMA1_Channel4->CNDTR = 2;
-		DMA1_Channel5->CNDTR = 2;
+		memcpy((uint8_t *)&spi2_tx_buffer[1], data, size);
+		DMA1_Channel4->CNDTR = size+1;
+		DMA1_Channel5->CNDTR = size+1;
 		DMA1_Channel4->CCR |= DMA_CCR_EN;
 		DMA1_Channel5->CCR |= DMA_CCR_EN;
 		SPI2->CR1 |= SPI_CR1_SPE;
@@ -184,15 +186,15 @@ void HAL_Delay(__IO uint32_t Delay)
 
 #else
 
-	void MpuWrite(uint8_t addr, uint8_t data)
+	void MpuWrite(uint8_t addr, uint8_t * data, uint8_t size)
 	{
 		i2c2_tx_buffer[0] = addr;
-		i2c2_tx_buffer[1] = data;
+		memcpy((uint8_t *)&i2c2_tx_buffer[1], data, size);
 		DMA1_Channel5->CNDTR = 0;
-		DMA1_Channel4->CNDTR = 2;
+		DMA1_Channel4->CNDTR = size+1;
 		DMA1_Channel4->CCR |= DMA_CCR_EN;
 		I2C2->CR2 &= ~(I2C_CR2_RD_WRN | I2C_CR2_NBYTES_Msk);
-		I2C2->CR2 |= (I2C_CR2_NBYTES_Msk & (2 << I2C_CR2_NBYTES_Pos)) | I2C_CR2_START;
+		I2C2->CR2 |= (I2C_CR2_NBYTES_Msk & ((uint32_t)size+1) << I2C_CR2_NBYTES_Pos)) | I2C_CR2_START;
 	}
 
 	void MpuRead(uint8_t addr, uint8_t size)
@@ -206,6 +208,28 @@ void HAL_Delay(__IO uint32_t Delay)
 	}
 
 #endif
+
+void radio_synch(void)
+{
+	// Disable DMA and error interrupt
+	USART2->CR1 &= ~USART_CR1_UE;			
+	USART2->CR3 = 0;
+	USART2->CR1 |= USART_CR1_UE;
+	
+	// Synchonise on IDLE character
+	USART2->RDR;
+	USART2->ICR = USART_ICR_IDLECF;
+	TIM7->CNT = 0;
+	while (((USART2->ISR & USART_ISR_IDLE) == 0) && (TIM7->CNT < 50000))
+		USART2->RDR;
+	
+	// Enable DMA and error interrupt
+	USART2->CR1 &= ~USART_CR1_UE;
+	USART2->CR3 = USART_CR3_DMAR | USART_CR3_EIE;
+	USART2->CR1 |= USART_CR1_UE;
+	DMA1_Channel6->CNDTR = sizeof(radio_frame);
+	DMA1_Channel6->CCR |= DMA_CCR_EN;
+}
 
 void dshot_encode(volatile uint32_t* val, volatile uint32_t buf[17])
 {
@@ -615,7 +639,7 @@ int main()
 	volatile uint32_t motor3_dshot[17];
 	volatile uint32_t motor4_dshot[17];
 	
-	volatile float vbat_acc;
+	float vbat_acc;
 	float vbat;
 	uint16_t vbat_sample_count;
 	
@@ -647,7 +671,7 @@ int main()
 	flag_host = 0;
 	flag_reg = 1;
 	flag_mpu_host_read = 0;
-	flag_radio_synch = 1;
+	flag_radio_synch = 0;
 	flag_mpu_cal = 1;
 	flag_vbat = 0;
 	flag_armed_locked = 1;
@@ -827,6 +851,7 @@ int main()
 	// B5 : Red LED, need open-drain
 	GPIOB->MODER |= GPIO_MODER_MODER5_0;
 	GPIOB->OTYPER |= GPIO_OTYPER_OT_5;
+	GPIOB->BSRR = GPIO_BSRR_BS_5;
 	// B6 : UART1 Tx, NOT USED
 	// B7 : UART1 Rx, NOT USED
 	// B10: UART3 Tx, AF7, NOT USED
@@ -851,19 +876,19 @@ int main()
 	DMA1_Channel4->CPAR = (uint32_t)&(SPI2->DR);
 
 	// SPI2 Tx
-	DMA1_Channel5->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL | DMA_CCR_TEIE;
+	DMA1_Channel5->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL_1 | DMA_CCR_TEIE;
 	DMA1_Channel5->CMAR = (uint32_t)spi2_tx_buffer;
 	DMA1_Channel5->CPAR = (uint32_t)&(SPI2->DR);
 #else
-	// I2C2 Tx
-	DMA1_Channel4->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL_0 | DMA_CCR_TEIE;
-	DMA1_Channel4->CMAR = (uint32_t)i2c2_tx_buffer;
-	DMA1_Channel4->CPAR = (uint32_t)&(I2C2->TXDR);
-
 	// I2C2 Rx
-	DMA1_Channel5->CCR = DMA_CCR_MINC | DMA_CCR_PL | DMA_CCR_TCIE | DMA_CCR_TEIE;
+	DMA1_Channel5->CCR = DMA_CCR_MINC | DMA_CCR_PL_0 | DMA_CCR_TCIE | DMA_CCR_TEIE;
 	DMA1_Channel5->CMAR = (uint32_t)i2c2_rx_buffer;
 	DMA1_Channel5->CPAR = (uint32_t)&(I2C2->RXDR);
+
+	// I2C2 Tx
+	DMA1_Channel4->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL_1 | DMA_CCR_TEIE;
+	DMA1_Channel4->CMAR = (uint32_t)i2c2_tx_buffer;
+	DMA1_Channel4->CPAR = (uint32_t)&(I2C2->TXDR);
 #endif
 	
 	// UART2 Rx
@@ -872,19 +897,19 @@ int main()
 	DMA1_Channel6->CPAR = (uint32_t)&(USART2->RDR);
 
 	// Timers for DSHOT
-	DMA1_Channel1->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL_1 | DMA_CCR_PSIZE_1 | DMA_CCR_MSIZE_1;
+	DMA1_Channel1->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL | DMA_CCR_PSIZE_1 | DMA_CCR_MSIZE_1;
 	DMA1_Channel1->CMAR = (uint32_t)motor2_dshot;
 	DMA1_Channel1->CPAR = (uint32_t)&(TIM2->CCR3);
 	
-	DMA1_Channel2->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL_1 | DMA_CCR_PSIZE_1 | DMA_CCR_MSIZE_1;
+	DMA1_Channel2->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL | DMA_CCR_PSIZE_1 | DMA_CCR_MSIZE_1;
 	DMA1_Channel2->CMAR = (uint32_t)motor3_dshot;
 	DMA1_Channel2->CPAR = (uint32_t)&(TIM3->CCR3);
 	
-	DMA1_Channel3->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL_1 | DMA_CCR_PSIZE_1 | DMA_CCR_MSIZE_1;
+	DMA1_Channel3->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL | DMA_CCR_PSIZE_1 | DMA_CCR_MSIZE_1;
 	DMA1_Channel3->CMAR = (uint32_t)motor4_dshot;
 	DMA1_Channel3->CPAR = (uint32_t)&(TIM3->CCR4);
 	
-	DMA1_Channel7->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL_1 | DMA_CCR_PSIZE_1 | DMA_CCR_MSIZE_1 | DMA_CCR_TCIE;
+	DMA1_Channel7->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL | DMA_CCR_PSIZE_1 | DMA_CCR_MSIZE_1 | DMA_CCR_TCIE;
 	DMA1_Channel7->CMAR = (uint32_t)motor1_dshot;
 	DMA1_Channel7->CPAR = (uint32_t)&(TIM2->CCR2);
 	
@@ -959,8 +984,7 @@ int main()
 	USART2->BRR = 417; // 48MHz/115200bps
 	USART2->CR1 = USART_CR1_RE;
 #endif
-	USART2->CR3 = USART_CR3_EIE | USART_CR3_DMAR;
-
+	
 #ifdef MPU_SPI
 
 	/* SPI ----------------------------------------------------*/
@@ -1061,20 +1085,25 @@ int main()
 	wait_ms(100);
 	//MPU_WRITE(MPU_PWR_MGMT_2, MPU_PWR_MGMT_2__STDBY_XA | MPU_PWR_MGMT_2__STDBY_YA | MPU_PWR_MGMT_2__STDBY_ZA); // Disable accelerometers
 	//MPU_WRITE(MPU_SMPLRT_DIV, 7); // Sample rate = Fs/(x+1)
-	MPU_WRITE(MPU_CFG, MPU_CFG__DLPF_CFG(3)); // Filter ON => Fs=1kHz, else 8kHz
+	if ((REG_GYRO_FILT < 1) || (REG_GYRO_FILT > 6))
+		REG_GYRO_FILT = 1;
+	MPU_WRITE(MPU_CFG, MPU_CFG__DLPF_CFG(REG_GYRO_FILT)); // Filter ON => Fs=1kHz, else 8kHz
 	MPU_WRITE(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
 	MPU_WRITE(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
 	wait_ms(100); // wait for filter to settle
 	MPU_WRITE(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
 
-	/* -----------------------------------------------------------------------------------*/
-	
 #ifdef MPU_SPI
 	SPI2->CR1 &= ~SPI_CR1_BR_Msk; // SPI clock = clock APB1/2 = 36MHz/2 = 18MHz
 #endif
+
+	/* Radio frame synchronisation -------------------------------------------------*/
+	
+	radio_synch();
+	
+	/* -----------------------------------------------------------------------------------*/
 	
 	EXTI->IMR = EXTI_IMR_MR15; // Enable interrupt now to avoid problem with new SPI clock settings
-	
 	SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk; // Disable Systick interrupt, not needed anymore (but can still use COUNTFLAG)
 
 	/* Main loop ---------------------------------------------------------------------
@@ -1153,25 +1182,7 @@ int main()
 		if (flag_radio_synch)
 		{
 			flag_radio_synch = 0;
-			
-			// Disable DMA
-			USART2->CR1 &= ~USART_CR1_UE;			
-			USART2->CR3 &= ~USART_CR3_DMAR;
-			USART2->CR1 |= USART_CR1_UE;
-			
-			// Synchonise on IDLE character
-			USART2->RDR;
-			USART2->ICR = USART_ICR_IDLECF;
-			time[4] = TIM7->CNT + 15000;
-			while (((USART2->ISR & USART_ISR_IDLE) == 0) && (TIM7->CNT < time[4]))
-				USART2->RDR;
-			
-			// Enable DMA
-			USART2->CR1 &= ~USART_CR1_UE;
-			USART2->CR3 |= USART_CR3_DMAR;
-			USART2->CR1 |= USART_CR1_UE;
-			DMA1_Channel6->CNDTR = sizeof(radio_frame);
-			DMA1_Channel6->CCR |= DMA_CCR_EN;
+			radio_synch();
 		}
 		
 		/* Process radio commands -----------------------------------------------------*/
@@ -1316,11 +1327,10 @@ int main()
 			
 			// Beep if requested
 		#ifndef PID_TUNING
-			if (aux[1] > 0.5f)
+			if (aux[0] > 0.5f)
 				flag_beep_user = 1;
 			else
 				flag_beep_user = 0;
-		
 		#endif
 			
 			// Toggle LED at rate of Radio flag
@@ -1501,19 +1511,36 @@ int main()
 			
 			// PID
 		#ifdef PID_TUNING
+			
 			if (aux[0] < 0.33f)
 				p_tune = REG_PITCH_P * aux[2];
-			if ((aux[0] > 0.33f) && (aux[0] < 0.66f))
-				i_tune = (aux[1] > 0.33f) ? REG_PITCH_I * aux[2] : 0;
-			if (aux[0] > 0.66f)
-				d_tune = (aux[1] > 0.66f) ? REG_PITCH_D * aux[2] : 0;
-			pitch = (error_pitch * p_tune) + (error_pitch_i * i_tune) + ((error_pitch - error_pitch_z) * d_tune);
-			roll  = (error_roll  * p_tune) + (error_roll_i  * i_tune) + ((error_roll  - error_roll_z ) * d_tune);
+			else if ((aux[0] >= 0.33f) && (aux[0] < 0.66f))
+				i_tune = REG_PITCH_I * aux[2];
+			else
+				d_tune = REG_PITCH_D * aux[2];
+			
+			if (aux[1] < 0.33f)
+			{
+				pitch = (error_pitch * p_tune);
+				roll  = (error_roll  * p_tune);
+			}
+			else if ((aux[1] >= 0.33f) && (aux[1] < 0.66f))
+			{
+				pitch = (error_pitch * p_tune) + (error_pitch_i * i_tune);
+				roll  = (error_roll  * p_tune) + (error_roll_i  * i_tune);
+			}
+			else
+			{
+				pitch = (error_pitch * p_tune) + (error_pitch_i * i_tune) + ((error_pitch - error_pitch_z) * d_tune);
+				roll  = (error_roll  * p_tune) + (error_roll_i  * i_tune) + ((error_roll  - error_roll_z ) * d_tune);
+			}
+			yaw   = (error_yaw   * REG_YAW_P  ) + (error_yaw_i   * REG_YAW_I  ) + ((error_yaw   - error_yaw_z  ) * REG_YAW_D);
+			
 		#else
 			pitch = (error_pitch * REG_PITCH_P) + (error_pitch_i * REG_PITCH_I) + ((error_pitch - error_pitch_z) * REG_PITCH_D);
 			roll  = (error_roll  * REG_ROLL_P ) + (error_roll_i  * REG_ROLL_I ) + ((error_roll  - error_roll_z ) * REG_ROLL_D);
-		#endif
 			yaw   = (error_yaw   * REG_YAW_P  ) + (error_yaw_i   * REG_YAW_I  ) + ((error_yaw   - error_yaw_z  ) * REG_YAW_D);
+		#endif
 			
 			// Send pitch/roll/yaw to host
 			if ((REG_DEBUG__CASE == 6) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
@@ -1563,13 +1590,6 @@ int main()
 			// Raise flag for motor command ready
 			flag_motor = 1;
 			
-			// Send motor command to host
-			if ((REG_DEBUG__CASE == 8) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
-			{
-				USBD_CDC_SetTxBuffer(&USBD_device_handler, (uint8_t *)motor_raw, 4*4);
-				USBD_CDC_TransmitPacket(&USBD_device_handler);
-			}
-			
 			// Toggle LED at rate of MPU flag
 			if ((REG_CTRL__LED_SELECT == 2) && !flag_mpu_cal)
 			{
@@ -1597,6 +1617,13 @@ int main()
 					motor_raw[i] = 0;
 			}
 			
+			// Send motor command to host
+			if ((REG_DEBUG__CASE == 8) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
+			{
+				USBD_CDC_SetTxBuffer(&USBD_device_handler, (uint8_t *)motor_raw, 4*4);
+				USBD_CDC_TransmitPacket(&USBD_device_handler);
+			}
+			
 			#ifdef ESC_DSHOT
 				dshot_encode(&motor_raw[0], motor1_dshot);
 				dshot_encode(&motor_raw[1], motor2_dshot);
@@ -1617,15 +1644,17 @@ int main()
 				DMA1_Channel1->CCR |= DMA_CCR_EN;
 				DMA1_Channel2->CCR |= DMA_CCR_EN;
 				DMA1_Channel3->CCR |= DMA_CCR_EN;
+				TIM3->CR1 |= TIM_CR1_CEN;
 				DMA1_Channel7->CCR |= DMA_CCR_EN;
+				TIM2->CR1 |= TIM_CR1_CEN;
 			#else
 				TIM2->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[0];
 				TIM2->CCR3 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[1];
 				TIM3->CCR3 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[2];
 				TIM3->CCR4 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[3];
+				TIM2->CR1 |= TIM_CR1_CEN;
+				TIM3->CR1 |= TIM_CR1_CEN;
 			#endif
-			TIM2->CR1 |= TIM_CR1_CEN;
-			TIM3->CR1 |= TIM_CR1_CEN;
 		}
 		
 		/* VBAT ---------------------------------------------------------------------*/
@@ -1704,7 +1733,7 @@ int main()
 				}
 				case 3: // SPI write to MPU
 				{
-					MpuWrite(addr,usb_buffer_rx.data.u8[3]);
+					MPU_WRITE_1(addr, usb_buffer_rx.data.u8[3]);
 					break;
 				}
 				case 4: // Flash read

@@ -85,12 +85,24 @@ fprintf(f,'classdef fc_reg\n');
 fprintf(f,'\tmethods\n');
 fprintf(f,'\t\tfunction data = read(obj,addr)\n');
 fprintf(f,'\t\t\tglobal ser\n');
-fprintf(f,'\t\t\tfwrite(ser,[0,addr,0,0,0,0]);\n');
-fprintf(f,'\t\t\tdata = sum(fread(ser,4) .* 2.^(0:8:24)'');\n');
+fprintf(f,'\t\t\tif obj.method\n');
+fprintf(f,'\t\t\t\tr = sx1272_receive(0);\n');
+fprintf(f,'\t\t\t\tsx1272_send([0,addr,0,0,0,0],1);\n');
+fprintf(f,'\t\t\t\tsleep(300);\n');
+fprintf(f,'\t\t\t\tr = sx1272_receive(0);\n');
+fprintf(f,'\t\t\t\tdata = sum(r.payload(3:6) .* 2.^(0:8:24));\n');
+fprintf(f,'\t\t\telse\n');
+fprintf(f,'\t\t\t\tfwrite(ser,[0,addr,0,0,0,0]);\n');
+fprintf(f,'\t\t\t\tdata = sum(fread(ser,4) .* 2.^(0:8:24)'');\n');
+fprintf(f,'\t\t\tend\n');
 fprintf(f,'\t\tend\n');
 fprintf(f,'\t\tfunction write(obj,addr,data)\n');
 fprintf(f,'\t\t\tglobal ser\n');
-fprintf(f,'\t\t\tfwrite(ser,[1,addr,floor(mod(double(data) ./ 2.^(0:8:24),2^8))]);\n');
+fprintf(f,'\t\t\tif obj.method\n');
+fprintf(f,'\t\t\t\tsx1272_send([1,addr,floor(mod(double(data) ./ 2.^(0:8:24),2^8))],1);\n');
+fprintf(f,'\t\t\telse\n');
+fprintf(f,'\t\t\t\tfwrite(ser,[1,addr,floor(mod(double(data) ./ 2.^(0:8:24),2^8))]);\n');
+fprintf(f,'\t\t\tend\n');
 fprintf(f,'\t\tend\n');
 
 for n = 1:length(reg)
@@ -131,6 +143,7 @@ end
 
 fprintf(f,'\tend\n');
 fprintf(f,'\tproperties\n');
+fprintf(f,'\t\tmethod = 0;\n');
 for n = 1:length(reg)
 	fprintf(f,'\t\t%s_addr = %d;\n', reg(n).name, n-1);
 end

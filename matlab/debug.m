@@ -91,7 +91,7 @@ switch DebugCase
 		end
 	case 8 % raw motors
 		dlen = 4;
-		dtype = 'int16';
+		dtype = 'uint32';
 		for n = 1:4
 			a{n} = subplot(4,1,n);
 			a{n}.YLim = [-10,2010];
@@ -107,7 +107,7 @@ d = nan(dlen,WindowSize);
 switch dtype
 	case {'uint16','int16'}
 		r1 = 2*dlen;
-	case 'float'
+	case {'uint32','float'}
 		r1 = 4*dlen;
 end
 n = 0;
@@ -136,6 +136,8 @@ while (n < NbSamples)
 					d(m,WindowSize) = 2^8*r((m-1)*2+2) + r((m-1)*2+1);
 				case 'int16'
 					d(m,WindowSize) = c2s(2^8*r((m-1)*2+2) + r((m-1)*2+1), 16);
+            case 'uint32'
+					d(m,WindowSize) = 2^24*r((m-1)*4+4) + 2^16*r((m-1)*4+3) + 2^8*r((m-1)*4+2) + r((m-1)*4+1);
 				case 'float'
 					d(m,WindowSize) = typecast(uint32(2^24*r((m-1)*4+4) + 2^16*r((m-1)*4+3) + 2^8*r((m-1)*4+2) + r((m-1)*4+1)), 'single');
 				end

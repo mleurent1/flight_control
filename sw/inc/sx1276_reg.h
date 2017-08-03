@@ -136,3 +136,10 @@
 #define SX1276_INVERT_IQ 0x33
 
 #define SX1276_INVERT_IQ__INVERT_IQ (0x01 << 6)
+
+#define SX1276_DIO_MAPPING_1 0x40
+
+#define SX1276_DIO_MAPPING_1__DIO0_MAPPING(x) (((x) & 0x3) << 6)
+#define SX1276_DIO_MAPPING_1__DIO1_MAPPING(x) (((x) & 0x3) << 4)
+#define SX1276_DIO_MAPPING_1__DIO2_MAPPING(x) (((x) & 0x3) << 2)
+#define SX1276_DIO_MAPPING_1__DIO3_MAPPING(x) (((x) & 0x3) << 0)

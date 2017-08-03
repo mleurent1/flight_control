@@ -38,6 +38,7 @@ reg(n).flash = 0;
 reg(n).subf{1} = {'MPU',7,0,'uint16',0};
 reg(n).subf{2} = {'RADIO',15,8,'uint16',0};
 reg(n).subf{3} = {'RF',23,16,'uint16',0};
+reg(n).subf{4} = {'CRC',31,24,'uint16',0};
 
 n = n + 1;
 reg(n).name = 'TIME';
@@ -56,7 +57,7 @@ n = n + 1;
 reg(n).name = 'VBAT_MIN';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VBAT_MIN',31,0,'float',14.4};
+reg(n).subf{1} = {'VBAT_MIN',31,0,'float',14.8};
 
 n = n + 1;
 reg(n).name = 'RADIO_FILTER_ALPHA';
@@ -159,3 +160,9 @@ reg(n).name = 'YAW_D';
 reg(n).read_only = 0;
 reg(n).flash = 1;
 reg(n).subf{1} = {'YAW_D',31,0,'float',0};
+
+n = n + 1;
+reg(n).name = 'GYRO_FILT';
+reg(n).read_only = 0;
+reg(n).flash = 1;
+reg(n).subf{1} = {'GYRO_FILT',7,0,'uint8',1};

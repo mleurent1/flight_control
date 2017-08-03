@@ -690,6 +690,49 @@ classdef sx1276_reg
 				obj.write(51,w);
 			end
 		end
+		function y = DIO_MAPPING_1(obj,x)
+			if nargin < 2
+				y = obj.read(64);
+			else
+				obj.write(64,x);
+			end
+		end
+		function y = DIO_MAPPING_1__DIO0_MAPPING(obj,x)
+			r = obj.read(64);
+			if nargin < 2
+				y = bitshift(bitand(r, 192), -6);
+			else
+				w = bitand(bitshift(x, 6), 192) + bitand(r, 63);
+				obj.write(64,w);
+			end
+		end
+		function y = DIO_MAPPING_1__DIO1_MAPPING(obj,x)
+			r = obj.read(64);
+			if nargin < 2
+				y = bitshift(bitand(r, 48), -4);
+			else
+				w = bitand(bitshift(x, 4), 48) + bitand(r, 207);
+				obj.write(64,w);
+			end
+		end
+		function y = DIO_MAPPING_1__DIO2_MAPPING(obj,x)
+			r = obj.read(64);
+			if nargin < 2
+				y = bitshift(bitand(r, 12), -2);
+			else
+				w = bitand(bitshift(x, 2), 12) + bitand(r, 243);
+				obj.write(64,w);
+			end
+		end
+		function y = DIO_MAPPING_1__DIO3_MAPPING(obj,x)
+			r = obj.read(64);
+			if nargin < 2
+				y = bitshift(bitand(r, 3), 0);
+			else
+				w = bitand(bitshift(x, 0), 3) + bitand(r, 252);
+				obj.write(64,w);
+			end
+		end
 	end
 	properties
 		FIFO_addr = 0;
@@ -734,5 +777,6 @@ classdef sx1276_reg
 		RSSI_WIDEBAND_addr = 44;
 		DETECT_OPTIMIZE_addr = 49;
 		INVERT_IQ_addr = 51;
+		DIO_MAPPING_1_addr = 64;
 	end
 end

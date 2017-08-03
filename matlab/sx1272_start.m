@@ -1,7 +1,7 @@
 function sx1272_start
 
 p.freq_hz = 865e6;      % center frequency
-p.rf_power = 14;        % TX power, in dBm 
+p.rf_power = 2;        % TX power, in dBm 
 p.modulation = 'LORA';  % modulation to use for the packet 
 p.bandwidth = 125e3;    % modulation bandwidth (LoRa only) 
 p.datarate = 7;         % TX datarate (baudrate for FSK, SF for LoRa) 
@@ -10,16 +10,16 @@ p.invert_pol = 0;       % invert signal polarity, for orthogonal downlinks (LoRa
 p.f_dev = 25;           % frequency deviation, in kHz (FSK only) 
 p.preamble = 8;         % set the preamble length, 0 for default 
 p.no_crc = 0;           % if true, do not send a CRC in the packet 
-p.no_header = 0;        % if true, enable implicit header mode (LoRa), fixed length (FSK) 
-p.size = 16;            % payload size in bytes 
+p.no_header = 1;        % if true, enable implicit header mode (LoRa), fixed length (FSK) 
+p.size = 6;            % payload size in bytes 
 p.ppm_offset = 0;
 p.sync_word = [1,2];
 
 % Hard Reset
 ftdi('GPIOL',5,[1,1]);
-sleep(0.01)
+sleep(10)
 ftdi('GPIOL',5,[1,0]);
-sleep(0.01)
+sleep(10)
 
 % Check version
 if ~ismember(sx1272_read('0x42'), [hex2dec('21'),hex2dec('22')])
@@ -81,11 +81,11 @@ SdOrder = 1;
 
 % Set chip in standby Lora mode
 sx1272_write('0x01', 0);
-sleep(0.01);
+sleep(10);
 sx1272_write('0x01', 2^7);
-sleep(0.01);
+sleep(10);
 sx1272_write('0x01', 1 + 2^7);
-sleep(0.01);
+sleep(10);
 
 sx1272_write('0x06', bitand(f,hex2dec('FF0000'))/2^16);
 sx1272_write('0x07', bitand(f,hex2dec('00FF00'))/2^8);
@@ -93,8 +93,6 @@ sx1272_write('0x08', bitand(f,hex2dec('0000FF')));
 sx1272_write('0x09', OutputPower + 2^7*PaSelect);
 sx1272_write('0x0A', PaRamp + 2^4*LowPnTxPllOff);
 sx1272_write('0x0C', LnaBoost + 2^3*TrimRxCrFo + 2^5*LnaGain);
-sx1272_write('0x0D', 0); % sets SPI pointer to 0
-sx1272_write('0x0E', 0); % sets TX modem start addr to 0
 sx1272_write('0x1D', p.ppm_offset + 2^1*~p.no_crc + 2^2*p.no_header + 2^3*p.coderate + 2^6*bw);
 sx1272_write('0x1E', bitand(SymbTimeout,hex2dec('300'))/2^8 + 2^2*AgcAutoOn + 2^3*TxContinuousMode + 2^4*p.datarate);
 sx1272_write('0x1F', bitand(SymbTimeout,hex2dec('0FF')));
@@ -115,7 +113,7 @@ sx1272_write('0x3D', SdOrder + 2^1*SdMaxFreqDev + 2^4*SdEdgeSelect + 2^5*TxChirp
 ftdi('GPIOH',0,[1,0]);
 
 sx1272_write('0x01', 5 + 2^7);
-sleep(0.01);
+sleep(10);
    
 end
 
