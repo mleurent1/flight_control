@@ -26,6 +26,12 @@ var motorBuf = new ArrayBuffer(4*4);
 var motorBufPrev = new ArrayBuffer(4*4);
 var motorBufInt32 = new Int32Array(motorBuf);
 var motorBufPrevInt32 = new Int32Array(motorBufPrev);
+var vbatBuf = new ArrayBuffer(1*4);
+var vbatBufPrev = new ArrayBuffer(1*4);
+var vbatBufFloat32 = new Float32Array(vbatBuf);
+var vbatBufPrevFloat32 = new Float32Array(vbatBufPrev);
+var axisWidth;
+var axisHeight;
 
 onload = function(){
 	document.getElementById('readcfg').onclick = readConfig;
@@ -57,16 +63,11 @@ onload = function(){
 	document.getElementById('motortest').value = 0;
 	document.getElementById('motortest').onchange = motorTest;
 	
-	canvas = document.getElementById("plot");
-	ctx = canvas.getContext("2d");
-	
 	chrome.serial.getDevices(openPort);
 	
 	document.getElementById('plotsel').innerHTML = '';
-	
 	var sel = document.createElement('select');
 	sel.id = 'plotselin';
-	
 	var opt = document.createElement('option');
 	opt.value = 'Gyros';
 	opt.innerHTML = 'Gyros';
@@ -79,11 +80,17 @@ onload = function(){
 	opt.value = 'Motors';
 	opt.innerHTML = 'Motors';
 	sel.appendChild(opt);
-	
+	opt = document.createElement('option');
+	opt.value = 'Vbat';
+	opt.innerHTML = 'Vbat';
+	sel.appendChild(opt);
 	document.getElementById('plotsel').appendChild(sel);
-	
 	document.getElementById('plotstart').value = 'Plot';
 	document.getElementById('plotstart').onclick = startPlot;
+	
+	canvas = document.getElementById("plot");
+	ctx = canvas.getContext("2d");
+	ctx.font = "9px arial";
 }
 
 onclose = function(){
@@ -149,123 +156,6 @@ function serRead(info){
 	rxBufUint8[3] = x[3];
 }
 
-function updatePlotSensor(info){
-	var i;
-	var x = new Float32Array(info.data);
-	var c = ["rgb(255,0,0)", "rgb(0,255,0)", "rgb(0,0,255)"]
-	
-	for (i=0; i<3; i++){
-		sensorBufPrevFloat32[i] = sensorBufFloat32[i];
-		sensorBufFloat32[i] = -(x[i] / 4000) * canvas.height;
-	}
-	
-	if (histLen < canvas.width){
-		
-		for (i=0; i<3; i++){
-			ctx.beginPath();
-			ctx.strokeStyle = c[i];
-			ctx.moveTo(histLen, sensorBufPrevFloat32[i] + canvas.height/2);
-			ctx.lineTo(histLen+1, sensorBufFloat32[i] + canvas.height/2);
-			ctx.stroke();
-		}
-		
-		histLen = histLen + 1;
-		
-	} else {
-		
-		var imgData = ctx.getImageData(1,0,canvas.width-1,canvas.height);
-		ctx.clearRect(canvas.width-1,0,1,canvas.height);
-		ctx.putImageData(imgData,0,0);
-		
-		for (i=0; i<3; i++){
-			ctx.beginPath();
-			ctx.strokeStyle = c[i];
-			ctx.moveTo(canvas.width-2, sensorBufPrevFloat32[i] + canvas.height/2);
-			ctx.lineTo(canvas.width-1, sensorBufFloat32[i] + canvas.height/2);
-			ctx.stroke();
-		}
-		
-	}
-}
-
-function updatePlotReceiver(info){
-	var i;
-	var x = new Float32Array(info.data);
-	var c = ["rgb(255,0,0)", "rgb(0,255,0)", "rgb(0,0,255)", "rgb(255,255,0)", "rgb(0,255,255)", "rgb(255,0,255)", "rgb(0,0,0)", "rgb(128,128,128)"];
-	
-	for (i=0; i<8; i++){
-		receiverBufPrevFloat32[i] = receiverBufFloat32[i];
-		receiverBufFloat32[i] = -x[i] * (canvas.height/2);
-	}
-	
-	if (histLen < canvas.width){
-		
-		for (i=0; i<8; i++){
-			ctx.beginPath();
-			ctx.strokeStyle = c[i];
-			ctx.moveTo(histLen, receiverBufPrevFloat32[i] + canvas.height/2);
-			ctx.lineTo(histLen+1, receiverBufFloat32[i] + canvas.height/2);
-			ctx.stroke();
-		}
-		
-		histLen = histLen + 1;
-		
-	} else {
-		
-		var imgData = ctx.getImageData(1,0,canvas.width-1,canvas.height);
-		ctx.clearRect(canvas.width-1,0,1,canvas.height);
-		ctx.putImageData(imgData,0,0);
-		
-		for (i=0; i<8; i++){
-			ctx.beginPath();
-			ctx.strokeStyle = c[i];
-			ctx.moveTo(canvas.width-2, receiverBufPrevFloat32[i] + canvas.height/2);
-			ctx.lineTo(canvas.width-1, receiverBufFloat32[i] + canvas.height/2);
-			ctx.stroke();
-		}
-		
-	}
-}
-
-function updatePlotMotor(info){
-	var i;
-	var x = new Int32Array(info.data);
-	var c = ["rgb(255,0,0)", "rgb(0,255,0)", "rgb(0,0,255)", "rgb(0,255,255)"];
-	
-	for (i=0; i<4; i++){
-		motorBufPrevInt32[i] = motorBufInt32[i];
-		motorBufInt32[i] = -(x[i] / 2000) * (canvas.height/4);
-	}
-	
-	if (histLen < canvas.width){
-		
-		for (i=0; i<4; i++){
-			ctx.beginPath();
-			ctx.strokeStyle = c[i];
-			ctx.moveTo(histLen, motorBufPrevInt32[i] + (canvas.height*(i+1)/4));
-			ctx.lineTo(histLen+1, motorBufInt32[i] + (canvas.height*(i+1)/4));
-			ctx.stroke();
-		}
-		
-		histLen = histLen + 1;
-		
-	} else {
-		
-		var imgData = ctx.getImageData(1,0,canvas.width-1,canvas.height);
-		ctx.clearRect(canvas.width-1,0,1,canvas.height);
-		ctx.putImageData(imgData,0,0);
-		
-		for (i=0; i<4; i++){
-			ctx.beginPath();
-			ctx.strokeStyle = c[i];
-			ctx.moveTo(canvas.width-2, motorBufPrevInt32[i] + (canvas.height*(i+1)/4));
-			ctx.lineTo(canvas.width-1, motorBufInt32[i] + (canvas.height*(i+1)/4));
-			ctx.stroke();
-		}
-		
-	}
-}
-
 function startPlot(){
 	document.getElementById('plotstart').value = 'Stop';
 	document.getElementById('plotstart').onclick = stopPlot;
@@ -275,15 +165,87 @@ function startPlot(){
 	histLen = 0;
 	chrome.serial.onReceive.removeListener(serRead);
 	if (document.getElementById('plotselin').value == 'Gyros'){
+		axisWidth = 26;
+		ctx.beginPath();
+		ctx.fillText(" 1000",0,canvas.height/4);
+		ctx.fillText("    0",0,canvas.height/2);
+		ctx.fillText("-1000",0,canvas.height*3/4);
+		ctx.strokeStyle = "rgb(192,192,192)";
+		ctx.moveTo(axisWidth,      canvas.height/4);
+		ctx.lineTo(canvas.width-1, canvas.height/4);
+		ctx.moveTo(axisWidth,      canvas.height/2);
+		ctx.lineTo(canvas.width-1, canvas.height/2);
+		ctx.moveTo(axisWidth,      canvas.height*3/4);
+		ctx.lineTo(canvas.width-1, canvas.height*3/4);
+		ctx.stroke();
 		chrome.serial.onReceive.addListener(updatePlotSensor);
 		regUint32Write(3,2+(31<<8));
 	} else if (document.getElementById('plotselin').value == 'Receiver'){
+		axisWidth = 12;
+		ctx.beginPath();
+		ctx.fillText(" 1",0, (0.1/2.2)*canvas.height);
+		ctx.fillText(" 0",0, canvas.height/2);
+		ctx.fillText("-1",0, (2.1/2.2)*canvas.height);
+		ctx.strokeStyle = "rgb(192,192,192)";
+		ctx.moveTo(axisWidth,      (0.1/2.2)*canvas.height);
+		ctx.lineTo(canvas.width-1, (0.1/2.2)*canvas.height);
+		ctx.moveTo(axisWidth,      canvas.height/2);
+		ctx.lineTo(canvas.width-1, canvas.height/2);
+		ctx.moveTo(axisWidth,      (2.1/2.2)*canvas.height);
+		ctx.lineTo(canvas.width-1, (2.1/2.2)*canvas.height);
+		ctx.stroke();
 		chrome.serial.onReceive.addListener(updatePlotReceiver);
 		regUint32Write(3,5+(31<<8));
-	}
-	else if (document.getElementById('plotselin').value == 'Motors'){
+	} else if (document.getElementById('plotselin').value == 'Motors'){
+		axisWidth = 26;
+		ctx.beginPath();
+		ctx.fillText("2000",0, ( 250/10000)*canvas.height);
+		ctx.fillText("   0",0, (2250/10000)*canvas.height);
+		ctx.fillText("2000",0, (2750/10000)*canvas.height);
+		ctx.fillText("   0",0, (4750/10000)*canvas.height);
+		ctx.fillText("2000",0, (5250/10000)*canvas.height);
+		ctx.fillText("   0",0, (7250/10000)*canvas.height);
+		ctx.fillText("2000",0, (7750/10000)*canvas.height);
+		ctx.fillText("   0",0, (9750/10000)*canvas.height);
+		ctx.strokeStyle = "rgb(192,192,192)";
+		ctx.moveTo(axisWidth,      ( 250/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, ( 250/10000)*canvas.height);
+		ctx.moveTo(axisWidth,      (2250/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (2250/10000)*canvas.height);
+		ctx.moveTo(axisWidth,      (2750/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (2750/10000)*canvas.height);
+		ctx.moveTo(axisWidth,      (4750/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (4750/10000)*canvas.height);
+		ctx.moveTo(axisWidth,      (5250/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (5250/10000)*canvas.height);
+		ctx.moveTo(axisWidth,      (7250/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (7250/10000)*canvas.height);
+		ctx.moveTo(axisWidth,      (7750/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (7750/10000)*canvas.height);
+		ctx.moveTo(axisWidth,      (9750/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (9750/10000)*canvas.height);
+		ctx.stroke();
 		chrome.serial.onReceive.addListener(updatePlotMotor);
 		regUint32Write(3,8+(31<<8));
+	} else if (document.getElementById('plotselin').value == 'Vbat'){
+		axisWidth = 20;
+		ctx.beginPath();
+		ctx.fillText("16.8",0, (1.2/8)*canvas.height);
+		ctx.fillText("15  ",0, (3  /8)*canvas.height);
+		ctx.fillText("12.6",0, (5.4/8)*canvas.height);
+		ctx.fillText("11  ",0, (7  /8)*canvas.height);
+		ctx.strokeStyle = "rgb(192,192,192)";
+		ctx.moveTo(axisWidth,      (1.2/8)*canvas.height);
+		ctx.lineTo(canvas.width-1, (1.2/8)*canvas.height);
+		ctx.moveTo(axisWidth,      (3  /8)*canvas.height);
+		ctx.lineTo(canvas.width-1, (3  /8)*canvas.height);
+		ctx.moveTo(axisWidth,      (5.4/8)*canvas.height);
+		ctx.lineTo(canvas.width-1, (5.4/8)*canvas.height);
+		ctx.moveTo(axisWidth,      (7  /8)*canvas.height);
+		ctx.lineTo(canvas.width-1, (7  /8)*canvas.height);
+		ctx.stroke();
+		chrome.serial.onReceive.addListener(updatePlotVbat);
+		regUint32Write(3,3+(3<<8));
 	}
 }
 
@@ -292,6 +254,7 @@ function stopPlot(){
 	chrome.serial.onReceive.removeListener(updatePlotSensor);
 	chrome.serial.onReceive.removeListener(updatePlotReceiver);
 	chrome.serial.onReceive.removeListener(updatePlotMotor);
+	chrome.serial.onReceive.removeListener(updatePlotVbat);
 	chrome.serial.onReceive.addListener(serRead);
 	
 	document.getElementById('plotstart').value = 'Plot';
@@ -372,6 +335,202 @@ function motorTest(){
 	else if ((sel == 0) && motorTestOn) {
 		motorTestOn = false;
 		log('Motor Test OFF');
+	}
+}
+
+function updatePlotSensor(info){
+	var i;
+	var x = new Float32Array(info.data);
+	var c = ["rgb(255,0,0)", "rgb(0,255,0)", "rgb(0,0,255)"]
+	
+	for (i=0; i<3; i++){
+		sensorBufPrevFloat32[i] = (histLen > 0) ? sensorBufFloat32[i] : 0;
+		sensorBufFloat32[i] = -(x[i] / 4000) * canvas.height;
+	}
+	
+	if (histLen < (canvas.width-axisWidth)){
+		
+		for (i=0; i<3; i++){
+			ctx.beginPath();
+			ctx.strokeStyle = c[i];
+			ctx.moveTo(histLen+axisWidth, sensorBufPrevFloat32[i] + canvas.height/2);
+			ctx.lineTo(histLen+1+axisWidth, sensorBufFloat32[i] + canvas.height/2);
+			ctx.stroke();
+		}
+		
+		histLen = histLen + 1;
+		
+	} else {
+		
+		var imgData = ctx.getImageData(1+axisWidth,0,canvas.width-1-axisWidth,canvas.height);
+		ctx.clearRect(canvas.width-1,0,1,canvas.height);
+		ctx.putImageData(imgData,axisWidth,0);
+		
+		ctx.beginPath();
+		ctx.strokeStyle = "rgb(192,192,192)";
+		ctx.moveTo(canvas.width-2,canvas.height/4);
+		ctx.lineTo(canvas.width-1,canvas.height/4);
+		ctx.moveTo(canvas.width-2,canvas.height/2);
+		ctx.lineTo(canvas.width-1,canvas.height/2);
+		ctx.moveTo(canvas.width-2,canvas.height*3/4);
+		ctx.lineTo(canvas.width-1,canvas.height*3/4);
+		ctx.stroke();
+		
+		for (i=0; i<3; i++){
+			ctx.beginPath();
+			ctx.strokeStyle = c[i];
+			ctx.moveTo(canvas.width-2, sensorBufPrevFloat32[i] + canvas.height/2);
+			ctx.lineTo(canvas.width-1, sensorBufFloat32[i] + canvas.height/2);
+			ctx.stroke();
+		}
+	}
+}
+
+function updatePlotReceiver(info){
+	var i;
+	var x = new Float32Array(info.data);
+	var c = ["rgb(255,0,0)", "rgb(0,255,0)", "rgb(0,0,255)", "rgb(255,255,0)", "rgb(0,255,255)", "rgb(255,0,255)", "rgb(0,0,0)", "rgb(128,128,128)"];
+	
+	for (i=0; i<8; i++){
+		receiverBufPrevFloat32[i] = (histLen > 0) ? receiverBufFloat32[i] : 0;
+		receiverBufFloat32[i] = -(x[i] / 2.2) * canvas.height;
+	}
+	
+	if (histLen < (canvas.width-axisWidth)){
+		
+		for (i=0; i<8; i++){
+			ctx.beginPath();
+			ctx.strokeStyle = c[i];
+			ctx.moveTo(histLen+axisWidth, receiverBufPrevFloat32[i] + canvas.height/2);
+			ctx.lineTo(histLen+1+axisWidth, receiverBufFloat32[i] + canvas.height/2);
+			ctx.stroke();
+		}
+		
+		histLen = histLen + 1;
+		
+	} else {
+		
+		var imgData = ctx.getImageData(1+axisWidth,0,canvas.width-1-axisWidth,canvas.height);
+		ctx.clearRect(canvas.width-1,0,1,canvas.height);
+		ctx.putImageData(imgData,axisWidth,0);
+		
+		ctx.beginPath();
+		ctx.strokeStyle = "rgb(192,192,192)";
+		ctx.moveTo(canvas.width-2, (0.1/2.2)*canvas.height);
+		ctx.lineTo(canvas.width-1, (0.1/2.2)*canvas.height);
+		ctx.moveTo(canvas.width-2, canvas.height/2);
+		ctx.lineTo(canvas.width-1, canvas.height/2);
+		ctx.moveTo(canvas.width-2, (2.1/2.2)*canvas.height);
+		ctx.lineTo(canvas.width-1, (2.1/2.2)*canvas.height);
+		ctx.stroke();
+		
+		for (i=0; i<8; i++){
+			ctx.beginPath();
+			ctx.strokeStyle = c[i];
+			ctx.moveTo(canvas.width-2, receiverBufPrevFloat32[i] + canvas.height/2);
+			ctx.lineTo(canvas.width-1, receiverBufFloat32[i] + canvas.height/2);
+			ctx.stroke();
+		}
+	}
+}
+
+function updatePlotMotor(info){
+	var i;
+	var x = new Int32Array(info.data);
+	var c = ["rgb(255,0,0)", "rgb(0,255,0)", "rgb(0,0,255)", "rgb(0,255,255)"];
+	
+	for (i=0; i<4; i++){
+		motorBufPrevInt32[i] = (histLen > 0) ? motorBufInt32[i] : 0;
+		motorBufInt32[i] = -(x[i] / 10000) * canvas.height;
+	}
+	
+	if (histLen < (canvas.width-axisWidth)){
+		
+		for (i=0; i<4; i++){
+			ctx.beginPath();
+			ctx.strokeStyle = c[i];
+			ctx.moveTo(histLen+axisWidth, motorBufPrevInt32[i] + (((2500*(i+1)-250)/10000)*canvas.height));
+			ctx.lineTo(histLen+1+axisWidth, motorBufInt32[i] + (((2500*(i+1)-250)/10000)*canvas.height));
+			ctx.stroke();
+		}
+		
+		histLen = histLen + 1;
+		
+	} else {
+		
+		var imgData = ctx.getImageData(1+axisWidth,0,canvas.width-1-axisWidth,canvas.height);
+		ctx.clearRect(canvas.width-1,0,1,canvas.height);
+		ctx.putImageData(imgData,axisWidth,0);
+		
+		ctx.beginPath();
+		ctx.strokeStyle = "rgb(192,192,192)";
+		ctx.moveTo(canvas.width-2, ( 250/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, ( 250/10000)*canvas.height);
+		ctx.moveTo(canvas.width-2, (2250/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (2250/10000)*canvas.height);
+		ctx.moveTo(canvas.width-2, (2750/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (2750/10000)*canvas.height);
+		ctx.moveTo(canvas.width-2, (4750/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (4750/10000)*canvas.height);
+		ctx.moveTo(canvas.width-2, (5250/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (5250/10000)*canvas.height);
+		ctx.moveTo(canvas.width-2, (7250/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (7250/10000)*canvas.height);
+		ctx.moveTo(canvas.width-2, (7750/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (7750/10000)*canvas.height);
+		ctx.moveTo(canvas.width-2, (9750/10000)*canvas.height);
+		ctx.lineTo(canvas.width-1, (9750/10000)*canvas.height);
+		ctx.stroke();
+		
+		for (i=0; i<4; i++){
+			ctx.beginPath();
+			ctx.strokeStyle = c[i];
+			ctx.moveTo(canvas.width-2, motorBufPrevInt32[i] + (((2500*(i+1)-250)/10000)*canvas.height));
+			ctx.lineTo(canvas.width-1, motorBufInt32[i] + (((2500*(i+1)-250)/10000)*canvas.height));
+			ctx.stroke();
+		}
+	}
+}
+
+function updatePlotVbat(info){
+	var x = new Float32Array(info.data);
+	
+	vbatBufPrevFloat32[0] = (histLen > 0) ? vbatBufFloat32[0] : 0;
+	vbatBufFloat32[0] = ((18 - x[0]) / 8) * canvas.height;
+	
+	if (histLen < (canvas.width-axisWidth)){
+		
+		ctx.beginPath();
+		ctx.strokeStyle = "rgb(255,0,0)";
+		ctx.moveTo(histLen+axisWidth, vbatBufPrevFloat32[0]);
+		ctx.lineTo(histLen+1+axisWidth, vbatBufFloat32[0]);
+		ctx.stroke();
+		
+		histLen = histLen + 1;
+		
+	} else {
+		
+		var imgData = ctx.getImageData(1+axisWidth,0,canvas.width-1-axisWidth,canvas.height);
+		ctx.clearRect(canvas.width-1,0,1,canvas.height);
+		ctx.putImageData(imgData,axisWidth,0);
+		
+		ctx.beginPath();
+		ctx.strokeStyle = "rgb(192,192,192)";
+		ctx.moveTo(canvas.width-2, (1.2/8)*canvas.height);
+		ctx.lineTo(canvas.width-1, (1.2/8)*canvas.height);
+		ctx.moveTo(canvas.width-2, (3  /8)*canvas.height);
+		ctx.lineTo(canvas.width-1, (3  /8)*canvas.height);
+		ctx.moveTo(canvas.width-2, (5.4/8)*canvas.height);
+		ctx.lineTo(canvas.width-1, (5.4/8)*canvas.height);
+		ctx.moveTo(canvas.width-2, (7  /8)*canvas.height);
+		ctx.lineTo(canvas.width-1, (7  /8)*canvas.height);
+		ctx.stroke();
+		
+		ctx.beginPath();
+		ctx.strokeStyle = "rgb(255,0,0)";
+		ctx.moveTo(canvas.width-2, vbatBufPrevFloat32[0]);
+		ctx.lineTo(canvas.width-1, vbatBufFloat32[0]);
+		ctx.stroke();
 	}
 }
 
@@ -510,11 +669,3 @@ function log(line){
 	document.getElementById('console').innerHTML+= line+'<br>';
 	document.getElementById('console').scrollTop = document.getElementById('console').scrollHeight;
 }
-
-/*
-canvas.beginPath();
-canvas.strokeStyle = "rgb(128,128,128)"; "rgb(11,153,11)"; "rgb(66,44,255)"
-canvas.moveTo(x,y);
-canvas.lineTo(w,y);
-canvas.stroke();
-*/
