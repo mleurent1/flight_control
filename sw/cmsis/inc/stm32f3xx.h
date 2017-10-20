@@ -2,8 +2,6 @@
   ******************************************************************************
   * @file    stm32f3xx.h
   * @author  MCD Application Team
-  * @version V2.3.0
-  * @date    29-April-2015
   * @brief   CMSIS STM32F3xx Device Peripheral Access Layer Header File.           
   *            
   *          The file is the unique include file that the application programmer
@@ -91,7 +89,7 @@
                                    STM32F302VD and STM32F302ZD Devices */
   /* #define STM32F303x8 */   /*!< STM32F303K6, STM32F303K8, STM32F303C6, STM32F303C8, 
                                    STM32F303R6 and STM32F303R8 Devices */
-  #define STM32F303xC   /*!< STM32F303CB, STM32F303CC, STM32F303RB, STM32F303RC,
+  /* #define STM32F303xC */   /*!< STM32F303CB, STM32F303CC, STM32F303RB, STM32F303RC,
                                    STM32F303VB and STM32F303VC Devices */
   /* #define STM32F303xE */   /*!< STM32F303RE, STM32F303VE, STM32F303ZE, STM32F303RD,
                                    STM32F303VD and STM32F303ZD Devices */
@@ -117,15 +115,15 @@
    In this case, these drivers will not be included and the application code will 
    be based on direct access to peripherals registers 
    */
-  #define USE_HAL_DRIVER
+  /*#define USE_HAL_DRIVER */
 #endif /* USE_HAL_DRIVER */
 
 /**
-  * @brief CMSIS Device version number V2.3.0
+  * @brief CMSIS Device version number V2.3.2
   */
 #define __STM32F3_CMSIS_VERSION_MAIN   (0x02) /*!< [31:24] main version */                                  
 #define __STM32F3_CMSIS_VERSION_SUB1   (0x03) /*!< [23:16] sub1 version */
-#define __STM32F3_CMSIS_VERSION_SUB2   (0x00) /*!< [15:8]  sub2 version */
+#define __STM32F3_CMSIS_VERSION_SUB2   (0x02) /*!< [15:8]  sub2 version */
 #define __STM32F3_CMSIS_VERSION_RC     (0x00) /*!< [7:0]  release candidate */
 #define __STM32F3_CMSIS_VERSION        ((__STM32F3_CMSIS_VERSION_MAIN     << 24)\
                                        |(__STM32F3_CMSIS_VERSION_SUB1 << 16)\

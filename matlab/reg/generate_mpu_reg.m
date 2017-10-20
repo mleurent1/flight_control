@@ -2,7 +2,7 @@ clear
 
 %% parse definitions
 
-f = fopen('../../sw/inc/mpu_reg.h','r');
+f = fopen('mpu_reg.h','r');
 
 n = 0;
 

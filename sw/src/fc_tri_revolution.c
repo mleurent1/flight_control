@@ -233,6 +233,31 @@ void RfRead(uint8_t addr, uint8_t size)
 	SPI3->CR1 |= SPI_CR1_SPE;
 }
 
+void radio_synch(void)
+{
+	// Unset UART DMA and error enables and set UART Rx enable
+	USART1->CR3 = 0;
+	USART1->CR1 |= USART_CR1_RE;
+	
+	// Disable DMA
+	DMA2_Stream5->CR &= ~DMA_SxCR_EN;
+	DMA2->HIFCR = DMA_CLEAR_ALL_FLAGS_5;
+	
+	// Synchonise on IDLE character
+	USART1->SR;
+	USART1->DR;
+	TIM7->CNT = 0;
+	while (((USART1->SR & USART_SR_IDLE) == 0) && (TIM7->CNT < 50000))
+		USART1->DR;
+	
+	// Set UART DMA and error enables
+	USART1->CR3 = USART_CR3_DMAR | USART_CR3_EIE;
+	
+	// Enable DMA
+	DMA2_Stream5->NDTR = sizeof(radio_frame);
+	DMA2_Stream5->CR |= DMA_SxCR_EN;
+}
+
 void uint32_to_float(uint32_t* b, float* f)
 {
 	union {
@@ -423,12 +448,20 @@ void DMA1_Stream7_IRQHandler()
 /*--- Radio UART error ---*/
 void USART1_IRQHandler()
 {
+	GPIOB->BSRR = GPIO_BSRR_BR_4;
+	
+	// Clear error flags;
+	USART1->SR;
+	USART1->DR;
+	USART1->SR = 0;
+	
+	// Unset UART Rx, DMA and error enables
+	USART1->CR1 &= ~USART_CR1_RE;
+	USART1->CR3 = 0;
+	
 	// Disable DMA
 	DMA2_Stream5->CR &= ~DMA_SxCR_EN;
 	DMA2->HIFCR = DMA_CLEAR_ALL_FLAGS_5;
-	
-	// Disable UART
-	USART1->CR1 &= ~USART_CR1_UE;
 	
 	flag_radio_synch = 1;
 	radio_error_count++;
@@ -437,6 +470,9 @@ void USART1_IRQHandler()
 /*--- End of radio UART receive ---*/
 void DMA2_Stream5_IRQHandler()
 {
+	// Unset UART DMA enable
+	USART1->CR3 &= ~USART_CR3_DMAR;
+	
 	// Check DMA transfer error
 	if (DMA2->HISR & DMA_HISR_TEIF5)
 		radio_error_count++;
@@ -446,6 +482,9 @@ void DMA2_Stream5_IRQHandler()
 	// Disable DMA
 	DMA2_Stream5->CR &= ~DMA_SxCR_EN;
 	DMA2->HIFCR = DMA_CLEAR_ALL_FLAGS_5;
+	
+	// Set UART DMA enable
+	USART1->CR3 |= USART_CR3_DMAR;
 	
 	// Enable DMA
 	DMA2_Stream5->NDTR = sizeof(radio_frame);
@@ -628,7 +667,7 @@ int main()
 	flag_host = 0;
 	flag_reg = 1;
 	flag_mpu_host_read = 0;
-	flag_radio_synch = 1;
+	flag_radio_synch = 0;
 	flag_mpu_cal = 1;
 	flag_vbat = 0;
 	flag_armed_locked = 1;
@@ -918,7 +957,7 @@ int main()
 	TIM13->DIER = TIM_DIER_UIE;
 	//TIM13->CR1 = TIM_CR1_CEN;
 	
-	// VBAT
+	// RF tempo
 	TIM14->PSC = 48000-1; // 1ms
 	TIM14->ARR = 200;
 	TIM14->DIER = TIM_DIER_UIE;
@@ -928,14 +967,14 @@ int main()
 #if (RADIO_TYPE == 2)
 	GPIOC->BSRR = GPIO_BSRR_BS_0; // Invert Rx
 	USART1->BRR = 480; // 48MHz/100000bps
-	USART1->CR1 = USART_CR1_RE | USART_CR1_M | USART_CR1_PCE;
+	USART1->CR1 = USART_CR1_UE | USART_CR1_M | USART_CR1_PCE;
 	USART1->CR2 = (2 << USART_CR2_STOP_Pos);
 #else
 	GPIOC->BSRR = GPIO_BSRR_BR_0; // Do not invert Rx
 	USART1->BRR = 417; // 48MHz/115200bps
-	USART1->CR1 = USART_CR1_RE;
+	USART1->CR1 = USART_CR1_UE;
 #endif
-	USART1->CR3 = USART_CR3_EIE | USART_CR3_DMAR;
+	USART1->CR1 |= USART_CR1_RE;
 	
 	/* SPI ----------------------------------------------------*/
 	
@@ -1012,11 +1051,16 @@ int main()
 	wait_ms(100);
 	//MPU_WRITE(MPU_PWR_MGMT_2, MPU_PWR_MGMT_2__STDBY_XA | MPU_PWR_MGMT_2__STDBY_YA | MPU_PWR_MGMT_2__STDBY_ZA); // Disable accelerometers
 	//MPU_WRITE(MPU_SMPLRT_DIV, 7); // Sample rate = Fs/(x+1)
-	MPU_WRITE(MPU_CFG, MPU_CFG__DLPF_CFG(3)); // Filter ON => Fs=1kHz, else 8kHz
+	if ((REG_GYRO_FILT < 1) || (REG_GYRO_FILT > 6))
+		REG_GYRO_FILT = 1;
+	MPU_WRITE(MPU_CFG, MPU_CFG__DLPF_CFG(REG_GYRO_FILT)); // Filter ON => Fs=1kHz, else 8kHz
 	MPU_WRITE(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
 	MPU_WRITE(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
 	wait_ms(100); // wait for filter to settle
 	MPU_WRITE(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
+	
+	SPI1->CR1 &= ~SPI_CR1_BR_Msk;
+	SPI1->CR1 |= 1 << SPI_CR1_BR_Pos; // SPI clock = clock APB2/2 = 48MHz/4 = 12MHz
 	
 	/* RF init -----------------------------------------------------*/
 	
@@ -1040,14 +1084,14 @@ int main()
 	RF_WRITE(SX1276_PAYLOAD_LENGTH, 6);
 	RF_WRITE(SX1276_MODEM_CONFIG_3, SX1276_MODEM_CONFIG_3__AGC_AUTO_ON);
 	RF_WRITE(SX1276_OP_MODE, SX1276_OP_MODE__LONG_RANGE_MODE | SX1276_OP_MODE__MODE(5));
-
+	
+	/* Radio frame synchronisation -------------------------------------------------*/
+	
+	radio_synch();
+	
 	/* -----------------------------------------------------------------------------------*/
 	
-	SPI1->CR1 &= ~SPI_CR1_BR_Msk;
-	SPI1->CR1 |= 1 << SPI_CR1_BR_Pos; // SPI clock = clock APB2/2 = 48MHz/4 = 12MHz
-	
 	EXTI->IMR = EXTI_IMR_MR4 | EXTI_IMR_MR0; // Enable external interrupts now
-	
 	SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk; // Disable Systick interrupt, not needed anymore (but can still use COUNTFLAG)
 
 	/* Main loop ---------------------------------------------------------------------
@@ -1141,25 +1185,7 @@ int main()
 		if (flag_radio_synch)
 		{
 			flag_radio_synch = 0;
-			
-			// Disable DMA
-			USART1->CR1 &= ~USART_CR1_UE;			
-			USART1->CR3 &= ~USART_CR3_DMAR;
-			USART1->CR1 |= USART_CR1_UE;
-			
-			// Synchonise on IDLE character
-			USART1->SR;
-			USART1->DR;
-			TIM7->CNT = 0;
-			while (((USART1->SR & USART_SR_IDLE) == 0) && (TIM7->CNT < 50000))
-				USART1->DR;
-			
-			// Enable DMA
-			USART1->CR1 &= ~USART_CR1_UE;
-			USART1->CR3 |= USART_CR3_DMAR;
-			USART1->CR1 |= USART_CR1_UE;
-			DMA2_Stream5->NDTR = sizeof(radio_frame);
-			DMA2_Stream5->CR |= DMA_SxCR_EN;
+			radio_synch();
 		}
 		
 		/* Process radio commands -----------------------------------------------------*/
@@ -1303,7 +1329,7 @@ int main()
 			}
 			
 			// Beep if requested
-			if (aux[1] > 0.5f)
+			if (aux[0] > 0.5f)
 				flag_beep_user = 1;
 			else
 				flag_beep_user = 0;
@@ -1532,17 +1558,6 @@ int main()
 			// Raise flag for motor command ready
 			flag_motor = 1;
 			
-			// Send motor command to host
-			if ((REG_DEBUG__CASE == 8) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
-			{
-				usb_buffer_tx.u16[0] = motor_raw[0];
-				usb_buffer_tx.u16[1] = motor_raw[1];
-				usb_buffer_tx.u16[2] = motor_raw[2];
-				usb_buffer_tx.u16[3] = servo_raw;
-				USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 4*2);
-				USBD_CDC_TransmitPacket(&USBD_device_handler);
-			}
-			
 			// Toggle LED at rate of MPU flag
 			if ((REG_CTRL__LED_SELECT == 2) && !flag_mpu_cal)
 			{
@@ -1573,6 +1588,17 @@ int main()
 				for (i=0; i<3; i++)
 					motor_raw[i] = 0;
 				servo_raw = 1000;
+			}
+			
+			// Send motor command to host
+			if ((REG_DEBUG__CASE == 8) && ((mpu_sample_count & REG_DEBUG__MASK) == 0))
+			{
+				usb_buffer_tx.u32[0] = motor_raw[0];
+				usb_buffer_tx.u32[1] = motor_raw[1];
+				usb_buffer_tx.u32[2] = motor_raw[2];
+				usb_buffer_tx.u32[3] = servo_raw;
+				USBD_CDC_SetTxBuffer(&USBD_device_handler, usb_buffer_tx.u8, 4*4);
+				USBD_CDC_TransmitPacket(&USBD_device_handler);
 			}
 			
 			TIM5->CCR4 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[0]; // Motor 3

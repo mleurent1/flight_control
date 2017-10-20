@@ -27,7 +27,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_cdc_if.h"
-#include "fc.h"
+#include "usb.h"
 
 /** @addtogroup STM32_USB_DEVICE_LIBRARY
   * @{
@@ -101,7 +101,7 @@ USBD_CDC_LineCodingTypeDef linecoding =
   */
 static int8_t USBD_CDC_IF_Init(void)
 {
-	USBD_CDC_SetRxBuffer(&USBD_device_handler, (uint8_t *)&usb_buffer_rx);
+	USBD_CDC_SetRxBuffer(&USBD_device_handler, (uint8_t *)&host_buffer_rx);
 	USBD_CDC_ReceivePacket(&USBD_device_handler);
 	return (0);
 }

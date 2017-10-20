@@ -296,7 +296,7 @@ function writeConfig(){
 	// Erase Flash
 	txBufUint8[0] = 6;
 	chrome.serial.send(conHandle.connectionId, txBuf, function(){});
-	timeout = 2000;
+	timeout = 3000;
 	
 	regUint32Flash(0);
 	regFloat32Flash(7);

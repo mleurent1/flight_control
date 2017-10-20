@@ -1,0 +1,40 @@
+reg_properties_t reg_properties[NB_REG] = 
+{
+	{1, 1, 0, 0}, // VERSION
+	{0, 0, 0, 0}, // CTRL
+	{0, 0, 0, 0}, // MOTOR_TEST
+	{0, 0, 0, 32512}, // DEBUG
+	{1, 0, 0, 0}, // ERROR
+	{1, 0, 0, 0}, // TIME
+	{1, 0, 1, 0}, // VBAT
+	{0, 1, 1, 1097649357}, // VBAT_MIN
+	{0, 1, 0, 327682000}, // TIME_CONSTANT
+	{0, 1, 0, 100}, // TIME_CONSTANT_RADIO
+	{0, 1, 1, 1082130432}, // EXPO_PITCH_ROLL
+	{0, 1, 1, 1077936128}, // EXPO_YAW
+	{0, 1, 0, 1782758450}, // MOTOR
+	{0, 1, 0, 756450000}, // RATE
+	{0, 1, 1, 1073741824}, // P_PITCH
+	{0, 1, 1, 1017370378}, // I_PITCH
+	{0, 1, 1, 0}, // D_PITCH
+	{0, 1, 1, 1073741824}, // P_ROLL
+	{0, 1, 1, 1017370378}, // I_ROLL
+	{0, 1, 1, 0}, // D_ROLL
+	{0, 1, 1, 1073741824}, // P_YAW
+	{0, 1, 1, 1017370378}, // I_YAW
+	{0, 1, 1, 0}, // D_YAW
+	{0, 1, 1, 1084227584}, // P_PITCH_ANGLE
+	{0, 1, 1, 0}, // I_PITCH_ANGLE
+	{0, 1, 1, 1140457472}, // D_PITCH_ANGLE
+	{0, 1, 1, 1084227584}, // P_ROLL_ANGLE
+	{0, 1, 1, 0}, // I_ROLL_ANGLE
+	{0, 1, 1, 1140457472}, // D_ROLL_ANGLE
+	{1, 1, 0, 0}, // GYRO_DC_XY
+	{1, 1, 0, 0}, // GYRO_DC_Z
+	{1, 1, 0, 0}, // ACCEL_DC_XY
+	{1, 1, 0, 0}, // ACCEL_DC_Z
+	{1, 1, 0, 0}, // THROTTLE
+	{1, 1, 0, 0}, // AILERON
+	{1, 1, 0, 0}, // ELEVATOR
+	{1, 1, 0, 0} // RUDDER
+};
