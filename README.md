@@ -57,7 +57,7 @@ pitch forward =>
 - pitch > 0
 - angle pitch > 0
 
-roll left =>
+roll right =>
 - gyro y > 0
 - accel y > 0
 - roll > 0
@@ -145,6 +145,6 @@ debug(7,nb_points)
 ```
 - Do not forget to arm
 - quad pitch forward: motor 1&4 up, motor 2&3 down
-- quad roll right: motor 3&4 up, motor 1&2 down
+- quad roll right: motor 1&2 up, motor 3&4 down
 - radio pitch forward: motor 2&3 up, motor 1&4 down
-- radio roll right: motor 1&2 up, motor 3&4 down
+- radio roll right: motor 3&4 up, motor 1&2 down
