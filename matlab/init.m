@@ -15,7 +15,7 @@ mpu = mpu_reg;
 rf = sx1276_reg;
 
 delete(instrfindall);
-ser = serial('COM11');
+ser = serial('COM21');
 ser.BaudRate = 115200;
 ser.Timeout = 1;
 fopen(ser);

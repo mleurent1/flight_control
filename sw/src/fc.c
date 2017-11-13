@@ -67,7 +67,8 @@ int main(void)
 	uint16_t radio_frame_count;
 	struct radio_raw_s radio_raw;
 	struct radio_s radio;
-	struct radio_s radio_smooth;
+	float radio_pitch_smooth;
+	float radio_roll_smooth;
 	
 	float error_pitch;
 	float error_roll;
@@ -139,10 +140,8 @@ int main(void)
 	
 	radio_frame_count = 0;
 	radio_error_count = 0;
-	radio_smooth.throttle = 0;
-	radio_smooth.pitch = 0;
-	radio_smooth.roll = 0;
-	radio_smooth.yaw = 0;
+	radio_pitch_smooth = 0;
+	radio_roll_smooth = 0;
 	
 	pitch_i_term = 0;
 	roll_i_term = 0;
@@ -204,8 +203,12 @@ int main(void)
 					flag_beep_user = 0;
 				
 				// Send data to host
-				if ((REG_DEBUG__CASE == 4) && ((radio_frame_count & REG_DEBUG__MASK) == 0))
-					host_send((uint8_t*)&radio_raw, sizeof(radio_raw));
+				if ((REG_DEBUG__CASE > 0) && ((radio_frame_count & REG_DEBUG__MASK) == 0)) {
+					if (REG_DEBUG__CASE == 4)
+						host_send((uint8_t*)&radio_raw, sizeof(radio_raw));
+					else if (REG_DEBUG__CASE == 5)
+						host_send((uint8_t*)&radio, sizeof(radio));
+				}
 				
 				// Toggle LED at rate of Radio flag
 				if ((radio_frame_count & 0x3F) == 0)
@@ -241,18 +244,10 @@ int main(void)
 			// Estimate angle
 			angle_estimate(&sensor, &angle, (sensor_sample_count1 == RECOVERY_TIME));
 			
-			// Smooth radio commands if in angle mode
-			if (flag_acro) {
-				radio_smooth.throttle  = radio.throttle;
-				radio_smooth.pitch     = radio.pitch;
-				radio_smooth.roll      = radio.roll;
-				radio_smooth.yaw       = radio.yaw;
-			}
-			else {
-				radio_smooth.throttle += filter_alpha_radio * radio.throttle - filter_alpha_radio * radio_smooth.throttle;
-				radio_smooth.pitch    += filter_alpha_radio * radio.pitch    - filter_alpha_radio * radio_smooth.pitch;
-				radio_smooth.roll     += filter_alpha_radio * radio.roll     - filter_alpha_radio * radio_smooth.roll;
-				radio_smooth.yaw      += filter_alpha_radio * radio.yaw      - filter_alpha_radio * radio_smooth.yaw;
+			// Smooth pitch and roll commands in angle mode
+			if (!flag_acro) {
+				radio_pitch_smooth += filter_alpha_radio * radio.pitch - filter_alpha_radio * radio_pitch_smooth;
+				radio_roll_smooth  += filter_alpha_radio * radio.roll  - filter_alpha_radio * radio_roll_smooth;
 			}
 			
 			// Previous error
@@ -262,14 +257,14 @@ int main(void)
 			
 			// Current error
 			if (flag_acro) {
-				error_pitch = sensor.gyro_x - radio_smooth.pitch * (float)REG_RATE__PITCH_ROLL;
-				error_roll = sensor.gyro_y - radio_smooth.roll * (float)REG_RATE__PITCH_ROLL;
+				error_pitch = sensor.gyro_x - radio.pitch * (float)REG_RATE__PITCH_ROLL;
+				error_roll = sensor.gyro_y - radio.roll * (float)REG_RATE__PITCH_ROLL;
 			}
 			else {
-				error_pitch = angle.pitch - radio_smooth.pitch * (float)REG_RATE__ANGLE;
-				error_roll = angle.roll - radio_smooth.roll * (float)REG_RATE__ANGLE;
+				error_pitch = angle.pitch - radio_pitch_smooth * (float)REG_RATE__ANGLE;
+				error_roll = angle.roll - radio_roll_smooth * (float)REG_RATE__ANGLE;
 			}
-			error_yaw = sensor.gyro_z - radio_smooth.yaw * (float)REG_RATE__YAW;
+			error_yaw = sensor.gyro_z - radio.yaw * (float)REG_RATE__YAW;
 			
 			// Switch PID coefficients for acro
 			if (flag_acro != flag_acro_z) {
@@ -338,13 +333,13 @@ int main(void)
 			
 			// Desactivate throttle when arm test
 			if (REG_CTRL__ARM_TEST > 0)
-				radio_smooth.throttle = 0;
+				radio.throttle = 0;
 			
 			// Motor matrix
-			motor[0] = radio_smooth.throttle * (float)REG_MOTOR__RANGE + roll + pitch - yaw;
-			motor[1] = radio_smooth.throttle * (float)REG_MOTOR__RANGE + roll - pitch + yaw;
-			motor[2] = radio_smooth.throttle * (float)REG_MOTOR__RANGE - roll - pitch - yaw;
-			motor[3] = radio_smooth.throttle * (float)REG_MOTOR__RANGE - roll + pitch + yaw;
+			motor[0] = radio.throttle * (float)REG_MOTOR__RANGE + roll + pitch - yaw;
+			motor[1] = radio.throttle * (float)REG_MOTOR__RANGE + roll - pitch + yaw;
+			motor[2] = radio.throttle * (float)REG_MOTOR__RANGE - roll - pitch - yaw;
+			motor[3] = radio.throttle * (float)REG_MOTOR__RANGE - roll + pitch + yaw;
 			
 			// Offset and clip motor value
 			for (i=0; i<4; i++) {
@@ -375,8 +370,6 @@ int main(void)
 					host_send((uint8_t*)&sensor, sizeof(sensor));
 				else if (REG_DEBUG__CASE == 3)
 					host_send((uint8_t*)&angle, sizeof(angle));
-				else if (REG_DEBUG__CASE == 5)
-					host_send((uint8_t*)&radio_smooth, sizeof(radio_smooth));
 				else if (REG_DEBUG__CASE == 6) {
 					host_buffer_tx.f[0] = pitch;
 					host_buffer_tx.f[1] = roll;

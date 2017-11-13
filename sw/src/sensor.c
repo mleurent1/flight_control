@@ -144,8 +144,6 @@ void angle_estimate(struct sensor_s * sensor, struct angle_s * angle, _Bool yaw_
 	float x;
 	
 	// Integrate gyro rate and wrap angle
-	//angle->pitch += sensor->gyro_x / 1000.0f; 
-	//angle->roll  += sensor->gyro_y / 1000.0f;
 	x = angle->pitch + (sensor->gyro_x / 1000.0f);
 	if (x > 180.0f)
 		angle->pitch = x - 360.0f;
@@ -165,17 +163,14 @@ void angle_estimate(struct sensor_s * sensor, struct angle_s * angle, _Bool yaw_
 	vector_magnitude = sqrt(sensor->accel_x * sensor->accel_x + sensor->accel_y * sensor->accel_y + sensor->accel_z * sensor->accel_z);
 	angle->pitch_from_accel = 57.2958f * ARCSINUS(sensor->accel_x / vector_magnitude);
 	angle->roll_from_accel  = 57.2958f * ARCSINUS(sensor->accel_y / vector_magnitude);
-	/*if (accel_z < 0)
-	{
-		if (angle->pitch > 45)
-			angle->pitch_from_accel = -angle->pitch_from_accel + 180.0f;
-		else if (angle->pitch < -45)
-			angle->pitch_from_accel = -angle->pitch_from_accel - 180.0f;
-		if (angle->roll > 45)
-			angle->roll_from_accel = -angle->roll_from_accel + 180.0f;
-		else if (angle->roll < -45)
-			angle->roll_from_accel = -angle->roll_from_accel - 180.0f;
-	}*/
+	if (angle->pitch >= 90)
+		angle->pitch_from_accel = -angle->pitch_from_accel + 180.0f;
+	else if (angle->pitch <= -90)
+		angle->pitch_from_accel = -angle->pitch_from_accel - 180.0f;
+	if (angle->roll >= 90)
+		angle->roll_from_accel = -angle->roll_from_accel + 180.0f;
+	else if (angle->roll <= -90)
+		angle->roll_from_accel = -angle->roll_from_accel - 180.0f;
 	
 	// Combine gyro and accel angles
 	angle->pitch += filter_alpha_accel * angle->pitch_from_accel - filter_alpha_accel * angle->pitch;

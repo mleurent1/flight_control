@@ -8,9 +8,9 @@ global ser
 %% To Customize
 WindowSize = 256;
 switch DebugCase
-	case {1,2,3,5,6,7} % sensor rate (1kHz)
+	case {1,2,3,6,7} % sensor rate (1kHz)
       SampleMask = hex2dec('001F');
-	case 4 % radio rate (~100Hz)
+	case {4,5} % radio rate (~100Hz)
 		SampleMask = hex2dec('0003');
 	case 8 % vbat rate (100Hz)
 		SampleMask = hex2dec('0003');
