@@ -17,7 +17,7 @@
 
 /* Function definitions ----------------------------------*/
 
-void mpu6000_init(void)
+void mpu_spi_init(void)
 {
 	SENSOR_WRITE(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__DEVICE_RST);
 	wait_ms(100);
@@ -35,19 +35,7 @@ void mpu6000_init(void)
 	SENSOR_WRITE(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
 }
 
-void mpu6050_init(void)
-{
-	SENSOR_WRITE(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__DEVICE_RST);
-	wait_ms(100);
-	SENSOR_WRITE(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1));
-	wait_ms(100);
-	SENSOR_WRITE(MPU_CFG, MPU_CFG__DLPF_CFG(1)); // Filter ON => Fs=1kHz, else 8kHz
-	SENSOR_WRITE(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
-	SENSOR_WRITE(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
-	SENSOR_WRITE(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
-}
-
-void mpu9150_init(void)
+void mpu_i2c_init(void)
 {
 	SENSOR_WRITE(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__DEVICE_RST);
 	wait_ms(100);

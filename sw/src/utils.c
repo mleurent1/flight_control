@@ -46,7 +46,7 @@ int32_t uint32_to_int32(uint32_t x)
 	return i2u.i;
 }
 
-void dshot_encode(volatile uint32_t* val, volatile uint32_t buf[17])
+void dshot_encode(volatile uint32_t* val, volatile uint32_t buf[16])
 {
 	int i;
 	uint8_t bit[11];
@@ -60,7 +60,6 @@ void dshot_encode(volatile uint32_t* val, volatile uint32_t buf[17])
 	buf[13] = (bit[ 9]^bit[5]^bit[1]) ? 60 : 30;
 	buf[14] = (bit[ 8]^bit[4]^bit[0]) ? 60 : 30;
 	buf[15] = (bit[ 7]^bit[3])        ? 60 : 30;
-	buf[16] = 0;
 }
 
 float expo(float lin)

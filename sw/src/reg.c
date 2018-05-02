@@ -8,7 +8,7 @@ uint32_t reg[NB_REG];
 float regf[NB_REG];
 reg_properties_t reg_properties[NB_REG] = 
 {
-	{1, 1, 0, 29}, // VERSION
+	{1, 1, 0, 30}, // VERSION
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
 	{0, 0, 0, 32512}, // DEBUG

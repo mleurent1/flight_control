@@ -29,7 +29,7 @@ switch DebugCase
 		dtype = 'int16';
 		for n = 1:3
 			a{n} = subplot(3,1,n);
-         a{n}.YLim = [-2^15,2^15];
+			%a{n}.YLim = [-2^15,2^15];
 		end
 		for n = 1:3
 			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));

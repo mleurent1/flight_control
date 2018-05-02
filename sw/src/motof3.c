@@ -527,7 +527,7 @@ void board_init()
 	/* Sensor init ----------------------------------------------------*/
 	
 	wait_ms(1000);
-	mpu6050_init();
+	mpu_i2c_init();
 	set_mpu_host(0);
 	EXTI->IMR = EXTI_IMR_MR15; // Enable interrupt
 	TIM15->CR1 = TIM_CR1_CEN;  // Enable timeout

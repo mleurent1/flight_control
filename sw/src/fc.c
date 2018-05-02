@@ -365,7 +365,7 @@ int main(void)
 			// Send data to host
 			if ((REG_DEBUG__CASE > 0) && ((sensor_sample_count & REG_DEBUG__MASK) == 0)) {
 				if (REG_DEBUG__CASE == 1) 
-					host_send((uint8_t*)&sensor_raw.bytes[2], sizeof(sensor_raw)-2);
+					host_send((uint8_t*)&sensor_raw.bytes[1], sizeof(sensor_raw)-1);
 				else if (REG_DEBUG__CASE == 2)
 					host_send((uint8_t*)&sensor, sizeof(sensor));
 				else if (REG_DEBUG__CASE == 3)

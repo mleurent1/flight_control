@@ -758,7 +758,7 @@ void board_init()
 	/* Sensor init ----------------------------------------------------*/
 	
 	wait_ms(1000);
-	mpu6000_init();
+	mpu_spi_init();
 	set_mpu_host(0);
 	EXTI->IMR = EXTI_IMR_MR4; // Enable interrupt
 	TIM12->CR1 = TIM_CR1_CEN; // Enable timeout

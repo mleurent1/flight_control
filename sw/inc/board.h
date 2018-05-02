@@ -10,6 +10,8 @@
 	#include "revolution.h"
 #elif defined(NUCLEO)
 	#include "nucleo.h"
+#elif defined(FEMTO)
+	#include "femto.h"
 #endif
 
 /* Public functions -----------------*/

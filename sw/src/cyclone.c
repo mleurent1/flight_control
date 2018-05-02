@@ -453,7 +453,7 @@ void board_init()
 	DMA1_Channel3->CMAR = (uint32_t)motor4_dshot;
 	DMA1_Channel3->CPAR = (uint32_t)&(TIM3->CCR4);
 	
-	DMA1_Channel7->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL | DMA_CCR_PSIZE_1 | DMA_CCR_MSIZE_1 | DMA_CCR_TCIE;
+	DMA1_Channel7->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL | DMA_CCR_PSIZE_1 | DMA_CCR_MSIZE_1;
 	DMA1_Channel7->CMAR = (uint32_t)motor1_dshot;
 	DMA1_Channel7->CPAR = (uint32_t)&(TIM2->CCR2);
 	
@@ -472,7 +472,7 @@ void board_init()
 	TIM3->ARR = 80;
 	TIM3->DIER = TIM_DIER_CC3DE | TIM_DIER_CC4DE;
 	TIM3->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;
-	TIM3->CCMR2 = (6 << TIM_CCMR2_OC3M_Pos) | (6 << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC3PE | TIM_CCMR2_OC4PE;
+	TIM3->CCMR2 = (6 << TIM_CCMR2_OC3M_Pos) | TIM_CCMR2_OC3PE | (6 << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC4PE;
 #else	
 	// One-pulse mode for OneShot125
 	TIM2->CR1 = TIM_CR1_OPM;
@@ -594,7 +594,7 @@ void board_init()
 	/* Sensor init ----------------------------------------------------*/
 	
 	wait_ms(1000);
-	mpu6000_init();
+	mpu_spi_init();
 	set_mpu_host(0);
 	EXTI->IMR = EXTI_IMR_MR15; // Enable external interrupt now
 	

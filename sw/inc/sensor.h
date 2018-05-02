@@ -21,7 +21,7 @@ __packed struct sensor_raw_s {
 };
 
 typedef union {
-	uint8_t bytes[16];
+	uint8_t bytes[15];
 	struct sensor_raw_s sensor;
 } sensor_raw_t;
 
@@ -46,9 +46,8 @@ struct angle_s {
 
 /* Public functions -----------------*/
 
-void mpu6000_init(void);
-void mpu6050_init(void);
-void mpu9150_init(void);
+void mpu_spi_init(void);
+void mpu_i2c_init(void);
 void mpu_process_samples(sensor_raw_t * sensor_raw, struct sensor_s * sensor);
 void mpu_cal(sensor_raw_t * sensor_raw);
 void angle_estimate(struct sensor_s * sensor, struct angle_s * angle, _Bool yaw_transfer_is_on);
