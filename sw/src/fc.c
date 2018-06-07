@@ -175,8 +175,10 @@ int main(void)
 			
 			// Decode radio commands
 			error = radio_decode(&radio_frame, &radio_raw, &radio);
-			if (error)
-				radio_error_recover();
+			if (error) {
+				radio_error_count++;
+				radio_synch();
+			}
 			else
 			{
 				reset_timeout_radio();

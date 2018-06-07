@@ -55,21 +55,15 @@ void rf_read(uint8_t addr, uint8_t size)
 	
 }
 
-void radio_error_recover()
+
+void radio_synch()
 {
-	// Disable DMA UART
-	DMA1->IFCR = DMA_IFCR_CGIF6;
-	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
-	USART2->CR3 &= ~USART_CR3_DMAR;
-	USART2->CR1 &= ~USART_CR1_RE;
+	// Enable DMA UART
+	DMA1_Channel6->CNDTR = sizeof(radio_frame);
+	DMA1_Channel6->CCR |= DMA_CCR_EN;
 	
-	// Clear status flags;
-	USART2->ICR = USART_ICR_IDLECF | USART_ICR_ORECF | USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NCF;
-	
-	// Set IDLE interrupt
-	USART2->CR1 |= USART_CR1_IDLEIE | USART_CR1_RE;
-		
-	radio_error_count++;
+	// Enable UART with IDLE line detection
+	USART2->CR1 |= USART_CR1_RE | USART_CR1_IDLEIE;
 }
 
 void set_motors(uint32_t * motor_raw)
@@ -81,21 +75,23 @@ void set_motors(uint32_t * motor_raw)
 	uint32_t motor3_dshot[16];
 	uint32_t motor4_dshot[16];
 	
-	dshot_encode(&motor_raw[0], motor1_dshot);
-	dshot_encode(&motor_raw[1], motor2_dshot);
-	dshot_encode(&motor_raw[2], motor3_dshot);
-	dshot_encode(&motor_raw[3], motor4_dshot);
-	for (i=0; i<16; i++) {
-		dshot[i*4+0] = motor2_dshot[i];
-		dshot[i*4+1] = motor1_dshot[i];
-		dshot[i*4+2] = motor3_dshot[i];
-		dshot[i*4+3] = motor4_dshot[i];
+	if (DMA1_Channel2->CNDTR == 0) {
+		dshot_encode(&motor_raw[0], motor1_dshot);
+		dshot_encode(&motor_raw[1], motor2_dshot);
+		dshot_encode(&motor_raw[2], motor3_dshot);
+		dshot_encode(&motor_raw[3], motor4_dshot);
+		for (i=0; i<16; i++) {
+			dshot[i*4+0] = motor2_dshot[i];
+			dshot[i*4+1] = motor1_dshot[i];
+			dshot[i*4+2] = motor3_dshot[i];
+			dshot[i*4+3] = motor4_dshot[i];
+		}
+		TIM2->CNT = 60;
+		TIM2->DIER = TIM_DIER_UDE;
+		memcpy(DMA1_Channel2, (const void*)&DMA1_Channel2_TIM, sizeof(DMA_Channel_TypeDef));
+		DMA1_Channel2->CCR |= DMA_CCR_EN;
+		TIM2->CR1 = TIM_CR1_CEN;
 	}
-	TIM2->CNT = 60;
-	TIM2->DIER = TIM_DIER_UDE;
-	memcpy(DMA1_Channel2, (const void*)&DMA1_Channel2_TIM, sizeof(DMA_Channel_TypeDef));
-	DMA1_Channel2->CCR |= DMA_CCR_EN;
-	TIM2->CR1 = TIM_CR1_CEN;
 #else
 	TIM2->CCR1 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[0];
 	TIM2->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[1];
@@ -169,7 +165,7 @@ uint16_t get_timer_process(void)
 void EXTI15_10_IRQHandler() 
 {
 	EXTI->PR = EXTI_PR_PIF13; // Clear pending request
-	if (REG_CTRL__SENSOR_HOST_CTRL == 0) {
+	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && ((SPI1->SR & SPI_SR_BSY) == 0) && (DMA1_Channel2->CNDTR == 0)) {
 		#if (ESC == DSHOT)
 			TIM2->CR1 = 0;
 			TIM2->DIER = 0;
@@ -221,16 +217,26 @@ void DMA1_Channel2_IRQHandler()
 void USART2_IRQHandler()
 {
 	if (USART2->ISR & USART_ISR_IDLE) {
+		USART2->CR1 &= ~USART_CR1_IDLEIE; // Disable idle line detection
 		USART2->ICR = USART_ICR_IDLECF;  // Clear status flags
 		
-		// Enable DMA UART
-		USART2->CR1 &= ~USART_CR1_IDLEIE;
-		USART2->CR3 |= USART_CR3_DMAR;
-		DMA1_Channel6->CNDTR = sizeof(radio_frame);
-		DMA1_Channel6->CCR |= DMA_CCR_EN;
+		if (DMA1_Channel6->CNDTR != sizeof(radio_frame)) {
+			// Disable DMA UART
+			DMA1->IFCR = DMA_IFCR_CGIF6;
+			DMA1_Channel6->CCR &= ~DMA_CCR_EN;
+			USART2->CR1 &= ~USART_CR1_RE;
+		
+			// Enable DMA UART
+			DMA1_Channel6->CNDTR = sizeof(radio_frame);
+			DMA1_Channel6->CCR |= DMA_CCR_EN;
+			USART2->CR1 |= USART_CR1_RE;
+		}
 	}
-	else
-		radio_error_recover();
+	else {
+		// Clear status flags
+		USART2->ICR = USART_ICR_ORECF | USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NCF;
+		radio_error_count++;
+	}
 }
 
 /* End of radio UART receive -----------------------*/
@@ -239,7 +245,7 @@ void DMA1_Channel6_IRQHandler()
 {
 	if (DMA1->ISR & DMA_ISR_TEIF6) // Check DMA transfer error
 		
-		radio_error_recover();
+		radio_synch();
 	else {
 		// Raise flag for radio commands ready
 		flag_radio = 1; 
@@ -408,7 +414,9 @@ void board_init()
 	// B11: UART3 Rx, AF7, NOT USED
 	// C13: MPU interrupt
 	// C15: Beeper
+#ifdef BEEPER
 	GPIOC->MODER |= GPIO_MODER_MODER15_0;
+#endif
 	
 	/* DMA --------------------------------------------------------------------------*/
 	
@@ -428,7 +436,7 @@ void board_init()
 	DMA1_Channel3->CPAR = (uint32_t)&(SPI1->DR);
 	
 	// UART2 Rx
-	DMA1_Channel6->CCR = DMA_CCR_TCIE | DMA_CCR_MINC | DMA_CCR_TEIE;
+	DMA1_Channel6->CCR = DMA_CCR_TCIE | DMA_CCR_MINC;
 	DMA1_Channel6->CMAR = (uint32_t)&radio_frame;
 	DMA1_Channel6->CPAR = (uint32_t)&(USART2->RDR);
 
@@ -474,7 +482,7 @@ void board_init()
 	TIM6->PSC = 48000-1; // 1ms
 	TIM6->ARR = TIMEOUT_RADIO;
 	TIM6->DIER = TIM_DIER_UIE;
-	//TIM6->CR1 = TIM_CR1_CEN;
+	TIM6->CR1 = TIM_CR1_CEN;
 	
 	// Processing time
 	TIM7->PSC = 48-1; // 1us
@@ -503,7 +511,7 @@ void board_init()
 	USART2->BRR = 417; // 48MHz/115200bps
 	USART2->CR1 = USART_CR1_UE;
 #endif
-	USART2->CR3 = USART_CR3_EIE;
+	USART2->CR3 = USART_CR3_DMAR | USART_CR3_EIE;
 	
 	/* SPI ----------------------------------------------------*/
 	
@@ -574,5 +582,5 @@ void board_init()
 	/* Radio init ----------------------------------*/
 	
 	// Set IDLE interrupt
-	//USART2->CR1 |= USART_CR1_IDLEIE | USART_CR1_RE;
+	radio_synch();
 }

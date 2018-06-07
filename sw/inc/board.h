@@ -29,6 +29,6 @@ void set_mpu_host(_Bool host);
 float get_vbat(void);
 void reset_timeout_radio(void);
 uint16_t get_timer_process(void);
-void radio_error_recover(void);
+void radio_synch(void);
 	
 #endif
