@@ -85,23 +85,13 @@ classdef fc_reg
 				obj.write(1, uint32(w));
 			end
 		end
-		function y = CTRL__RADIO_CAL_IDLE(obj,x)
+		function y = CTRL__BEEP_DISABLE(obj,x)
 			r = double(obj.read(1));
 			if nargin < 2
 				z = typecast(uint32(bitshift(bitand(r, 64), -6)),'uint8');
 				y = z(1);
 			else
 				w = bitand(bitshift(double(x), 6), 64) + bitand(r, 4294967231);
-				obj.write(1, uint32(w));
-			end
-		end
-		function y = CTRL__RADIO_CAL_RANGE(obj,x)
-			r = double(obj.read(1));
-			if nargin < 2
-				z = typecast(uint32(bitshift(bitand(r, 128), -7)),'uint8');
-				y = z(1);
-			else
-				w = bitand(bitshift(double(x), 7), 128) + bitand(r, 4294967167);
 				obj.write(1, uint32(w));
 			end
 		end
@@ -129,6 +119,16 @@ classdef fc_reg
 				y = z(1);
 			else
 				w = bitand(bitshift(double(x), 16), 983040) + bitand(r, 4293984255);
+				obj.write(2, uint32(w));
+			end
+		end
+		function y = MOTOR_TEST__TELEMETRY(obj,x)
+			r = double(obj.read(2));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 1048576), -20)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 20), 1048576) + bitand(r, 4293918719);
 				obj.write(2, uint32(w));
 			end
 		end
@@ -650,6 +650,60 @@ classdef fc_reg
 				obj.write(36, uint32(w));
 			end
 		end
+		function y = AUX(obj,x)
+			if nargin < 2
+				y = obj.read(37);
+			else
+				obj.write(37, uint32(x));
+			end
+		end
+		function y = AUX__IDLE(obj,x)
+			r = double(obj.read(37));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 65535), 0)),'uint16');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 0), 65535) + bitand(r, 4294901760);
+				obj.write(37, uint32(w));
+			end
+		end
+		function y = AUX__RANGE(obj,x)
+			r = double(obj.read(37));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 4294901760), -16)),'uint16');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 16), 4294901760) + bitand(r, 65535);
+				obj.write(37, uint32(w));
+			end
+		end
+		function y = MPU_CFG(obj,x)
+			if nargin < 2
+				y = obj.read(38);
+			else
+				obj.write(38, uint32(x));
+			end
+		end
+		function y = MPU_CFG__FILT(obj,x)
+			r = double(obj.read(38));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 255), 0)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 0), 255) + bitand(r, 4294967040);
+				obj.write(38, uint32(w));
+			end
+		end
+		function y = MPU_CFG__RATE(obj,x)
+			r = double(obj.read(38));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 65280), -8)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 8), 65280) + bitand(r, 4294902015);
+				obj.write(38, uint32(w));
+			end
+		end
 	end
 	properties
 		method = 0;
@@ -662,11 +716,11 @@ classdef fc_reg
 			'CTRL__BEEP_TEST', [1,0,0,2],...
 			'CTRL__TIME_MAXHOLD', [1,0,0,2],...
 			'CTRL__SENSOR_CAL', [1,0,0,2],...
-			'CTRL__RADIO_CAL_IDLE', [1,0,0,2],...
-			'CTRL__RADIO_CAL_RANGE', [1,0,0,2],...
+			'CTRL__BEEP_DISABLE', [1,0,0,2],...
 			'MOTOR_TEST', [2,0,0,1],...
 			'MOTOR_TEST__VALUE', [2,0,0,2],...
 			'MOTOR_TEST__SELECT', [2,0,0,2],...
+			'MOTOR_TEST__TELEMETRY', [2,0,0,2],...
 			'DEBUG', [3,0,0,1],...
 			'DEBUG__CASE', [3,0,0,2],...
 			'DEBUG__MASK', [3,0,0,2],...
@@ -728,6 +782,12 @@ classdef fc_reg
 			'ELEVATOR__RANGE', [35,1,0,2],...
 			'RUDDER', [36,1,0,1],...
 			'RUDDER__IDLE', [36,1,0,2],...
-			'RUDDER__RANGE', [36,1,0,2] );
+			'RUDDER__RANGE', [36,1,0,2],...
+			'AUX', [37,1,0,1],...
+			'AUX__IDLE', [37,1,0,2],...
+			'AUX__RANGE', [37,1,0,2],...
+			'MPU_CFG', [38,1,0,1],...
+			'MPU_CFG__FILT', [38,1,0,2],...
+			'MPU_CFG__RATE', [38,1,0,2] );
 	end
 end

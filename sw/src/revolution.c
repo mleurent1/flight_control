@@ -8,19 +8,6 @@
 
 #define ADC_SCALE 0.0089f
 
-/* Private types --------------------------------------*/
-
-/* Global variables --------------------------------------*/
-
-volatile uint8_t spi1_rx_buffer[16];
-volatile uint8_t spi1_tx_buffer[16];
-volatile uint8_t spi3_rx_buffer[7];
-volatile uint8_t spi3_tx_buffer[7];
-volatile uint32_t motor1_dshot[17];
-volatile uint32_t motor2_dshot[17];
-volatile uint32_t motor3_dshot[17];
-volatile uint32_t motor4_dshot[17];
-
 /* Private macros ---------------------------------------------------*/
 
 #define DMA_CLEAR_ALL_FLAGS_0 (DMA_LIFCR_CTCIF0 | DMA_LIFCR_CHTIF0 | DMA_LIFCR_CTEIF0 |DMA_LIFCR_CDMEIF0 |DMA_LIFCR_CFEIF0)
@@ -32,133 +19,163 @@ volatile uint32_t motor4_dshot[17];
 #define DMA_CLEAR_ALL_FLAGS_6 (DMA_HIFCR_CTCIF6 | DMA_HIFCR_CHTIF6 | DMA_HIFCR_CTEIF6 |DMA_HIFCR_CDMEIF6 |DMA_HIFCR_CFEIF6)
 #define DMA_CLEAR_ALL_FLAGS_7 (DMA_HIFCR_CTCIF7 | DMA_HIFCR_CHTIF7 | DMA_HIFCR_CTEIF7 |DMA_HIFCR_CDMEIF7 |DMA_HIFCR_CFEIF7)
 
+/* Private types --------------------------------------*/
+
+/* Global variables --------------------------------------*/
+
+volatile uint8_t spi1_rx_buffer[16];
+volatile uint8_t spi1_tx_buffer[16];
+volatile uint8_t spi3_rx_buffer[7];
+volatile uint8_t spi3_tx_buffer[7];
+volatile uint32_t dshot12[17*2];
+volatile uint32_t dshot34[17*2];
+
 /* Functions ------------------------------------------------*/
 
-void sensor_write(uint8_t addr, uint8_t data)
+uint32_t HAL_RCC_GetHCLKFreq(void)
 {
-	spi1_tx_buffer[0] = addr & 0x7F;
-	spi1_tx_buffer[1] = data;
-	DMA2_Stream0->NDTR = 2;
-	DMA2_Stream3->NDTR = 2;
+  return SystemCoreClock;
+}
+
+__forceinline void sensor_spi_dma_enable(uint8_t size)
+{
+	DMA2_Stream0->NDTR = size + 1;
+	DMA2_Stream3->NDTR = size + 1;
 	DMA2_Stream0->CR |= DMA_SxCR_EN;
 	DMA2_Stream3->CR |= DMA_SxCR_EN;
 	SPI1->CR1 |= SPI_CR1_SPE;
 }
 
+__forceinline void sensor_spi_dma_disable()
+{
+	DMA2->LIFCR = DMA_CLEAR_ALL_FLAGS_0 | DMA_CLEAR_ALL_FLAGS_3;
+	DMA2_Stream0->CR &= ~DMA_SxCR_EN;
+	DMA2_Stream3->CR &= ~DMA_SxCR_EN;
+	while ((DMA2_Stream0->CR & DMA_SxCR_EN) && (DMA2_Stream3->CR & DMA_SxCR_EN)) {}
+	SPI1->CR1 &= ~SPI_CR1_SPE;
+}
+
+__forceinline void rf_spi_dma_enable(uint8_t size)
+{
+	DMA1_Stream0->NDTR = size + 1;
+	DMA1_Stream7->NDTR = size + 1;
+	DMA1_Stream0->CR |= DMA_SxCR_EN;
+	DMA1_Stream7->CR |= DMA_SxCR_EN;
+	SPI3->CR1 |= SPI_CR1_SPE;
+}
+
+__forceinline void rf_spi_dma_disable()
+{
+	DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_0;
+	DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_7;
+	DMA1_Stream0->CR &= ~DMA_SxCR_EN;
+	DMA1_Stream7->CR &= ~DMA_SxCR_EN;
+	while ((DMA1_Stream0->CR & DMA_SxCR_EN) && (DMA1_Stream7->CR & DMA_SxCR_EN)) {}
+	SPI3->CR1 &= ~SPI_CR1_SPE;
+}
+
+__forceinline void radio_uart_dma_enable(uint8_t size)
+{
+	DMA2_Stream5->NDTR = size;
+	DMA2_Stream5->CR |= DMA_SxCR_EN;
+	USART1->CR1 |= USART_CR1_RE;
+}
+
+__forceinline void radio_uart_dma_disable()
+{
+	DMA2->HIFCR = DMA_CLEAR_ALL_FLAGS_5;
+	DMA2_Stream5->CR &= ~DMA_SxCR_EN;
+	while (DMA2_Stream5->CR & DMA_SxCR_EN) {};
+	USART1->CR1 &= ~USART_CR1_RE;
+}
+
+void sensor_write(uint8_t addr, uint8_t data)
+{
+	spi1_tx_buffer[0] = addr & 0x7F;
+	spi1_tx_buffer[1] = data;
+	sensor_spi_dma_enable(1);
+}
+
 void sensor_read(uint8_t addr, uint8_t size)
 {
 	spi1_tx_buffer[0] = 0x80 | (addr & 0x7F);
-	DMA2_Stream0->NDTR = size+1;
-	DMA2_Stream3->NDTR = size+1;
-	DMA2_Stream0->CR |= DMA_SxCR_EN;
-	DMA2_Stream3->CR |= DMA_SxCR_EN;
-	SPI1->CR1 |= SPI_CR1_SPE;
+	sensor_spi_dma_enable(size);
 }
 
 void rf_write(uint8_t addr, uint8_t * data, uint8_t size)
 {
 	spi3_tx_buffer[0] = 0x80 | (addr & 0x7F);
 	memcpy((uint8_t *)&spi3_tx_buffer[1], data, size);
-	DMA1_Stream0->NDTR = size+1;
-	DMA1_Stream7->NDTR = size+1;
-	DMA1_Stream0->CR |= DMA_SxCR_EN;
-	DMA1_Stream7->CR |= DMA_SxCR_EN;
-	SPI3->CR1 |= SPI_CR1_SPE;
+	rf_spi_dma_enable(size);
 }
 
 void rf_read(uint8_t addr, uint8_t size)
 {
 	spi3_tx_buffer[0] = addr & 0x7F;
-	DMA1_Stream0->NDTR = size+1;
-	DMA1_Stream7->NDTR = size+1;
-	DMA1_Stream0->CR |= DMA_SxCR_EN;
-	DMA1_Stream7->CR |= DMA_SxCR_EN;
-	SPI3->CR1 |= SPI_CR1_SPE;
+	rf_spi_dma_enable(size);
 }
 
-void radio_error_recover()
+void radio_synch()
 {
-	// Disable DMA UART
-	DMA2->HIFCR = DMA_CLEAR_ALL_FLAGS_5;
-	DMA2_Stream5->CR &= ~DMA_SxCR_EN;
-	while (DMA2_Stream5->CR & DMA_SxCR_EN) {}
-	USART1->CR3 &= ~USART_CR3_DMAR;
-	USART1->CR1 &= ~USART_CR1_RE;
+	// Enable DMA UART
+	DMA2_Stream5->NDTR = sizeof(radio_frame);
+	DMA2_Stream5->CR |= DMA_SxCR_EN;
 	
-	// Clear status flags;
-	USART1->SR;
-	USART1->DR;
-	
-	USART1->CR1 |= USART_CR1_IDLEIE | USART_CR1_RE; // Set IDLE interrupt
-		
-	radio_error_count++;
+	// Enable UART with IDLE line detection
+	USART1->CR1 |= USART_CR1_RE | USART_CR1_IDLEIE;
 }
 
-__forceinline void sensor_error_recover()
+void set_motors(uint32_t * motor_raw, _Bool * motor_telemetry)
 {
-	// Disable DMA SPI
-	DMA2->LIFCR = DMA_CLEAR_ALL_FLAGS_0 | DMA_CLEAR_ALL_FLAGS_3;
-	DMA2_Stream0->CR &= ~DMA_SxCR_EN;
-	DMA2_Stream3->CR &= ~DMA_SxCR_EN;
-	while ((DMA2_Stream0->CR & DMA_SxCR_EN) && (DMA2_Stream3->CR & DMA_SxCR_EN)) {}
-	SPI1->CR1 &= ~SPI_CR1_SPE;
+#if (ESC == DSHOT)
+	int i;
+	uint32_t motor1_dshot[16];
+	uint32_t motor2_dshot[16];
+	uint32_t motor3_dshot[16];
+	uint32_t motor4_dshot[16];
 	
-	SPI1->CR1 |= SPI_CR1_MSTR; // Set master bit that could be reset after a SPI mode error
-	
-	sensor_error_count++;
-}
-
-__forceinline void rf_error_recover()
-{
-	// Disable DMA SPI
-	DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_0;
-	DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_7;
-	DMA1_Stream0->CR &= ~DMA_SxCR_EN;
-	DMA1_Stream7->CR &= ~DMA_SxCR_EN;
-	while ((DMA1_Stream0->CR & DMA_SxCR_EN) && (DMA1_Stream7->CR & DMA_SxCR_EN)) {};
-	SPI3->CR1 &= ~SPI_CR1_SPE;
-	
-	SPI3->CR1 |= SPI_CR1_MSTR; // Set master bit that could be reset after a SPI error
-	
-	rf_error_count++;
-}
-
-void set_motors(uint32_t * motor_raw)
-{
-	#if (ESC == DSHOT)
-		dshot_encode(&motor_raw[0], motor1_dshot);
-		dshot_encode(&motor_raw[1], motor2_dshot);
-		dshot_encode(&motor_raw[2], motor3_dshot);
-		dshot_encode(&motor_raw[3], motor4_dshot);
-		TIM2->CR1 = 0;
+	if ((DMA1_Stream2->NDTR == 0) && (DMA1_Stream6->NDTR == 0)) {
+		TIM3->DIER = 0;
 		TIM3->CR1 = 0;
+		TIM3->CNT = 60;
+		DMA1_Stream2->CR &= ~DMA_SxCR_EN; // Disable DMA TIM
+		DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_2;
+		
+		TIM5->DIER = 0;
 		TIM5->CR1 = 0;
-		TIM2->CNT = 0;
-		TIM3->CNT = 0;
-		TIM5->CNT = 0;
-		DMA1_Stream1->CR &= ~DMA_SxCR_EN;
-		DMA1_Stream2->CR &= ~DMA_SxCR_EN;
-		DMA1_Stream3->CR &= ~DMA_SxCR_EN;
-		DMA1_Stream4->CR &= ~DMA_SxCR_EN;
-		DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_1 | DMA_CLEAR_ALL_FLAGS_2 | DMA_CLEAR_ALL_FLAGS_3;
-		DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_4;
-		DMA1_Stream1->NDTR = 17;
-		DMA1_Stream2->NDTR = 17;
-		DMA1_Stream3->NDTR = 17;
-		DMA1_Stream4->NDTR = 17;
-		DMA1_Stream1->CR |= DMA_SxCR_EN;
+		TIM5->CNT = 60;
+		DMA1_Stream6->CR &= ~DMA_SxCR_EN; // Disable DMA TIM
+		DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_6;
+		
+		dshot_encode(&motor_raw[0], motor1_dshot, motor_telemetry[0]);
+		dshot_encode(&motor_raw[1], motor2_dshot, motor_telemetry[1]);
+		dshot_encode(&motor_raw[2], motor3_dshot, motor_telemetry[2]);
+		dshot_encode(&motor_raw[3], motor4_dshot, motor_telemetry[3]);
+		for (i=0; i<16; i++) {
+			dshot12[i*2+0] = motor2_dshot[i];
+			dshot12[i*2+1] = motor1_dshot[i];
+			dshot34[i*2+2] = motor4_dshot[i];
+			dshot34[i*2+3] = motor3_dshot[i];
+		}
+		
+		DMA1_Stream2->NDTR = 17*2;
 		DMA1_Stream2->CR |= DMA_SxCR_EN;
-		DMA1_Stream3->CR |= DMA_SxCR_EN;
-		DMA1_Stream4->CR |= DMA_SxCR_EN;
-	#else
-		TIM3->CCR4 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[0]; // Motor 2
-		TIM5->CCR4 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[1]; // Motor 3
-		TIM2->CCR3 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[2]; // Motor 4
-		TIM5->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[3]; // Motor 5
-	#endif
-	TIM2->CR1 |= TIM_CR1_CEN;
+		TIM3->DIER = TIM_DIER_UDE;
+		TIM3->CR1 = TIM_CR1_CEN;
+		
+		DMA1_Stream6->NDTR = 17*2;
+		DMA1_Stream6->CR |= DMA_SxCR_EN;
+		TIM5->DIER = TIM_DIER_UDE;
+		TIM5->CR1 = TIM_CR1_CEN;
+	}
+#else
+	TIM3->CCR4 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[0];
+	TIM3->CCR3 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[1];
+	TIM5->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[2];
+	TIM5->CCR1 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[3];
 	TIM3->CR1 |= TIM_CR1_CEN;
 	TIM5->CR1 |= TIM_CR1_CEN;
+#endif
 }
 
 void toggle_led_sensor()
@@ -210,8 +227,9 @@ uint16_t get_timer_process(void)
 	return TIM7->CNT;
 }
 
-/* Interrupt routines -------------------------------------------------------------
------------------------------------------------------------------------------------*/
+/* --------------------------------------------------------------------------------
+ Interrupt routines
+--------------------------------------------------------------------------------- */
 
 /* RF Rx Done ----------------------------*/
 
@@ -221,137 +239,132 @@ void EXTI0_IRQHandler()
 	flag_rf_rxtx_done = 1;
 }
 
-/* Sample valid from MPU --------------------*/
+/* Sensor ready IRQ ---------------------------*/
 
 void EXTI4_IRQHandler() 
 {
 	EXTI->PR = EXTI_PR_PR4; // Clear pending request
 	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && ((SPI1->SR & SPI_SR_BSY) == 0)) {
 		sensor_read(59,14);
-		timer_sensor[0] = TIM7->CNT; // SPI transaction time
+		timer_sensor[0] = TIM7->CNT; // Start recording SPI transaction time
 	}
 }
 
-/* MPU SPI error -----------------------*/
+/* Sensor SPI IRQ ------------------------------*/
 
 void SPI1_IRQHandler() 
 {
-	sensor_error_recover();
+	sensor_spi_dma_disable();
+	sensor_error_count++;
 }
 
-/* End of MPU SPI receive -----------------------*/
+/* DMA IRQ of sensor Rx SPI ----------------------*/
 
 void DMA2_Stream0_IRQHandler() 
 {
-	if (DMA2->LISR & DMA_LISR_TEIF0) // Check DMA transfer error
-		sensor_error_recover();
-	else {
-		// Disable DMA SPI
-		DMA2->LIFCR = DMA_CLEAR_ALL_FLAGS_0 | DMA_CLEAR_ALL_FLAGS_3;
-		DMA2_Stream0->CR &= ~DMA_SxCR_EN;
-		DMA2_Stream3->CR &= ~DMA_SxCR_EN;
-		while ((DMA2_Stream0->CR & DMA_SxCR_EN) && (DMA2_Stream3->CR & DMA_SxCR_EN)) {}
-		SPI1->CR1 &= ~SPI_CR1_SPE;
-		
-		if (flag_sensor_host_read) {
-			flag_sensor_host_read = 0;
-			host_send((uint8_t*)&spi1_rx_buffer[1],1);
-		}
-		else {
-			TIM12->CNT = 0; // Reset timeout
-			flag_sensor = 1; // Raise flag for sample ready
-		}
+	_Bool error = 0;
+	
+	 // Check DMA transfer error
+	if (DMA2->LISR & DMA_LISR_TEIF0)
+		error = 1;
+	
+	sensor_spi_dma_disable();
+	
+	if (error)
+		sensor_error_count++;
+	else if (flag_sensor_host_read) {
+		flag_sensor_host_read = 0;
+		host_send((uint8_t*)&spi1_rx_buffer[1],1);
+	} else {
+		TIM12->CNT = 0; // Reset sensor timeout
+		flag_sensor = 1; // Raise flag for sample ready
 	}
 	
-	// SPI transaction time
-	timer_sensor[1] = TIM7->CNT;
+	timer_sensor[1] = TIM7->CNT; // Record SPI transaction time
 }
 
-/* MPU SPI DMA Transfer error ---------------------------*/
+/* DMA IRQ of sensor Tx SPI ---------------------------*/
 
 void DMA2_Stream3_IRQHandler()
 {
-	sensor_error_recover();
+	sensor_spi_dma_disable();
+	sensor_error_count++;
 }
 
-/* RF SPI error ---------------------------------------*/
+/* RF SPI IRQ ---------------------------------------*/
 
 void SPI3_IRQHandler() 
 {
-	rf_error_recover();
+	rf_spi_dma_disable();
+	rf_error_count++;
 }
 
-/* End of RF SPI receive --------------------------------*/
+/* DMA IRQ of RF Rx SPI --------------------------------*/
 
 void DMA1_Stream0_IRQHandler() 
 {
-	if (DMA1->LISR & DMA_LISR_TEIF0) // Check DMA transfer error
-		rf_error_recover();
-	else {
-		// Disable DMA SPI
-		DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_0;
-		DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_7;
-		DMA1_Stream0->CR &= ~DMA_SxCR_EN;
-		DMA1_Stream7->CR &= ~DMA_SxCR_EN;
-		while ((DMA1_Stream0->CR & DMA_SxCR_EN) && (DMA1_Stream7->CR & DMA_SxCR_EN)) {};
-		SPI3->CR1 &= ~SPI_CR1_SPE;
+	_Bool error = 0;
 	
-		if (flag_rf_host_read){
-			flag_rf_host_read = 0;
-			host_send((uint8_t*)&spi3_rx_buffer[1],1);
-		}
-		else
-			flag_rf = 1;
-	}
+	// Check DMA transfer error
+	if (DMA1->LISR & DMA_LISR_TEIF0) 
+		error = 1;
+	
+	rf_spi_dma_disable();
+	
+	if (error)
+		rf_error_count++;
+	else if (flag_rf_host_read) {
+		flag_rf_host_read = 0;
+		host_send((uint8_t*)&spi3_rx_buffer[1],1);
+	} else
+		flag_rf = 1;
 }
 
-/* RF SPI DMA Transfer error ------------------------*/
+/* DMA IRQ of RF Rx SPI ------------------------*/
 
 void DMA1_Stream7_IRQHandler() 
 {
-	rf_error_recover();
+	rf_spi_dma_disable();
+	rf_error_count++;
 }
 
-/* Radio UART error ---------------------------------*/
+/* Radio UART IRQ ---------------------------------*/
 
 void USART1_IRQHandler()
 {
 	if (USART1->SR & USART_SR_IDLE) {
 		USART1->DR; // Clear status flags
+		USART1->CR1 &= ~USART_CR1_IDLEIE; // Disable idle line detection
 		
-		// Enable DMA UART
-		USART1->CR1 &= ~USART_CR1_IDLEIE;
-		DMA2_Stream5->NDTR = sizeof(radio_frame);
-		DMA2_Stream5->CR |= DMA_SxCR_EN;
-		USART1->CR3 |= USART_CR3_DMAR;
+		if (DMA2_Stream5->NDTR != sizeof(radio_frame)) {
+			radio_uart_dma_disable();
+			radio_uart_dma_enable(sizeof(radio_frame));
+		}
 	}
-	else
-		radio_error_recover();
+	else {
+		USART1->DR; // Clear status flags
+		radio_error_count++;
+	}
 }
 
-/* End of radio UART receive -------------------------------*/
+/* DMA IRQ of radio Rx UART -------------------------------*/
 
 void DMA2_Stream5_IRQHandler()
 {
+	_Bool error = 0;
+	
 	// Check DMA transfer error
 	if (DMA2->HISR & DMA_HISR_TEIF5)
-		radio_error_recover();
-	else {
-		// Disable DMA UART
-		DMA2->HIFCR = DMA_CLEAR_ALL_FLAGS_5;
-		DMA2_Stream5->CR &= ~DMA_SxCR_EN;
-		while (DMA2_Stream5->CR & DMA_SxCR_EN) {};
-		USART1->CR3 &= ~USART_CR3_DMAR;
-		USART1->CR1 &= ~USART_CR1_RE;
-		
+		error = 1;
+	
+	radio_uart_dma_disable();
+	
+	if (error)
+		radio_error_count++;
+	else
 		flag_radio = 1; // Raise flag for radio commands ready
 	
-		// Enable DMA UART
-		USART1->CR3 |= USART_CR3_DMAR;
-		DMA2_Stream5->NDTR = sizeof(radio_frame);
-		DMA2_Stream5->CR |= DMA_SxCR_EN;
-		USART1->CR1 |= USART_CR1_RE;
-	}
+	radio_uart_dma_enable(sizeof(radio_frame));
 }
 
 /* Beeper period ----------------------------------------------*/
@@ -402,13 +415,14 @@ void TIM8_TRG_COM_TIM14_IRQHandler()
 
 /* USB interrupt ------------------------------*/
 
-void OTG_FS_IRQHandler(void)
+void OTG_FS_IRQHandler()
 {
 	HAL_PCD_IRQHandler(&PCD_handler);
 }
 
-/* INIT -----------------------------------------------------------------
------------------------------------------------------------------------*/
+/* ---------------------------------------------------------------------
+ board init
+--------------------------------------------------------------------- */
 
 void board_init()
 {
@@ -587,63 +601,43 @@ void board_init()
 	
 	// Timers for DSHOT
 	DMA1_Stream2->CR = (5 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
-	DMA1_Stream2->M0AR = (uint32_t)motor1_dshot;
-	DMA1_Stream2->PAR = (uint32_t)&(TIM3->CCR4);
+	DMA1_Stream2->M0AR = (uint32_t)dshot12;
+	DMA1_Stream2->PAR = (uint32_t)&(TIM3->DMAR);
 	
-	DMA1_Stream3->CR = (6 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
-	DMA1_Stream3->M0AR = (uint32_t)motor2_dshot;
-	DMA1_Stream3->PAR = (uint32_t)&(TIM5->CCR4);
-	
-	DMA1_Stream1->CR = (3 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
-	DMA1_Stream1->M0AR = (uint32_t)motor3_dshot;
-	DMA1_Stream1->PAR = (uint32_t)&(TIM2->CCR3);
-	
-	DMA1_Stream4->CR = (6 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
-	DMA1_Stream4->M0AR = (uint32_t)motor4_dshot;
-	DMA1_Stream4->PAR = (uint32_t)&(TIM5->CCR2);
+	DMA1_Stream6->CR = (6 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
+	DMA1_Stream6->M0AR = (uint32_t)dshot34;
+	DMA1_Stream6->PAR = (uint32_t)&(TIM5->DMAR);
 	
 	/* Timers --------------------------------------------------------------------------*/
 	
 #if (ESC == DSHOT)
-	// DMA driven timer for DShot600, 12Mhz, 0:15, 1:30, T:40
-	TIM2->PSC = 0;
-	TIM2->ARR = 80;
-	TIM2->DIER = TIM_DIER_CC3DE;
-	TIM2->CCER = TIM_CCER_CC3E;
-	TIM2->CCMR2 = (6 << TIM_CCMR2_OC3M_Pos) | TIM_CCMR2_OC3PE;
-	
-	TIM3->PSC = 0;
+	// DMA driven timer for DShot600, 48Mhz: 0:30, 1:60, T:80
+	TIM3->PSC = 0; // 0:DShot600, 1:DShot300
 	TIM3->ARR = 80;
-	TIM3->DIER = TIM_DIER_CC4DE;
-	TIM3->CCER = TIM_CCER_CC4E;
-	TIM3->CCMR2 = (6 << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC4PE;
+	//TIM3->DIER = TIM_DIER_UDE;
+	TIM3->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;
+	TIM3->CCMR2 = (6 << TIM_CCMR2_OC3M_Pos) | TIM_CCMR2_OC3PE | (6 << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC4PE;
+	TIM3->DCR = (1 << TIM_DCR_DBL_Pos) | (15 << TIM_DCR_DBA_Pos);
 	
 	TIM5->PSC = 0;
 	TIM5->ARR = 80;
-	TIM5->DIER = TIM_DIER_CC2DE | TIM_DIER_CC4DE;
-	TIM5->CCER = TIM_CCER_CC2E | TIM_CCER_CC4E;
-	TIM5->CCMR1 = (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
-	TIM5->CCMR2 = (6 << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC4PE;
+	//TIM5->DIER = TIM_DIER_UDE;
+	TIM5->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;
+	TIM5->CCMR1 = (6 << TIM_CCMR1_OC1M_Pos) | TIM_CCMR1_OC1PE | (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
+	TIM3->DCR = (1 << TIM_DCR_DBL_Pos) | (13 << TIM_DCR_DBA_Pos);
 #else
 	// One-pulse mode for OneShot125
-	TIM2->CR1 = TIM_CR1_OPM;
-	TIM2->PSC = 3-1;
-	TIM2->ARR = SERVO_MAX*2 + 1;
-	TIM2->CCER = TIM_CCER_CC3E;
-	TIM2->CCMR2 = 7 << TIM_CCMR2_OC3M_Pos;
-	
 	TIM3->CR1 = TIM_CR1_OPM;
 	TIM3->PSC = 3-1;
 	TIM3->ARR = SERVO_MAX*2 + 1;
-	TIM3->CCER = TIM_CCER_CC4E;
-	TIM3->CCMR2 = 7 << TIM_CCMR2_OC4M_Pos;
+	TIM3->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;
+	TIM3->CCMR2 = (7 << TIM_CCMR2_OC3M_Pos) | (7 << TIM_CCMR2_OC4M_Pos);
 	
 	TIM5->CR1 = TIM_CR1_OPM;
 	TIM5->PSC = 3-1;
 	TIM5->ARR = SERVO_MAX*2 + 1;
-	TIM5->CCER = TIM_CCER_CC2E | TIM_CCER_CC4E;
-	TIM5->CCMR1 = 7 << TIM_CCMR1_OC2M_Pos;
-	TIM5->CCMR2 = 7 << TIM_CCMR2_OC4M_Pos;
+	TIM5->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;
+	TIM5->CCMR1 = (7 << TIM_CCMR1_OC1M_Pos) | (7 << TIM_CCMR1_OC2M_Pos);
 #endif
 
 	// Beeper

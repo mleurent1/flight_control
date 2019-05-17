@@ -46,7 +46,7 @@ int32_t uint32_to_int32(uint32_t x)
 	return i2u.i;
 }
 
-void dshot_encode(volatile uint32_t* val, volatile uint32_t buf[16])
+void dshot_encode(volatile uint32_t* val, volatile uint32_t buf[16], _Bool telemetry)
 {
 	int i;
 	uint8_t bit[11];
@@ -55,7 +55,7 @@ void dshot_encode(volatile uint32_t* val, volatile uint32_t buf[16])
 		buf[i] = (*val & (1 << (10-i))) ? 60 : 30;
 		bit[i] = (*val & (1 << i)) ? 1 : 0;
 	}
-	buf[11] = 30;
+	buf[11] = telemetry ? 60 : 30;
 	buf[12] = (bit[10]^bit[6]^bit[2]) ? 60 : 30;
 	buf[13] = (bit[ 9]^bit[5]^bit[1]) ? 60 : 30;
 	buf[14] = (bit[ 8]^bit[4]^bit[0]) ? 60 : 30;

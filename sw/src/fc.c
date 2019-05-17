@@ -101,6 +101,7 @@ int main(void)
 	float motor[4];
 	int32_t motor_clip[4];
 	uint32_t motor_raw[4];
+	_Bool motor_telemetry[4];
 	
 	uint16_t vbat_sample_count;
 	
@@ -153,11 +154,12 @@ int main(void)
 	
 	sensor_sample_count1 = 0;
 	
-	/* Setup -----------------------------------------------------*/
+	/* Init -----------------------------------------------------*/
 	
-	board_init(); // BOARD_DEPENDENT
-	SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk; // Disable Systick interrupt, not needed anymore (but can still use COUNTFLAG)
-	reg_init();
+	board_init();
+	
+	// Disable Systick interrupt, not needed anymore (but can still use COUNTFLAG)
+	//SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
 	
 	/* Loop ----------------------------------------------------------------------------
 	-----------------------------------------------------------------------------------*/
@@ -355,14 +357,20 @@ int main(void)
 			
 			// Motor command
 			for (i=0; i<4; i++) {
-				if (REG_MOTOR_TEST__SELECT & (1 << i))
+				if (REG_MOTOR_TEST__SELECT & (1 << i)) {
 					motor_raw[i] = (uint32_t)REG_MOTOR_TEST__VALUE;
-				else if (flag_armed || (REG_CTRL__ARM_TEST > 0))
+					motor_telemetry[i] = REG_MOTOR_TEST__TELEMETRY;
+				}
+				else if (flag_armed || (REG_CTRL__ARM_TEST > 0)) {
 					motor_raw[i] = (uint32_t)motor_clip[i];
-				else
+					motor_telemetry[i] = 0;
+				}
+				else {
 					motor_raw[i] = 0;
+					motor_telemetry[i] = 0;
+				}
 			}
-			set_motors(motor_raw);
+			set_motors(motor_raw, motor_telemetry);
 			
 			// Send data to host
 			if ((REG_DEBUG__CASE > 0) && ((sensor_sample_count & REG_DEBUG__MASK) == 0)) {
@@ -420,9 +428,11 @@ int main(void)
 		
 		if (flag_timeout_sensor) {
 			flag_timeout_sensor = 0;
-			for (i=0; i<4; i++)
+			for (i=0; i<4; i++) {
 				motor_raw[i] = 0;
-			set_motors(motor_raw);
+				motor_telemetry[i] = 0;
+			}
+			set_motors(motor_raw, motor_telemetry);
 			flag_beep_sensor = 1;
 		}
 		if (flag_timeout_radio) {
@@ -433,15 +443,16 @@ int main(void)
 		
 		/*------------------------------------------------------------------*/
 		
-		// Record processing time
-		t1 = (int32_t)get_timer_process() - t1;
-		if (t1 < 0)
-			t1 += 0xFFFF;
-		if ((REG_CTRL__TIME_MAXHOLD == 0) || (((uint16_t)t1 > time_process) && REG_CTRL__TIME_MAXHOLD))
-			time_process = (uint16_t)t1;
-		
 		// Wait for interrupts if all flags are processed
-		if (!flag_radio && !flag_sensor && !flag_vbat && !flag_host && !flag_timeout_sensor && !flag_timeout_radio)
+		if (!flag_radio && !flag_sensor && !flag_vbat && !flag_host && !flag_timeout_sensor && !flag_timeout_radio) {
+			// Record processing time
+			t1 = (int32_t)get_timer_process() - t1;
+			if (t1 < 0)
+				t1 += 0xFFFF;
+			if ((REG_CTRL__TIME_MAXHOLD == 0) || (((uint16_t)t1 > time_process) && REG_CTRL__TIME_MAXHOLD))
+				time_process = (uint16_t)t1;
+			
 			__wfi();
+		}
 	}
 }

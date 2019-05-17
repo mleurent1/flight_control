@@ -19,10 +19,11 @@ for n = 1:length(reg)
 		for m = 1:length(reg(n).subf)
 			mask = sum(2.^(reg(n).subf{m}{3}:reg(n).subf{m}{2}));
 			fprintf(f,'#define REG_%s__%s (%s_t)((reg[%d] & %dU) >> %d)\n', reg(n).name, reg(n).subf{m}{1}, reg(n).subf{m}{4}, n-1, mask, reg(n).subf{m}{3});
-         fprintf(f,'#define REG_%s__%s_Msk %dU\n', reg(n).name, reg(n).subf{m}{1}, mask);
-         fprintf(f,'#define REG_%s__%s_Pos %dU\n', reg(n).name, reg(n).subf{m}{1}, reg(n).subf{m}{3});
+			fprintf(f,'#define REG_%s__%s_Msk %dU\n', reg(n).name, reg(n).subf{m}{1}, mask);
+			fprintf(f,'#define REG_%s__%s_Pos %dU\n', reg(n).name, reg(n).subf{m}{1}, reg(n).subf{m}{3});
 		end
 	end
+	fprintf(f,'#define REG_%s_Addr %d\n', reg(n).name, n-1);
 end
 
 fclose(f);

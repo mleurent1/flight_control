@@ -27,8 +27,8 @@ void mpu_spi_init(void)
 	SENSOR_WRITE(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1));// | MPU_PWR_MGMT_1__TEMP_DIS); // Get MPU out of sleep, set CLK = gyro X clock, and disable temperature sensor
 	wait_ms(100);
 	//SENSOR_WRITE(MPU_PWR_MGMT_2, MPU_PWR_MGMT_2__STDBY_XA | MPU_PWR_MGMT_2__STDBY_YA | MPU_PWR_MGMT_2__STDBY_ZA); // Disable accelerometers
-	//SENSOR_WRITE(MPU_SMPLRT_DIV, 7); // Sample rate = Fs/(x+1)
-	SENSOR_WRITE(MPU_CFG, MPU_CFG__DLPF_CFG(1)); // Filter ON => Fs=1kHz, else 8kHz
+	SENSOR_WRITE(MPU_SMPLRT_DIV, REG_MPU_CFG__RATE); // Sample rate = Fs/(x+1)
+	SENSOR_WRITE(MPU_CFG, MPU_CFG__DLPF_CFG(REG_MPU_CFG__FILT)); // Filter ON => Fs=1kHz, else 8kHz
 	SENSOR_WRITE(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
 	SENSOR_WRITE(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
 	//wait_ms(100); // wait for filter to settle
@@ -41,7 +41,8 @@ void mpu_i2c_init(void)
 	wait_ms(100);
 	SENSOR_WRITE(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1));
 	wait_ms(100);
-	SENSOR_WRITE(MPU_CFG, MPU_CFG__DLPF_CFG(1)); // Filter ON => Fs=1kHz, else 8kHz
+	SENSOR_WRITE(MPU_SMPLRT_DIV, REG_MPU_CFG__RATE); // Sample rate = Fs/(x+1)
+	SENSOR_WRITE(MPU_CFG, MPU_CFG__DLPF_CFG(REG_MPU_CFG__FILT)); // Filter ON => Fs=1kHz, else 8kHz
 	SENSOR_WRITE(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
 	SENSOR_WRITE(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
 	SENSOR_WRITE(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
@@ -132,14 +133,14 @@ void angle_estimate(struct sensor_s * sensor, struct angle_s * angle, _Bool yaw_
 	float x;
 	
 	// Integrate gyro rate and wrap angle
-	x = angle->pitch + (sensor->gyro_x / 1000.0f);
+	x = angle->pitch + (sensor->gyro_x / sensor_rate);
 	/*if (x > 180.0f)
 		angle->pitch = x - 360.0f;
 	else if (x < -180.0f)
 		angle->pitch = x + 360.0f;
 	else*/
 		angle->pitch = x;
-	x = angle->roll + (sensor->gyro_y / 1000.0f);
+	x = angle->roll + (sensor->gyro_y / sensor_rate);
 	/*if (x > 180.0f)
 		angle->roll = x - 360.0f;
 	else if (x < -180.0f)

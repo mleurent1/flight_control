@@ -15,7 +15,6 @@
 #define TIMEOUT_RADIO 500 // ms
 #define TIMEOUT_SENSOR 10000 // us
 #define VBAT_PERIOD 10 // ms
-#define BEEPER
 
 /* Public types -----------------*/
 

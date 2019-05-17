@@ -101,6 +101,9 @@
 #define HAL_DFSDM_MODULE_ENABLED
 #define HAL_LPTIM_MODULE_ENABLED
 */
+#include <stdint.h>
+uint32_t HAL_RCC_GetHCLKFreq(void);
+
 /* ########################## HSE/HSI Values adaptation ##################### */
 /**
   * @brief Adjust the value of External High Speed oscillator (HSE) used in your application.

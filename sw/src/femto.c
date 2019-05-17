@@ -66,7 +66,7 @@ void radio_synch()
 	USART2->CR1 |= USART_CR1_RE | USART_CR1_IDLEIE;
 }
 
-void set_motors(uint32_t * motor_raw)
+void set_motors(uint32_t * motor_raw, _Bool * motor_telemetry)
 {
 #if (ESC == DSHOT)
 	int i;
@@ -76,10 +76,10 @@ void set_motors(uint32_t * motor_raw)
 	uint32_t motor4_dshot[16];
 	
 	if (DMA1_Channel2->CNDTR == 0) {
-		dshot_encode(&motor_raw[0], motor1_dshot);
-		dshot_encode(&motor_raw[1], motor2_dshot);
-		dshot_encode(&motor_raw[2], motor3_dshot);
-		dshot_encode(&motor_raw[3], motor4_dshot);
+		dshot_encode(&motor_raw[0], motor1_dshot, motor_telemetry[0]);
+		dshot_encode(&motor_raw[1], motor2_dshot, motor_telemetry[1]);
+		dshot_encode(&motor_raw[2], motor3_dshot, motor_telemetry[2]);
+		dshot_encode(&motor_raw[3], motor4_dshot, motor_telemetry[3]);
 		for (i=0; i<16; i++) {
 			dshot[i*4+0] = motor2_dshot[i];
 			dshot[i*4+1] = motor1_dshot[i];
@@ -243,23 +243,18 @@ void USART2_IRQHandler()
 
 void DMA1_Channel6_IRQHandler()
 {
-	if (DMA1->ISR & DMA_ISR_TEIF6) // Check DMA transfer error
-		
-		radio_synch();
-	else {
-		// Raise flag for radio commands ready
-		flag_radio = 1; 
+	// Disable DMA UART
+	DMA1->IFCR = DMA_IFCR_CGIF6;
+	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
+	USART2->CR1 &= ~USART_CR1_RE;
 	
-		// Disable DMA UART
-		DMA1->IFCR = DMA_IFCR_CGIF6;
-		DMA1_Channel6->CCR &= ~DMA_CCR_EN;
-		USART2->CR1 &= ~USART_CR1_RE;
-		
-		// Enable DMA UART
-		DMA1_Channel6->CNDTR = sizeof(radio_frame);
-		DMA1_Channel6->CCR |= DMA_CCR_EN;
-		USART2->CR1 |= USART_CR1_RE;
-	}
+	// Enable DMA UART
+	DMA1_Channel6->CNDTR = sizeof(radio_frame);
+	DMA1_Channel6->CCR |= DMA_CCR_EN;
+	USART2->CR1 |= USART_CR1_RE;
+	
+	// Raise flag for radio commands ready
+	flag_radio = 1; 
 }
 
 /* Beeper period --------------------------------*/
@@ -449,8 +444,8 @@ void board_init()
 	/* Timers --------------------------------------------------------------------------*/
 	
 #if (ESC == DSHOT)
-	// DMA driven timer for DShot600, 24Mhz: 0:15, 1:30, T:40
-	TIM2->PSC = 0;
+	// DMA driven timer for DShot600, 48Mhz: 0:30, 1:60, T:80
+	TIM2->PSC = 1; // 0:DShot600, 1:DShot300
 	TIM2->ARR = 80;
 	//TIM2->DIER = TIM_DIER_UDE;
 	TIM2->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
@@ -581,6 +576,5 @@ void board_init()
 	
 	/* Radio init ----------------------------------*/
 	
-	// Set IDLE interrupt
 	radio_synch();
 }
