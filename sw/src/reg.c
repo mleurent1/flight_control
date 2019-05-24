@@ -1,15 +1,19 @@
 #include "reg.h"
 #include "fc.h" // flags, sensor_raw, radio_raw
-#include "board.h" // CMSIS
 #include "sensor.h" // mpu_cal()
 #include "sensor_reg.h"
-#include "radio.h" // default idle/range
+#include "utils.h" // uint32_to_float()
+#ifdef STM32F4
+	#include "stm32f4xx.h"
+#else
+	#include "stm32f3xx.h" // FLASH->
+#endif
 
 uint32_t reg[NB_REG];
 float regf[NB_REG];
 reg_properties_t reg_properties[NB_REG] = 
 {
-	{1, 1, 0, 31}, // VERSION
+	{1, 1, 0, 32}, // VERSION
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
 	{0, 0, 0, 32512}, // DEBUG
@@ -51,9 +55,11 @@ reg_properties_t reg_properties[NB_REG] =
 };
 
 #ifdef STM32F3
+	#define REG_FLASH_ADDR 0x0800F800
 	uint32_t* flash_r = (uint32_t*)REG_FLASH_ADDR;
 	uint16_t* flash_w = (uint16_t*)REG_FLASH_ADDR;
 #elif defined(STM32F4)
+	#define REG_FLASH_ADDR 0x080E0000
 	uint32_t* flash_r = (uint32_t*)REG_FLASH_ADDR;
 	uint32_t* flash_w = (uint32_t*)REG_FLASH_ADDR;
 #endif

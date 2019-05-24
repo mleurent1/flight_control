@@ -1,4 +1,0 @@
-LIBRARY    libmex.dll
-EXPORTS
-	mex_ftdi
-	libmex_

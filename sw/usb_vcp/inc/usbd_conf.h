@@ -34,7 +34,11 @@
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "fc.h"
+#ifdef STM32F4
+  #include "stm32f4xx_hal.h"
+#else
+  #include "stm32f3xx_hal.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

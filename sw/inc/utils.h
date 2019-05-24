@@ -13,9 +13,9 @@
 #define ONESHOT 0
 #define DSHOT 1
 
-#define EXPONENTIAL exp
-#define ARCSINUS asin
-#define SINUS sin
+#define EXPONENTIAL expf
+#define ARCSINUS asinf
+#define SINUS sinf
 
 /* Public macros -----------------*/
 

@@ -1,1 +1,0 @@
-ilib_mex_build('libmex',['ftdi','ftdi','cmex'],'ftdi.cpp','ftd2xx');

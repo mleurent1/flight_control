@@ -1,2 +1,0 @@
-global ser
-fclose(ser);

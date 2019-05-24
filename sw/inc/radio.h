@@ -7,24 +7,24 @@
 
 /* Public types -----------------*/
 
- __packed struct radio_frame_s {
+struct radio_frame_s {
 	uint16_t header;
 	uint16_t chan[14];
 	uint16_t checksum;
-};
+} __attribute__((packed));
 
 typedef union {
 	uint8_t bytes[32];
 	struct radio_frame_s frame;
 } radio_frame_t;
 
-__packed struct radio_raw_s {
+struct radio_raw_s {
 	uint16_t throttle;
 	uint16_t aileron;
 	uint16_t elevator;
 	uint16_t rudder;
 	uint16_t aux[4];
-};
+} __attribute__((packed));
 
 struct radio_s {
 	float throttle;

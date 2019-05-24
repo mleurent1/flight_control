@@ -1,8 +1,9 @@
 #include "board.h"
-#include "fc.h"
-#include "radio.h"
-#include "sensor.h"
-#include "usb.h"
+#include "stm32f3xx.h" // CMSIS
+#include "fc.h" // flags
+#include "sensor.h" // mpu_spi_init()
+#include "utils.h" // wait_ms()
+#include "usb.h" // usb_init();
 
 /* Private defines ------------------------------------*/
 
@@ -23,14 +24,14 @@ volatile uint8_t i2c2_tx_nb_bytes;
 
 /* Functions ------------------------------------------------*/
 
-__forceinline void radio_uart_dma_enable(uint8_t size)
+inline __attribute__((always_inline)) void radio_uart_dma_enable(uint8_t size)
 {
 	DMA1_Channel6->CNDTR = size;
 	DMA1_Channel6->CCR |= DMA_CCR_EN;
 	USART2->CR1 |= USART_CR1_RE;
 }
 
-__forceinline void radio_uart_dma_disable()
+inline __attribute__((always_inline)) void radio_uart_dma_disable()
 {
 	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
 	DMA1->IFCR = DMA_IFCR_CGIF6;
@@ -56,7 +57,7 @@ void sensor_read(uint8_t addr, uint8_t size)
 	I2C2->CR2 |= (1 << I2C_CR2_NBYTES_Pos) | I2C_CR2_START;
 }
 
-void radio_synch()
+void radio_sync()
 {
 	// Enable DMA UART
 	DMA1_Channel6->CNDTR = sizeof(radio_frame);
@@ -332,10 +333,6 @@ void board_init()
 	// System configuration controller clock enable (to manage external interrupt line connection to GPIOs)
 	RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
 	
-	/* Register init --------------------------------------------------*/
-	
-	reg_init();
-	
 	/* GPIO ------------------------------------------------*/
 	
 	// MODER: 00:IN, 01:OUT, 10:AF, 11:analog
@@ -465,7 +462,7 @@ void board_init()
 	NVIC_SetPriority(TIM6_DAC_IRQn,0);
 	
 	// Init
-	radio_synch();
+	radio_sync();
 	
 	/* Motors -----------------------------------------*/
 	

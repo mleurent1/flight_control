@@ -219,16 +219,16 @@ typedef struct
 	uint32_t dflt;
 } reg_properties_t;
 
-typedef __packed struct {
+typedef struct {
 	uint8_t instr;
 	uint8_t addr;
-	__packed union { 
+	union { 
 		uint8_t u8[4];
 		uint16_t u16[2];
 		uint32_t u32;
 		float f;
-	} data;
-} host_buffer_rx_t;
+	} data __attribute__((packed));
+} __attribute__((packed)) host_buffer_rx_t;
 
 typedef union {
 	uint8_t u8[32];

@@ -1,7 +1,9 @@
 #include "board.h"
-#include "fc.h"
-#include "radio.h"
-#include "sensor.h"
+#include "stm32f3xx.h" // CMSIS
+#include "fc.h" // flags
+#include "sensor.h" // mpu_i2c_init()
+#include "utils.h" // wait_ms()
+
 
 /* Private defines ------------------------------------*/
 
@@ -48,7 +50,7 @@ void rf_read(uint8_t addr, uint8_t size)
 	
 }
 
-void radio_error_recover()
+void radio_sync()
 {
 	// Disable DMA UART
 	DMA1->IFCR = DMA_IFCR_CGIF5;
@@ -62,7 +64,7 @@ void radio_error_recover()
 	radio_error_count++;
 }
 
-__forceinline void sensor_error_recover()
+inline __attribute__((always_inline)) void sensor_error_recover()
 {
 	// Disable DMA I2C
 	DMA1->IFCR = DMA_IFCR_CGIF3;
@@ -73,7 +75,7 @@ __forceinline void sensor_error_recover()
 	sensor_error_count++;
 }
 
-__forceinline void host_error_recover()
+inline __attribute__((always_inline)) void host_error_recover()
 {
 	// Disable DMA UART
 	DMA1->IFCR = DMA_IFCR_CGIF6 | DMA_IFCR_CGIF7;
@@ -90,7 +92,7 @@ __forceinline void host_error_recover()
 	USART2->CR1 |= USART_CR1_RE;
 }
 
-void set_motors(uint32_t * motor_raw)
+void set_motors(uint32_t * motor_raw, _Bool * motor_telemetry)
 {
 	TIM3->CCR1 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[0];
 	TIM3->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - motor_raw[1];
@@ -263,7 +265,7 @@ void USART1_IRQHandler()
 		USART1->CR3 |= USART_CR3_DMAR;
 	}
 	else
-		radio_error_recover();
+		radio_sync();
 }
 
 /* End of Radio UART receive ------------------*/
@@ -271,7 +273,7 @@ void USART1_IRQHandler()
 void DMA1_Channel5_IRQHandler()
 {
 	if (DMA1->ISR & DMA_ISR_TEIF5) // Check DMA transfer error
-		radio_error_recover();
+		radio_sync();
 	else {
 		// Disable DMA UART
 		DMA1->IFCR = DMA_IFCR_CGIF5;

@@ -1,6 +1,9 @@
-#include "fc.h"
 #include "usbd_cdc_if.h"
 #include "usbd_desc.h"
+#ifdef STM32F3
+	#include "stm32f3xx.h"  // USB->
+	#include "utils.h"
+#endif
 
 USBD_HandleTypeDef USBD_device_handler;
 

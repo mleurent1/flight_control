@@ -3,6 +3,12 @@
 #include "fc.h" // flags
 #include "board.h" // toggle_led_sensor
 #include "reg.h" // alpha coeff
+#include "utils.h" // wait_ms()
+#ifdef STM32F4
+	#include "stm32f4xx.h" // __WFI()
+#else
+	#include "stm32f3xx.h" // __WFI()
+#endif
 
 /* Private defines --------------------------------------*/
 
@@ -117,7 +123,7 @@ void mpu_cal(sensor_raw_t * sensor_raw)
 			
 			sensor_sample_count++;
 		}
-		__wfi();
+		__WFI();
 	}
 	
 	REG_GYRO_DC_XY = int32_to_uint32((int32_t)(gyro_x_dc / 1000.0f)) + (int32_to_uint32((int32_t)(gyro_y_dc / 1000.0f)) << 16);

@@ -1,7 +1,7 @@
 #ifndef __SENSOR_H
 #define __SENSOR_H
 
-#include "board.h"
+#include <stdint.h>
 
 /* Public defines -----------------*/
 
@@ -9,7 +9,7 @@
 
 /* Public types -----------------*/
 
-__packed struct sensor_raw_s {
+struct sensor_raw_s {
 	uint8_t dummy;
 	int16_t accel_x;
 	int16_t accel_y;
@@ -18,7 +18,7 @@ __packed struct sensor_raw_s {
 	int16_t gyro_x;
 	int16_t gyro_y;
 	int16_t gyro_z;
-};
+} __attribute__((packed));
 
 typedef union {
 	uint8_t bytes[15];

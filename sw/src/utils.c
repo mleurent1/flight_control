@@ -1,5 +1,9 @@
 #include "utils.h"
-#include "fc.h"
+#ifdef STM32F4
+	#include "stm32f4xx.h" // __WFI()
+#else
+	#include "stm32f3xx.h" // __WFI()
+#endif
 
 volatile uint32_t tick;
 
@@ -13,7 +17,7 @@ void wait_ms(uint32_t t)
 {
 	uint32_t next_tick = tick + t;
 	while (tick != next_tick)
-		__wfi();
+		__WFI();
 }
 
 float uint32_to_float(uint32_t x)

@@ -1,10 +1,14 @@
-#include <stdint.h>
-#include <string.h> // memcpy
 #include "fc.h"
-#include "board.h"
-#include "sensor.h"
-#include "radio.h"
-#include "reg.h"
+#include "board.h" // board_init()
+#include "sensor.h" // mpu_process_samples()
+#include "radio.h" // radio_decode()
+#include "reg.h" // REG__*
+#ifdef STM32F4
+	#include "stm32f4xx.h" // __WFI()
+#else
+	#include "stm32f3xx.h" // __WFI()
+#endif
+#include <string.h> // memcpy
 
 /* Private defines ------------------------------------*/
 
@@ -113,6 +117,10 @@ int main(void)
 	
 	host_buffer_tx_t host_buffer_tx;
 	
+	/* Register init --------------------------------------------------*/
+	
+	reg_init();
+
 	/* Variable initialisation -----------------------------------------------------*/
 	
 	flag_sensor = 0;
@@ -154,11 +162,22 @@ int main(void)
 	
 	sensor_sample_count1 = 0;
 	
+	error_pitch = 0;
+	error_roll = 0;
+	error_yaw = 0;
+
+	p_pitch = REG_P_PITCH;
+	i_pitch = REG_I_PITCH;
+	d_pitch = REG_D_PITCH;
+	p_roll  = REG_P_ROLL;
+	i_roll  = REG_I_ROLL;
+	d_roll  = REG_D_ROLL;
+
 	/* Init -----------------------------------------------------*/
 	
 	board_init();
 	
-	// Disable Systick interrupt, not needed anymore (but can still use COUNTFLAG)
+	// Do not disable Systick interrupt, needed by reg write update
 	//SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
 	
 	/* Loop ----------------------------------------------------------------------------
@@ -179,7 +198,7 @@ int main(void)
 			error = radio_decode(&radio_frame, &radio_raw, &radio);
 			if (error) {
 				radio_error_count++;
-				radio_synch();
+				radio_sync();
 			}
 			else
 			{
@@ -452,7 +471,7 @@ int main(void)
 			if ((REG_CTRL__TIME_MAXHOLD == 0) || (((uint16_t)t1 > time_process) && REG_CTRL__TIME_MAXHOLD))
 				time_process = (uint16_t)t1;
 			
-			__wfi();
+			__WFI();
 		}
 	}
 }

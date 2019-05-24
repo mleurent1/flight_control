@@ -1,20 +1,7 @@
 #ifndef __BOARD_H
 #define __BOARD_H
 
-#include "utils.h"
-#if defined(MOTOF3)
-	#include "motof3.h"
-#elif defined(CYCLONE)
-	#include "cyclone.h"
-#elif defined(REVOLUTION)
-	#include "revolution.h"
-#elif defined(NUCLEO)
-	#include "nucleo.h"
-#elif defined(FEMTO)
-	#include "femto.h"
-#elif defined(BEECORE)
-	#include "beecore.h"
-#endif
+#include <stdint.h>
 
 /* Public functions -----------------*/
 
@@ -31,6 +18,6 @@ void set_mpu_host(_Bool host);
 float get_vbat(void);
 void reset_timeout_radio(void);
 uint16_t get_timer_process(void);
-void radio_synch(void);
-	
+void radio_sync(void);
+
 #endif

@@ -1,8 +1,9 @@
 #include "board.h"
-#include "fc.h"
-#include "radio.h"
-#include "sensor.h"
-#include "usb.h"
+#include "stm32f4xx.h" // CMSIS
+#include "fc.h" // flags
+#include "sensor.h" // mpu_spi_init()
+#include "utils.h" // wait_ms()
+#include "usb.h" // usb_init();
 
 /* Private defines ------------------------------------*/
 
@@ -37,7 +38,7 @@ uint32_t HAL_RCC_GetHCLKFreq(void)
   return SystemCoreClock;
 }
 
-__forceinline void sensor_spi_dma_enable(uint8_t size)
+inline __attribute__((always_inline)) void sensor_spi_dma_enable(uint8_t size)
 {
 	DMA2_Stream0->NDTR = size + 1;
 	DMA2_Stream3->NDTR = size + 1;
@@ -46,7 +47,7 @@ __forceinline void sensor_spi_dma_enable(uint8_t size)
 	SPI1->CR1 |= SPI_CR1_SPE;
 }
 
-__forceinline void sensor_spi_dma_disable()
+inline __attribute__((always_inline)) void sensor_spi_dma_disable()
 {
 	DMA2->LIFCR = DMA_CLEAR_ALL_FLAGS_0 | DMA_CLEAR_ALL_FLAGS_3;
 	DMA2_Stream0->CR &= ~DMA_SxCR_EN;
@@ -55,7 +56,7 @@ __forceinline void sensor_spi_dma_disable()
 	SPI1->CR1 &= ~SPI_CR1_SPE;
 }
 
-__forceinline void rf_spi_dma_enable(uint8_t size)
+inline __attribute__((always_inline)) void rf_spi_dma_enable(uint8_t size)
 {
 	DMA1_Stream0->NDTR = size + 1;
 	DMA1_Stream7->NDTR = size + 1;
@@ -64,7 +65,7 @@ __forceinline void rf_spi_dma_enable(uint8_t size)
 	SPI3->CR1 |= SPI_CR1_SPE;
 }
 
-__forceinline void rf_spi_dma_disable()
+inline __attribute__((always_inline)) void rf_spi_dma_disable()
 {
 	DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_0;
 	DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_7;
@@ -74,14 +75,14 @@ __forceinline void rf_spi_dma_disable()
 	SPI3->CR1 &= ~SPI_CR1_SPE;
 }
 
-__forceinline void radio_uart_dma_enable(uint8_t size)
+inline __attribute__((always_inline)) void radio_uart_dma_enable(uint8_t size)
 {
 	DMA2_Stream5->NDTR = size;
 	DMA2_Stream5->CR |= DMA_SxCR_EN;
 	USART1->CR1 |= USART_CR1_RE;
 }
 
-__forceinline void radio_uart_dma_disable()
+inline __attribute__((always_inline)) void radio_uart_dma_disable()
 {
 	DMA2->HIFCR = DMA_CLEAR_ALL_FLAGS_5;
 	DMA2_Stream5->CR &= ~DMA_SxCR_EN;
@@ -115,7 +116,7 @@ void rf_read(uint8_t addr, uint8_t size)
 	rf_spi_dma_enable(size);
 }
 
-void radio_synch()
+void radio_sync()
 {
 	// Enable DMA UART
 	DMA2_Stream5->NDTR = sizeof(radio_frame);
