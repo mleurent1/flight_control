@@ -121,7 +121,7 @@ void radio_sync()
 	// Enable DMA UART
 	DMA2_Stream5->NDTR = sizeof(radio_frame);
 	DMA2_Stream5->CR |= DMA_SxCR_EN;
-	
+
 	// Enable UART with IDLE line detection
 	USART1->CR1 |= USART_CR1_RE | USART_CR1_IDLEIE;
 }
@@ -134,20 +134,20 @@ void set_motors(uint32_t * motor_raw, _Bool * motor_telemetry)
 	uint32_t motor2_dshot[16];
 	uint32_t motor3_dshot[16];
 	uint32_t motor4_dshot[16];
-	
+
 	if ((DMA1_Stream2->NDTR == 0) && (DMA1_Stream6->NDTR == 0)) {
 		TIM3->DIER = 0;
 		TIM3->CR1 = 0;
 		TIM3->CNT = 60;
 		DMA1_Stream2->CR &= ~DMA_SxCR_EN; // Disable DMA TIM
 		DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_2;
-		
+
 		TIM5->DIER = 0;
 		TIM5->CR1 = 0;
 		TIM5->CNT = 60;
 		DMA1_Stream6->CR &= ~DMA_SxCR_EN; // Disable DMA TIM
 		DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_6;
-		
+
 		dshot_encode(&motor_raw[0], motor1_dshot, motor_telemetry[0]);
 		dshot_encode(&motor_raw[1], motor2_dshot, motor_telemetry[1]);
 		dshot_encode(&motor_raw[2], motor3_dshot, motor_telemetry[2]);
@@ -155,15 +155,15 @@ void set_motors(uint32_t * motor_raw, _Bool * motor_telemetry)
 		for (i=0; i<16; i++) {
 			dshot12[i*2+0] = motor2_dshot[i];
 			dshot12[i*2+1] = motor1_dshot[i];
-			dshot34[i*2+2] = motor4_dshot[i];
-			dshot34[i*2+3] = motor3_dshot[i];
+			dshot34[i*2+0] = motor4_dshot[i];
+			dshot34[i*2+1] = motor3_dshot[i];
 		}
-		
+
 		DMA1_Stream2->NDTR = 17*2;
 		DMA1_Stream2->CR |= DMA_SxCR_EN;
 		TIM3->DIER = TIM_DIER_UDE;
 		TIM3->CR1 = TIM_CR1_CEN;
-		
+
 		DMA1_Stream6->NDTR = 17*2;
 		DMA1_Stream6->CR |= DMA_SxCR_EN;
 		TIM5->DIER = TIM_DIER_UDE;
@@ -234,7 +234,7 @@ uint16_t get_timer_process(void)
 
 /* RF Rx Done ----------------------------*/
 
-void EXTI0_IRQHandler() 
+void EXTI0_IRQHandler()
 {
 	EXTI->PR = EXTI_PR_PR0; // Clear pending request
 	flag_rf_rxtx_done = 1;
@@ -242,7 +242,7 @@ void EXTI0_IRQHandler()
 
 /* Sensor ready IRQ ---------------------------*/
 
-void EXTI4_IRQHandler() 
+void EXTI4_IRQHandler()
 {
 	EXTI->PR = EXTI_PR_PR4; // Clear pending request
 	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && ((SPI1->SR & SPI_SR_BSY) == 0)) {
@@ -253,7 +253,7 @@ void EXTI4_IRQHandler()
 
 /* Sensor SPI IRQ ------------------------------*/
 
-void SPI1_IRQHandler() 
+void SPI1_IRQHandler()
 {
 	sensor_spi_dma_disable();
 	sensor_error_count++;
@@ -261,16 +261,16 @@ void SPI1_IRQHandler()
 
 /* DMA IRQ of sensor Rx SPI ----------------------*/
 
-void DMA2_Stream0_IRQHandler() 
+void DMA2_Stream0_IRQHandler()
 {
 	_Bool error = 0;
-	
+
 	 // Check DMA transfer error
 	if (DMA2->LISR & DMA_LISR_TEIF0)
 		error = 1;
-	
+
 	sensor_spi_dma_disable();
-	
+
 	if (error)
 		sensor_error_count++;
 	else if (flag_sensor_host_read) {
@@ -280,7 +280,7 @@ void DMA2_Stream0_IRQHandler()
 		TIM12->CNT = 0; // Reset sensor timeout
 		flag_sensor = 1; // Raise flag for sample ready
 	}
-	
+
 	timer_sensor[1] = TIM7->CNT; // Record SPI transaction time
 }
 
@@ -294,7 +294,7 @@ void DMA2_Stream3_IRQHandler()
 
 /* RF SPI IRQ ---------------------------------------*/
 
-void SPI3_IRQHandler() 
+void SPI3_IRQHandler()
 {
 	rf_spi_dma_disable();
 	rf_error_count++;
@@ -302,16 +302,16 @@ void SPI3_IRQHandler()
 
 /* DMA IRQ of RF Rx SPI --------------------------------*/
 
-void DMA1_Stream0_IRQHandler() 
+void DMA1_Stream0_IRQHandler()
 {
 	_Bool error = 0;
-	
+
 	// Check DMA transfer error
-	if (DMA1->LISR & DMA_LISR_TEIF0) 
+	if (DMA1->LISR & DMA_LISR_TEIF0)
 		error = 1;
-	
+
 	rf_spi_dma_disable();
-	
+
 	if (error)
 		rf_error_count++;
 	else if (flag_rf_host_read) {
@@ -323,7 +323,7 @@ void DMA1_Stream0_IRQHandler()
 
 /* DMA IRQ of RF Rx SPI ------------------------*/
 
-void DMA1_Stream7_IRQHandler() 
+void DMA1_Stream7_IRQHandler()
 {
 	rf_spi_dma_disable();
 	rf_error_count++;
@@ -336,7 +336,7 @@ void USART1_IRQHandler()
 	if (USART1->SR & USART_SR_IDLE) {
 		USART1->DR; // Clear status flags
 		USART1->CR1 &= ~USART_CR1_IDLEIE; // Disable idle line detection
-		
+
 		if (DMA2_Stream5->NDTR != sizeof(radio_frame)) {
 			radio_uart_dma_disable();
 			radio_uart_dma_enable(sizeof(radio_frame));
@@ -353,18 +353,18 @@ void USART1_IRQHandler()
 void DMA2_Stream5_IRQHandler()
 {
 	_Bool error = 0;
-	
+
 	// Check DMA transfer error
 	if (DMA2->HISR & DMA_HISR_TEIF5)
 		error = 1;
-	
+
 	radio_uart_dma_disable();
-	
+
 	if (error)
 		radio_error_count++;
 	else
 		flag_radio = 1; // Raise flag for radio commands ready
-	
+
 	radio_uart_dma_enable(sizeof(radio_frame));
 }
 
@@ -373,7 +373,7 @@ void DMA2_Stream5_IRQHandler()
 void TIM4_IRQHandler()
 {
 	TIM4->SR &= ~TIM_SR_UIF;
-	
+
 	if (flag_beep_user || flag_beep_radio || flag_beep_sensor || flag_beep_host || flag_beep_vbat)
 		GPIOB->ODR ^= GPIO_ODR_OD0;
 	else
@@ -428,35 +428,35 @@ void OTG_FS_IRQHandler()
 void board_init()
 {
 	/* RCC --------------------------------------------------------*/
-	
+
 	// Enable XTAL oscillator
 	RCC->CR |= RCC_CR_HSEON;
 	while ((RCC->CR & RCC_CR_HSERDY) == 0) {}
-	
+
 	// Set VCO at 192 MHz = XTAL(8MHz) * (N=192) / (M=8)
 	// PLL system = VCO / ((P=0,default)+2) = 96 MHz , PLL USB = VCO / (Q=4) = 48 MHz
 	RCC->PLLCFGR &= ~(RCC_PLLCFGR_PLLM_Msk | RCC_PLLCFGR_PLLN_Msk | RCC_PLLCFGR_PLLQ_Msk);
 	RCC->PLLCFGR |= (8 << RCC_PLLCFGR_PLLM_Pos) | (192 << RCC_PLLCFGR_PLLN_Pos) | RCC_PLLCFGR_PLLSRC | (4 << RCC_PLLCFGR_PLLQ_Pos);
 	RCC->CR |= RCC_CR_PLLON;
 	while ((RCC->CR & RCC_CR_PLLRDY) == 0) {}
-	
+
 	// Select PLL as system clock
 	FLASH->ACR |= (3 << FLASH_ACR_LATENCY_Pos);// | FLASH_ACR_PRFTEN; // Inrease Flash latency + Prefetch?
 	RCC->CFGR |= RCC_CFGR_SW_PLL;
 	while ((RCC->CFGR & RCC_CFGR_SWS_PLL) == 0) {}
 	SystemCoreClock = 96000000;
-	
+
 	// Disable internal high-speed RC
 	RCC->CR &= ~RCC_CR_HSION;
-	
+
 	// Set APB1 at 24 MHz (96/4) and APB2 at 48 MHz (96/2)
 	RCC->CFGR |= RCC_CFGR_PPRE1_DIV4 | RCC_CFGR_PPRE2_DIV2;
-	
+
 	// Configure SysTick to generate interrupt every ms
 	SysTick_Config(96000);
-	
+
 	/* Clock enable --------------------------------------------------*/
-	
+
 	// UART clock enable
 	RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
 	// SPI clock enable
@@ -468,20 +468,20 @@ void board_init()
 	RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
 	// DMA clock enable
 	RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN | RCC_AHB1ENR_DMA2EN;
-	// GPIO clock enable 
+	// GPIO clock enable
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN | RCC_AHB1ENR_GPIOCEN | RCC_AHB1ENR_GPIODEN;
 	// ADC clock enable
 	//RCC->AHBENR |= RCC_AHBENR_ADC12EN;
 	// USB clock enable
 	RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;
-	
+
 	/* GPIO ------------------------------------------------*/
-	
+
 	// MODER: 00:IN, 01:OUT, 10:AF, 11:analog
 	// PUPDR: 00:float 01:PU, 10:PD
 	// OTYPER: 0:PP, 1:OD
 	// OSPEEDR: 00:low 4MHz, 01:mid 25MHz, 10:high 50MHz, 11:very high 100MHz
-	
+
 	// Reset IOs
 	GPIOA->MODER = 0;
 	GPIOA->PUPDR = 0;
@@ -495,7 +495,7 @@ void board_init()
 	GPIOD->MODER = 0;
 	GPIOD->PUPDR = 0;
 	GPIOD->OSPEEDR = 0;
-	
+
 	// A0 : Servo 6, used as SX1276 DIO[0]
 	// A1 : Servo 5, TIM5_CH2, AF2, DMA1 Stream 4
 	// A2 : Servo 4, TIM2_CH3, AF1, DMA1 Stream 1
@@ -570,9 +570,9 @@ void board_init()
 	// D2 : RF reset, need open-drain (external pull-up)
 	//GPIOD->MODER |= GPIO_MODER_MODER2_0;
 	GPIOD->OTYPER |= GPIO_OTYPER_OT_2;
-	
+
 	/* DMA --------------------------------------------------------------------------*/
-	
+
 	// DMA[y]_Stream[x]->CR = (3 << DMA_SxCR_CHSEL_Pos) | (1 << DMA_SxCR_PL_Pos) | (1 << DMA_SxCR_MSIZE_Pos) | (1 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | DMA_SxCR_PINC | (1 << DMA_SxCR_DIR_Pos) | DMA_SxCR_TCIE | DMA_SxCR_TEIE;
 
 	// SPI1 Rx
@@ -589,28 +589,28 @@ void board_init()
 	DMA2_Stream5->CR = (4 << DMA_SxCR_CHSEL_Pos) | DMA_SxCR_MINC | DMA_SxCR_TCIE | DMA_SxCR_TEIE;
 	DMA2_Stream5->M0AR = (uint32_t)&radio_frame;
 	DMA2_Stream5->PAR = (uint32_t)&(USART1->DR);
-	
+
 	// SPI3 Rx
 	DMA1_Stream0->CR = (0 << DMA_SxCR_CHSEL_Pos) | (3 << DMA_SxCR_PL_Pos) | DMA_SxCR_MINC | DMA_SxCR_TCIE | DMA_SxCR_TEIE;
 	DMA1_Stream0->M0AR = (uint32_t)spi3_rx_buffer;
 	DMA1_Stream0->PAR = (uint32_t)&(SPI3->DR);
-	
+
 	// SPI3 Tx
 	DMA1_Stream7->CR = (0 << DMA_SxCR_CHSEL_Pos) | (1 << DMA_SxCR_PL_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos) | DMA_SxCR_TEIE;
 	DMA1_Stream7->M0AR = (uint32_t)spi3_tx_buffer;
 	DMA1_Stream7->PAR = (uint32_t)&(SPI3->DR);
-	
+
 	// Timers for DSHOT
 	DMA1_Stream2->CR = (5 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
 	DMA1_Stream2->M0AR = (uint32_t)dshot12;
 	DMA1_Stream2->PAR = (uint32_t)&(TIM3->DMAR);
-	
+
 	DMA1_Stream6->CR = (6 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
 	DMA1_Stream6->M0AR = (uint32_t)dshot34;
 	DMA1_Stream6->PAR = (uint32_t)&(TIM5->DMAR);
-	
+
 	/* Timers --------------------------------------------------------------------------*/
-	
+
 #if (ESC == DSHOT)
 	// DMA driven timer for DShot600, 48Mhz: 0:30, 1:60, T:80
 	TIM3->PSC = 0; // 0:DShot600, 1:DShot300
@@ -619,7 +619,7 @@ void board_init()
 	TIM3->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;
 	TIM3->CCMR2 = (6 << TIM_CCMR2_OC3M_Pos) | TIM_CCMR2_OC3PE | (6 << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC4PE;
 	TIM3->DCR = (1 << TIM_DCR_DBL_Pos) | (15 << TIM_DCR_DBA_Pos);
-	
+
 	TIM5->PSC = 0;
 	TIM5->ARR = 80;
 	//TIM5->DIER = TIM_DIER_UDE;
@@ -633,7 +633,7 @@ void board_init()
 	TIM3->ARR = SERVO_MAX*2 + 1;
 	TIM3->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;
 	TIM3->CCMR2 = (7 << TIM_CCMR2_OC3M_Pos) | (7 << TIM_CCMR2_OC4M_Pos);
-	
+
 	TIM5->CR1 = TIM_CR1_OPM;
 	TIM5->PSC = 3-1;
 	TIM5->ARR = SERVO_MAX*2 + 1;
@@ -646,35 +646,35 @@ void board_init()
 	TIM4->ARR = BEEPER_PERIOD;
 	TIM4->DIER = TIM_DIER_UIE;
 	TIM4->CR1 = TIM_CR1_CEN;
-	
+
 	// Receiver timeout
 	TIM6->PSC = 48000-1; // 1ms
 	TIM6->ARR = TIMEOUT_RADIO;
 	TIM6->DIER = TIM_DIER_UIE;
 	//TIM6->CR1 = TIM_CR1_CEN; // To be enabled after radio init
-	
+
 	// Processing time
 	TIM7->PSC = 48-1; // 1us
 	TIM7->ARR = 65535;
 	TIM7->CR1 = TIM_CR1_CEN;
-	
+
 	// Sensor timeout
 	TIM12->PSC = 48-1; // 1us
 	TIM12->ARR = TIMEOUT_SENSOR;
 	TIM12->DIER = TIM_DIER_UIE;
 	//TIM12->CR1 = TIM_CR1_CEN; // To be enabled after sensor init
-	
+
 	// VBAT
 	TIM13->PSC = 48000-1; // 1ms
 	TIM13->ARR = VBAT_PERIOD;
 	TIM13->DIER = TIM_DIER_UIE;
 	//TIM13->CR1 = TIM_CR1_CEN;
-	
+
 	// RF tempo
 	TIM14->PSC = 48000-1; // 1ms
 	TIM14->ARR = 200;
 	TIM14->DIER = TIM_DIER_UIE;
-	
+
 	/* UART ---------------------------------------------------*/
 
 #if (RADIO_TYPE == SBUS)
@@ -688,9 +688,9 @@ void board_init()
 	USART1->CR1 = USART_CR1_UE;
 #endif
 	USART1->CR3 = USART_CR3_EIE;
-	
+
 	/* SPI ----------------------------------------------------*/
-	
+
 	SPI1->CR1 = SPI_CR1_MSTR | (5 << SPI_CR1_BR_Pos) | SPI_CR1_CPOL | SPI_CR1_CPHA; // SPI clock = clock APB2/64 = 48MHz/64 = 750 kHz
 	SPI1->CR2 = SPI_CR2_SSOE | SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN | SPI_CR2_ERRIE;
 
@@ -701,17 +701,17 @@ void board_init()
 	/*
 	ADC1->CR2 |= ADC_CR2_ADON;
 	wait_ms(1);
-	
+
 	ADC1->SMPR2 = 4 << ADC_SMPR2_SMP2_Pos;
 	ADC1->SQR3 = 2 << ADC_SQR3_SQ1_Pos;
 	*/
 	/* Interrupts ---------------------------------------------------*/
-	
+
 	SYSCFG->EXTICR[1] = SYSCFG_EXTICR2_EXTI4_PC; // Sensor interrrupt
 	SYSCFG->EXTICR[0] = SYSCFG_EXTICR1_EXTI0_PA; // RF interrupt
 	EXTI->RTSR = EXTI_RTSR_TR4 | EXTI_RTSR_TR0; // Rising edge
 	//EXTI->IMR = EXTI_IMR_MR4 | EXTI_IMR_MR0; // To be enabled after sensor init
-	
+
 	NVIC_EnableIRQ(EXTI0_IRQn);
 	NVIC_EnableIRQ(EXTI4_IRQn);
 	NVIC_EnableIRQ(USART1_IRQn);
@@ -728,7 +728,7 @@ void board_init()
 	NVIC_EnableIRQ(TIM8_UP_TIM13_IRQn);
 	NVIC_EnableIRQ(TIM8_TRG_COM_TIM14_IRQn);
 	NVIC_EnableIRQ(OTG_FS_IRQn);
-	
+
 	NVIC_SetPriority(EXTI0_IRQn,0);
 	NVIC_SetPriority(EXTI4_IRQn,0);
 	NVIC_SetPriority(USART1_IRQn,0);
@@ -745,19 +745,19 @@ void board_init()
 	NVIC_SetPriority(TIM8_UP_TIM13_IRQn,0);
 	NVIC_SetPriority(TIM8_TRG_COM_TIM14_IRQn,0);
 	NVIC_SetPriority(OTG_FS_IRQn,16);
-	
+
 	/* Host init -------------------------------------------*/
-	
+
 	usb_init();
-	
+
 	/* Sensor init ----------------------------------------------------*/
-	
+
 	wait_ms(1000);
 	mpu_spi_init();
 	set_mpu_host(0);
 	EXTI->IMR = EXTI_IMR_MR4; // Enable interrupt
 	TIM12->CR1 = TIM_CR1_CEN; // Enable timeout
-	
+
 	/* RF init -----------------------------------------------------*/
 	/*
 	// Reset
@@ -768,9 +768,9 @@ void board_init()
 	sx1276_init();
 	EXTI->IMR |= EXTI_IMR_MR0; // Enable external interrupts now
 	*/
-	
+
 	/* Radio init --------------------------------*/
-	
+
 	USART1->CR1 |= USART_CR1_IDLEIE | USART_CR1_RE; // Set IDLE interrupt
 	TIM6->CR1 = TIM_CR1_CEN; // Enable timeout
 }

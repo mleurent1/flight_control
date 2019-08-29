@@ -1,171 +1,241 @@
-function debug(DebugCase,NbSamples)
-
-if nargin < 2, NbSamples = 512; end
+function debug
 
 global fc
 global ser
+global KEY_IS_PRESSED
 
-%% To Customize
-WindowSize = 256;
-switch DebugCase
-	case {1,2,3,6,7} % sensor rate (1kHz)
-      SampleMask = hex2dec('001F');
-	case {4,5} % radio rate (~100Hz)
-		SampleMask = hex2dec('0003');
-	case 8 % vbat rate (100Hz)
-		SampleMask = hex2dec('0003');
-end
-c = 'brgcmkyb';
+t_max = 10;
+status_period = 63e-3;
+buf_len = 24*4;
 
-%%
-figure(DebugCase);
+KEY_IS_PRESSED = 0;
+
+len = round(t_max/status_period);
+t = (0:len-1)*status_period;
+
+figure(1)
 clf
-l = {};
+set(gcf, 'KeyPressFcn', @myKeyPressFcn)
+
 a = {};
+l = {};
 
-switch DebugCase
-	case 1 % raw sensors
-		dlen = 7;
-		dtype = 'int16';
-		for n = 1:3
-			a{n} = subplot(3,1,n);
-			%a{n}.YLim = [-2^15,2^15];
-		end
-		for n = 1:3
-			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
-			l{4+n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
-		end
-		l{4} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{3},'Color',c(1));
-	case 2 % scaled sensors
-		dlen = 7;
-		dtype = 'float';
-		for n = 1:3
-			a{n} = subplot(3,1,n);
-		end
-		%a{1}.YLim = [-2000,2000];
-		%a{2}.YLim = [-16,16];
-		a{3}.YLim = [-10,100];
-		for n = 1:3
-			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
-			l{n+3} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
-		end
-		l{7} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{3},'Color',c(1));
-	case 3 % angle
-      dlen = 4;
-		dtype = 'float';
-      for n = 1:2
-         a{n} = subplot(2,1,n);
-         a{n}.YLim = [-180,180];
-      end
-      for n = 1:2
-         l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
-         l{n+2} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(n));
-      end
-	case 4 % raw commands
-		dlen = 8;
-		dtype = 'uint16';
-		a{1} = axes;
-		for n = 1:8
-			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
-		end
-	case 5 % commands
-		dlen = 8;
-		dtype = 'float';
-		a{1} = subplot(211);
-		a{2} = subplot(212);
-		a{1}.YLim = [-1.05,1.05];
-		a{2}.YLim = [-0.05,1.05];
-		k = 0;
-		for n = [1,5,6,7,8]
-			k = k + 1;
-			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{2},'Color',c(k));
-		end
-		k = 0;
-		for n = 2:4
-			k = k + 1;
-			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(k));
-		end
-	case 6 % pitch, roll, yaw
-		dlen = 3;
-		dtype = 'float';
-		a{1} = axes;
-		for n = 1:3
-			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(n));
-		end
-	case 7 % raw motors
-		dlen = 4;
-		dtype = 'uint32';
-		for n = 1:4
-			a{n} = subplot(4,1,n);
-			a{n}.YLim = [-10,2010];
-			l{n} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{n},'Color',c(n));
-      end
-   case 8 % vbat
-		dlen = 1;
-		dtype = 'float';
-		a{1} = axes;
-		l{1} = line(nan(1,WindowSize),nan(1,WindowSize),'Parent',a{1},'Color',c(1));
+for n = 1:9
+	a{n} = subplot(3,3,n);
 end
 
-for n = 1:length(a)
-	a{n}.XLim = [1,WindowSize];
-end
+set(a{1},'XLim',[t(1),t(end)],'YLabel',text('String','gyro (deg/s)'));
+l{1,1} = line(t,nan(1,len),'Parent',a{1},'Color','b','DisplayName','pitch');
+l{1,2} = line(t,nan(1,len),'Parent',a{1},'Color','r','DisplayName','roll');
+l{1,3} = line(t,nan(1,len),'Parent',a{1},'Color','g','DisplayName','yaw');
 
-d = nan(dlen,WindowSize);
-switch dtype
-	case {'uint16','int16'}
-		r1 = 2*dlen;
-	case {'uint32','float'}
-		r1 = 4*dlen;
-end
-n = 0;
+set(a{2},'XLim',[t(1),t(end)],'YLabel',text('String','accel (G)'));
+l{2,1} = line(t,nan(1,len),'Parent',a{2},'Color','b','DisplayName','pitch');
+l{2,2} = line(t,nan(1,len),'Parent',a{2},'Color','r','DisplayName','roll');
+l{2,3} = line(t,nan(1,len),'Parent',a{2},'Color','g','DisplayName','yaw');
 
-% Empty VCP buffer
-fc.DEBUG(0);
-sleep(10);
-while (ser.BytesAvailable > 0)
+set(a{3},'XLim',[t(1),t(end)],'YLabel',text('String','angle (deg)'),'YLim',[-95,95]);
+l{3,1} = line(t,nan(1,len),'Parent',a{3},'Color','b','DisplayName','pitch');
+l{3,2} = line(t,nan(1,len),'Parent',a{3},'Color','r','DisplayName','roll');
+
+l{4,1} = bar(1:6,zeros(1,6),'Parent',a{4});
+set(a{4},'XTickLabel',{'throttle','pitch','roll','yaw','arm','beep'},'YLim',[-1.05,1.05]);
+
+set(a{5},'XLim',[t(1),t(end)],'YLabel',text('String','vbat (V)'));
+l{5,1} = line(t,nan(1,len),'Parent',a{5},'Color','b');
+
+set(a{6},'XLim',[t(1),t(end)],'YLabel',text('String','correction'),'YLim',[-605,605]);
+l{6,1} = line(t,nan(1,len),'Parent',a{6},'Color','b','DisplayName','pitch');
+l{6,2} = line(t,nan(1,len),'Parent',a{6},'Color','r','DisplayName','roll');
+l{6,3} = line(t,nan(1,len),'Parent',a{6},'Color','g','DisplayName','yaw');
+
+l{7,1} = bar(1:4,zeros(1,4),'Parent',a{7});
+set(a{7},'XLabel',text('String','motor'),'YLim',[0,2010]);
+
+set(a{8},'XLim',[t(1),t(end)],'YLabel',text('String','time sensor (us)'));%,'YLim',[-10,1010]);
+l{8,1} = line(t,nan(1,len),'Parent',a{8},'Color','b','DisplayName','mean');
+l{8,2} = line(t,nan(1,len),'Parent',a{8},'Color','r','DisplayName','max','LineStyle','--');
+l{8,3} = line(t,nan(1,len),'Parent',a{8},'Color','r','DisplayName','min','LineStyle','--');
+
+set(a{9},'XLim',[t(1),t(end)],'YLabel',text('String','time process (us)'));%,'YLim',[-10,1010]);
+l{9,1} = line(t,nan(1,len),'Parent',a{9},'Color','b','DisplayName','mean');
+l{9,2} = line(t,nan(1,len),'Parent',a{9},'Color','r','DisplayName','max','LineStyle','--');
+l{9,3} = line(t,nan(1,len),'Parent',a{9},'Color','r','DisplayName','min','LineStyle','--');
+
+for n = [1,2,3,6,8,9]
+	set(a{n},'XLabel',text('String','time (s)'));
+	%legend(a{n},'show','Location','NorthWest')
+end
+set(a{5},'XLabel',text('String','time (s)'));
+
+sensor.gyro_x = nan(1,len);
+sensor.gyro_y = nan(1,len);
+sensor.gyro_z = nan(1,len);
+
+sensor.accel_x = nan(1,len);
+sensor.accel_y = nan(1,len);
+sensor.accel_z = nan(1,len);
+
+angle.pitch = nan(1,len);
+angle.roll = nan(1,len);
+
+radio.throttle = 0;
+radio.pitch = 0;
+radio.roll = 0;
+radio.yaw = 0;
+radio.aux = zeros(2,1);
+
+vbat = nan(1,len);
+
+pitch = nan(1,len);
+roll = nan(1,len);
+yaw = nan(1,len);
+
+motor = zeros(4,1);
+
+t_sensor = nan(3,len);
+t_processing = nan(3,len);
+
+while ser.BytesAvailable > 0
 	fread(ser,ser.BytesAvailable);
-   sleep(10);
 end
 
-fc.DEBUG__MASK(SampleMask);
-fc.DEBUG__CASE(DebugCase);
+fc.CTRL__DEBUG(1);
 
-while (n < NbSamples)
+while ~KEY_IS_PRESSED
 	
-	if (ser.BytesAvailable >= r1)
+	if ser.BytesAvailable >= buf_len
+		
+		r = fread(ser,ser.BytesAvailable);
+		r = reshape(r,buf_len,[]);
+		d = size(r,2);
+		len1 = len - d + 1;
+		
+		sensor.gyro_x(1:len-d) = sensor.gyro_x(d+1:len);
+		sensor.gyro_y(1:len-d) = sensor.gyro_y(d+1:len);
+		sensor.gyro_z(1:len-d) = sensor.gyro_z(d+1:len);
+		sensor.accel_x(1:len-d) = sensor.accel_x(d+1:len);
+		sensor.accel_y(1:len-d) = sensor.accel_y(d+1:len);
+		sensor.accel_z(1:len-d) = sensor.accel_z(d+1:len);
 
-		r = fread(ser,r1);
-		n = n + 1;
+		angle.pitch(1:len-d) = angle.pitch(d+1:len);
+		angle.roll(1:len-d) = angle.roll(d+1:len);
 
-		for m = 1:dlen
-			switch dtype
-            case 'uint16'
-					d(m,WindowSize) = 2^8*r((m-1)*2+2) + r((m-1)*2+1);
-				case 'int16'
-					d(m,WindowSize) = c2s(2^8*r((m-1)*2+2) + r((m-1)*2+1), 16);
-            case 'uint32'
-					d(m,WindowSize) = 2^24*r((m-1)*4+4) + 2^16*r((m-1)*4+3) + 2^8*r((m-1)*4+2) + r((m-1)*4+1);
-				case 'float'
-					d(m,WindowSize) = typecast(uint32(2^24*r((m-1)*4+4) + 2^16*r((m-1)*4+3) + 2^8*r((m-1)*4+2) + r((m-1)*4+1)), 'single');
-				end
-			set(l{m},'XData',1:WindowSize);
-			set(l{m},'YData',d(m,:));
+		vbat(1:len-d) = vbat(d+1:len);
+
+		pitch(1:len-d) = pitch(d+1:len);
+		roll(1:len-d) = roll(d+1:len);
+		yaw(1:len-d) = yaw(d+1:len);
+		
+		for m = 1:3
+			t_sensor(m,1:len-d) = t_sensor(m,d+1:len);
+			t_processing(m,1:len-d) = t_processing(m,d+1:len);
 		end
+
+		n = 0;
+
+		sensor.gyro_x(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+		sensor.gyro_y(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+		sensor.gyro_z(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+
+		sensor.accel_x(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+		sensor.accel_y(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+		sensor.accel_z(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+
+		angle.pitch(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+		angle.roll(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+
+		radio.throttle = typecast(uint32(2^24*r(n+4,end) + 2^16*r(n+3,end) + 2^8*r(n+2,end) + r(n+1,end)), 'single');
+		n = n + 4;
+		radio.pitch = typecast(uint32(2^24*r(n+4,end) + 2^16*r(n+3,end) + 2^8*r(n+2,end) + r(n+1,end)), 'single');
+		n = n + 4;
+		radio.roll = typecast(uint32(2^24*r(n+4,end) + 2^16*r(n+3,end) + 2^8*r(n+2,end) + r(n+1,end)), 'single');
+		n = n + 4;
+		radio.yaw = typecast(uint32(2^24*r(n+4,end) + 2^16*r(n+3,end) + 2^8*r(n+2,end) + r(n+1,end)), 'single');
+		n = n + 4;
+		for m = 1:2
+			radio.aux(m) = typecast(uint32(2^24*r(n+4,end) + 2^16*r(n+3,end) + 2^8*r(n+2,end) + r(n+1,end)), 'single');
+			n = n + 4;
+		end
+
+		vbat(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+
+		pitch(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+		roll(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+		yaw(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+
+		for m = 1:4
+			motor(m) = 2^8*r(n+2,end) + r(n+1,end);
+			n = n + 2;
+		end
+
+		t_sensor(1,len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+		for m = 2:3
+			t_sensor(m,len1:len) = 2^8*r(n+2,:) + r(n+1,:);
+			n = n + 2;
+		end
+		t_processing(1,len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+		for m = 2:3
+			t_processing(m,len1:len) = 2^8*r(n+2,:) + r(n+1,:);
+			n = n + 2;
+		end
+
+		set(l{1,1},'YData',sensor.gyro_x);
+		set(l{1,2},'YData',sensor.gyro_y);
+		set(l{1,3},'YData',sensor.gyro_z);
+		
+		set(l{2,1},'YData',sensor.accel_x);
+		set(l{2,2},'YData',sensor.accel_y);
+		set(l{2,3},'YData',sensor.accel_z);
+		
+		set(l{3,1},'YData',angle.pitch);
+		set(l{3,2},'YData',angle.roll);
+
+		set(l{4,1},'YData',[radio.throttle, radio.pitch, radio.roll, radio.yaw, radio.aux(1), radio.aux(2)]);
+
+		set(l{5,1},'YData',vbat);
+		
+		set(l{6,1},'YData',pitch);
+		set(l{6,2},'YData',roll);
+		set(l{6,3},'YData',yaw);
+		
+		set(l{7,1},'YData',motor);
+		
+		for m = 1:3
+			set(l{8,m},'YData',t_sensor(m,:));
+			set(l{9,m},'YData',t_processing(m,:));
+		end
+		
 		drawnow
-
-		d(:,1:WindowSize-1) = d(:,2:WindowSize);
-
+		
 	end
-
+	
 end
 
-% Empty VCP buffer
-fc.DEBUG(0);
-sleep(10);
-while (ser.BytesAvailable > 0)
+fc.CTRL__DEBUG(0);
+pause(0.5)
+
+while ser.BytesAvailable > 0
 	fread(ser,ser.BytesAvailable);
-   sleep(10);
 end
 
+end
+
+function myKeyPressFcn(hObject, event)
+	global KEY_IS_PRESSED
+	KEY_IS_PRESSED  = 1;
 end

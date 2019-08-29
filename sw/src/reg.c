@@ -11,15 +11,13 @@
 
 uint32_t reg[NB_REG];
 float regf[NB_REG];
-reg_properties_t reg_properties[NB_REG] = 
+reg_properties_t reg_properties[NB_REG] =
 {
-	{1, 1, 0, 32}, // VERSION
+	{1, 1, 0, 33}, // VERSION
+	{1, 0, 0, 0}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
-	{0, 0, 0, 32512}, // DEBUG
 	{1, 0, 0, 0}, // ERROR
-	{1, 0, 0, 0}, // TIME
-	{1, 0, 1, 0}, // VBAT
 	{0, 1, 1, 1097649357}, // VBAT_MIN
 	{0, 1, 0, 327682000}, // TIME_CONSTANT
 	{0, 1, 0, 100}, // TIME_CONSTANT_RADIO
@@ -51,7 +49,8 @@ reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 0, 32769500}, // ELEVATOR
 	{0, 1, 0, 32769500}, // RUDDER
 	{0, 1, 0, 65537000}, // AUX
-	{0, 1, 0, 1} // MPU_CFG
+	{0, 1, 0, 1}, // MPU_CFG
+	{0, 0, 0, 0} // DEBUG_REG
 };
 
 #ifdef STM32F3
@@ -72,15 +71,15 @@ float filter_alpha_vbat;
 void reg_init()
 {
 	int i;
-	
+
 	_Bool reg_flash_valid;
 	uint32_t reg_default;
-	
+
 	if (flash_r[0] == reg_properties[0].dflt)
 		reg_flash_valid = 1;
 	else
 		reg_flash_valid = 0;
-	
+
 	for(i=0; i<NB_REG; i++)
 	{
 		if (reg_properties[i].flash && reg_flash_valid)
@@ -92,10 +91,8 @@ void reg_init()
 		else {
 			reg[i] = reg_default;
 		}
-		
 	}
-	
-	REG_VBAT = REG_VBAT_MIN + 0.1f;
+
 	sensor_rate = 1000.0f / (float)(REG_MPU_CFG__RATE+1);
 	if (REG_TIME_CONSTANT_RADIO == 0)
 		filter_alpha_radio = 1.0f;
@@ -115,7 +112,7 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 {
 	uint8_t addr = host_buffer_rx->addr;
 	uint32_t old_data;
-	
+
 	switch (host_buffer_rx->instr)
 	{
 		case 0: // REG read
@@ -125,8 +122,9 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			else {
 				if (addr == REG_ERROR_Addr)
 					REG_ERROR = ((uint32_t)rf_error_count << 16) | ((uint32_t)radio_error_count << 8) | (uint32_t)sensor_error_count;
-				else if (addr == REG_TIME_Addr)
-					REG_TIME = ((uint32_t)time_process << 16) | (uint32_t)time_sensor;
+				else if (addr == REG_DEBUG_REG_Addr) {
+					/* Print your debug value here */
+				}
 				host_send((uint8_t*)&reg[addr], 4);
 			}
 			break;
@@ -148,19 +146,15 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 							mpu_cal(&sensor_raw);
 							REG_CTRL &= ~REG_CTRL__SENSOR_CAL_Msk;
 						}
-						flag_beep_host = (REG_CTRL__BEEP_TEST == 1);
-						flag_acro = (REG_CTRL__ARM_TEST == 1);
 					}
 					else if (addr == REG_MPU_CFG_Addr) {
 						if (REG_MPU_CFG != old_data) {
 							set_mpu_host(1);
 							sensor_write(MPU_CFG, MPU_CFG__DLPF_CFG(REG_MPU_CFG__FILT));
-							wait_ms(1);
 							sensor_write(MPU_SMPLRT_DIV, REG_MPU_CFG__RATE);
-							wait_ms(1);
 							set_mpu_host(REG_CTRL__SENSOR_HOST_CTRL == 1);
 							sensor_rate = 1000.0f / (float)(REG_MPU_CFG__RATE+1);
-						}						
+						}
 					}
 					else if (addr == REG_TIME_CONSTANT_RADIO_Addr) {
 						if (REG_TIME_CONSTANT_RADIO == 0)
@@ -178,19 +172,23 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 						else
 							filter_alpha_vbat  = (float)VBAT_PERIOD / (float)REG_TIME_CONSTANT__VBAT;
 					}
+					else if (addr == REG_DEBUG_REG_Addr) {
+						/* Put your debug command here */
+					}
 				}
 			}
 			break;
 		}
 		case 2: // SPI read to MPU
 		{
-			flag_sensor_host_read = 1;
-			sensor_read(addr,1);
+			if (REG_CTRL__SENSOR_HOST_CTRL == 1)
+				sensor_read(addr,1);
 			break;
 		}
 		case 3: // SPI write to MPU
 		{
-			sensor_write(addr, host_buffer_rx->data.u8[3]);
+			if (REG_CTRL__SENSOR_HOST_CTRL == 1)
+				sensor_write(addr, host_buffer_rx->data.u8[3]);
 			break;
 		}
 		case 4: // Flash read

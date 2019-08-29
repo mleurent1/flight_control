@@ -1,3 +1,5 @@
 *.bin
+*.hex
 *.o
-*.ipch
+CURRENT_BOARD
+.vscode/ipch/*

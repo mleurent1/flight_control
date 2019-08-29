@@ -8,15 +8,20 @@ reg(n).flash = 1;
 reg(n).subf{1} = {'VERSION',7,0,'uint8',0};
 
 n = n + 1;
+reg(n).name = 'STATUS';
+reg(n).read_only = 1;
+reg(n).flash = 0;
+reg(n).subf{1} = {'STATUS',7,0,'uint8',0};
+
+n = n + 1;
 reg(n).name = 'CTRL';
 reg(n).read_only = 0;
 reg(n).flash = 0;
 reg(n).subf{1} = {'SENSOR_HOST_CTRL',0,0,'uint8',0};
 reg(n).subf{2} = {'ARM_TEST',2,1,'uint8',0};
 reg(n).subf{3} = {'BEEP_TEST',3,3,'uint8',0};
-reg(n).subf{4} = {'TIME_MAXHOLD',4,4,'uint8',0};
-reg(n).subf{5} = {'SENSOR_CAL',5,5,'uint8',0};
-reg(n).subf{6} = {'BEEP_DISABLE',6,6,'uint8',0};
+reg(n).subf{4} = {'SENSOR_CAL',4,4,'uint8',0};
+reg(n).subf{5} = {'DEBUG',5,5,'uint8',0};
 
 n = n + 1;
 reg(n).name = 'MOTOR_TEST';
@@ -27,13 +32,6 @@ reg(n).subf{2} = {'SELECT',19,16,'uint8',0};
 reg(n).subf{3} = {'TELEMETRY',20,20,'uint8',0};
 
 n = n + 1;
-reg(n).name = 'DEBUG';
-reg(n).read_only = 0;
-reg(n).flash = 0;
-reg(n).subf{1} = {'CASE',7,0,'uint8',0};
-reg(n).subf{2} = {'MASK',23,8,'uint16',127};
-
-n = n + 1;
 reg(n).name = 'ERROR';
 reg(n).read_only = 1;
 reg(n).flash = 0;
@@ -41,19 +39,6 @@ reg(n).subf{1} = {'SENSOR',7,0,'uint8',0};
 reg(n).subf{2} = {'RADIO',15,8,'uint8',0};
 reg(n).subf{3} = {'RF',23,16,'uint8',0};
 reg(n).subf{4} = {'CRC',31,24,'uint8',0};
-
-n = n + 1;
-reg(n).name = 'TIME';
-reg(n).read_only = 1;
-reg(n).flash = 0;
-reg(n).subf{1} = {'SENSOR',15,0,'uint16',0};
-reg(n).subf{2} = {'PROCESSING',31,16,'uint16',0};
-
-n = n + 1;
-reg(n).name = 'VBAT';
-reg(n).read_only = 1;
-reg(n).flash = 0;
-reg(n).subf{1} = {'VBAT',31,0,'single',0};
 
 n = n + 1;
 reg(n).name = 'VBAT_MIN';
@@ -259,3 +244,9 @@ reg(n).read_only = 0;
 reg(n).flash = 1;
 reg(n).subf{1} = {'FILT',7,0,'uint8',1};
 reg(n).subf{2} = {'RATE',15,8,'uint8',0};
+
+n = n + 1;
+reg(n).name = 'DEBUG_REG';
+reg(n).read_only = 0;
+reg(n).flash = 0;
+reg(n).subf{1} = {'DEBUG_REG',7,0,'uint8',0};

@@ -1,0 +1,29 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "sw/inc",
+                "sw/stm32f3/cmsis/inc",
+                "sw/stm32f3/hal/inc",
+                "sw/usb_vcp/inc"
+            ],
+            "defines": [
+                "STM32F3",
+                "STM32F303xC",
+                "HAL_PCD_MODULE_ENABLED",
+                "SENSOR=6000",
+                "DSHOT=1",
+                "ONESHOT=0",
+                "ESC=1",
+                "BEEPER",
+                "VBAT"
+            ],
+            "compilerPath": "C:/Program Files/mingw-w64/x86_64-8.1.0-posix-seh-rt_v6-rev0/mingw64/bin/gcc.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}

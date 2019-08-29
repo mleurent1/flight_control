@@ -18,6 +18,7 @@ delete(instrfindall);
 ser = serial('COM21');
 ser.BaudRate = 115200;
 ser.Timeout = 1;
+ser.InputBufferSize = 8192;
 fopen(ser);
 
 % ftdi('close');
@@ -27,5 +28,5 @@ fopen(ser);
 %    n = n + 1;
 % end
 % ftdi('clock',1e6);
-% 
+%
 % sx1272_start;

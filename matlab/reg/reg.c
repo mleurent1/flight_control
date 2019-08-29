@@ -1,12 +1,10 @@
 reg_properties_t reg_properties[NB_REG] = 
 {
 	{1, 1, 0, 0}, // VERSION
+	{1, 0, 0, 0}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
-	{0, 0, 0, 32512}, // DEBUG
 	{1, 0, 0, 0}, // ERROR
-	{1, 0, 0, 0}, // TIME
-	{1, 0, 1, 0}, // VBAT
 	{0, 1, 1, 1097649357}, // VBAT_MIN
 	{0, 1, 0, 327682000}, // TIME_CONSTANT
 	{0, 1, 0, 100}, // TIME_CONSTANT_RADIO
@@ -38,5 +36,6 @@ reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 0, 32769500}, // ELEVATOR
 	{0, 1, 0, 32769500}, // RUDDER
 	{0, 1, 0, 65537000}, // AUX
-	{0, 1, 0, 1} // MPU_CFG
+	{0, 1, 0, 1}, // MPU_CFG
+	{0, 0, 0, 0} // DEBUG_REG
 };
