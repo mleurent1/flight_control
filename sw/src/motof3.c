@@ -24,7 +24,6 @@ volatile uint8_t i2c2_tx_bytes_written;
 #endif
 volatile _Bool sensor_busy;
 volatile int32_t time_sensor_start;
-volatile _Bool radio_sync_first_idle;
 
 /* Functions ------------------------------------------------*/
 
@@ -69,7 +68,6 @@ void sensor_read(uint8_t addr, uint8_t size)
 void radio_sync()
 {
 	radio_uart_dma_disable();
-	radio_sync_first_idle = 1;
 	USART2->CR1 |= USART_CR1_RE | USART_CR1_IDLEIE; // Enable UART with IDLE line detection
 }
 
@@ -77,10 +75,10 @@ void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
 {
 #if (ESC == DSHOT)
 	int i;
-	uint32_t motor1_dshot[16];
-	uint32_t motor2_dshot[16];
-	uint32_t motor3_dshot[16];
-	uint32_t motor4_dshot[16];
+	uint8_t motor1_dshot[16];
+	uint8_t motor2_dshot[16];
+	uint8_t motor3_dshot[16];
+	uint8_t motor4_dshot[16];
 
 	if (DMA1_Channel3->CNDTR == 0) {
 		TIM3->DIER = 0;
@@ -94,10 +92,10 @@ void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
 		dshot_encode(&motor_raw[2], motor3_dshot, motor_telemetry[2]);
 		dshot_encode(&motor_raw[3], motor4_dshot, motor_telemetry[3]);
 		for (i=0; i<16; i++) {
-			dshot[i*4+0] = motor1_dshot[i];
-			dshot[i*4+1] = motor2_dshot[i];
-			dshot[i*4+2] = motor3_dshot[i];
-			dshot[i*4+3] = motor4_dshot[i];
+			dshot[i*4+0] = (uint32_t)motor1_dshot[i];
+			dshot[i*4+1] = (uint32_t)motor2_dshot[i];
+			dshot[i*4+2] = (uint32_t)motor3_dshot[i];
+			dshot[i*4+3] = (uint32_t)motor4_dshot[i];
 		}
 
 		DMA1_Channel3->CNDTR = 17*4;
@@ -124,7 +122,7 @@ void toggle_beeper(_Bool en)
 	if (en)
 		GPIOA->ODR ^= GPIO_ODR_0;
 	else
-		GPIOA->ODR &= ~GPIO_ODR_0;
+		GPIOA->BSRR = GPIO_BSRR_BR_0;
 }
 
 void set_mpu_host(_Bool host)
@@ -228,15 +226,8 @@ void USART2_IRQHandler()
 {
 	if (USART2->ISR & USART_ISR_IDLE) {
 		USART2->ICR = USART_ICR_IDLECF; // Clear status flags
-		if (radio_sync_first_idle) {
-			radio_sync_first_idle = 0;
-			USART2->CR1 &= ~USART_CR1_RE;
-			USART2->CR1 |= USART_CR1_RE;
-		}
-		else {
-			USART2->CR1 &= ~(USART_CR1_IDLEIE | USART_CR1_RE); // Disable idle line detection
-			radio_uart_dma_enable(sizeof(radio_frame));
-		}
+		USART2->CR1 &= ~(USART_CR1_IDLEIE | USART_CR1_RE); // Disable idle line detection
+		radio_uart_dma_enable(sizeof(radio_frame));
 	}
 	else {
 		USART2->ICR = USART_ICR_ORECF | USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NCF; // Clear all flags
@@ -538,6 +529,7 @@ void board_init()
 
 	// A0 : Beeper
 	GPIOA->MODER |= GPIO_MODER_MODER0_0;
+	GPIOA->BSRR = GPIO_BSRR_BR_0;
 
 #endif
 

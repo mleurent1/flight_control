@@ -386,6 +386,10 @@ int main(void)
 
 			/*------ Motor command ------*/
 
+			// adapt yaw control if motor direction is reversed
+			if (REG_MOTOR__REVERSED)
+				yaw = -yaw;
+
 			// Motor matrix
 			motor[0] = radio.throttle * (float)REG_MOTOR__RANGE + roll + pitch - yaw;
 			motor[1] = radio.throttle * (float)REG_MOTOR__RANGE + roll - pitch + yaw;

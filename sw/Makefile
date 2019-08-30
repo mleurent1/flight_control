@@ -2,7 +2,7 @@ CC = "/mnt/c/Program Files (x86)/GNU Tools ARM Embedded/8 2018-q4-major/bin/arm-
 OBJCOPY = "/mnt/c/Program Files (x86)/GNU Tools ARM Embedded/7 2018-q2-update/bin/arm-none-eabi-objcopy.exe"
 SIZE = "/mnt/c/Program Files (x86)/GNU Tools ARM Embedded/8 2018-q4-major/bin/arm-none-eabi-size.exe"
 STLINK = "/mnt/c/Program Files (x86)/STMicroelectronics/STM32 ST-LINK Utility/ST-LINK Utility/ST-LINK_CLI.exe"
-DFU = "/mnt/c/dfu-util-0.9-win64/dfu-util.exe"
+DFU = "/mnt/c/programs/dfu-util-0.9-win64/dfu-util.exe"
 LDFLAGS = *.o -lm -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs --specs=nosys.specs
 #-L/home/mleurent/gcc-arm-none-eabi-8-2018-q4-major/arm-none-eabi/lib -L/home/mleurent/gcc-arm-none-eabi-8-2018-q4-major/lib/gcc/arm-none-eabi/8.2.1
 #KEIL:-mthumb-interwork -nostartfiles

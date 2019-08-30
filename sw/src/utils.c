@@ -50,7 +50,7 @@ int32_t uint32_to_int32(uint32_t x)
 	return i2u.i;
 }
 
-void dshot_encode(volatile uint16_t* val, volatile uint32_t buf[16], _Bool telemetry)
+void dshot_encode(volatile uint16_t* val, volatile uint8_t buf[16], _Bool telemetry)
 {
 	int i;
 	uint8_t bit[11];

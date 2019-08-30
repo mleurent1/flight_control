@@ -16,49 +16,51 @@
 /* Global variables --------------------------------------*/
 
 volatile uint8_t spi1_rx_buffer[16];
-volatile uint8_t spi1_tx_bytes_to_write;
+volatile uint8_t spi1_tx_buffer[16];
 #if (ESC == DSHOT)
 	volatile uint32_t dshot12[17*2];
 	volatile uint32_t dshot34[17*2];
 #endif
 volatile _Bool sensor_busy;
 volatile int32_t time_sensor_start;
-volatile _Bool radio_sync_first_idle;
 
 /* Functions ------------------------------------------------*/
 
 inline __attribute__((always_inline)) void sensor_spi_dma_enable(uint8_t size)
 {
 	DMA1_Channel2->CNDTR = size + 1;
+	DMA1_Channel3->CNDTR = size + 1;
 	DMA1_Channel2->CCR |= DMA_CCR_EN;
+	DMA1_Channel3->CCR |= DMA_CCR_EN;
 	SPI1->CR1 |= SPI_CR1_SPE;
 }
 
 inline __attribute__((always_inline)) void sensor_spi_dma_disable()
 {
-	DMA1->IFCR = DMA_IFCR_CGIF2; // Clear all DMA flags
+	DMA1->IFCR = DMA_IFCR_CGIF2 | DMA_IFCR_CGIF3; // Clear all DMA flags
 	DMA1_Channel2->CCR &= ~DMA_CCR_EN;
+	DMA1_Channel3->CCR &= ~DMA_CCR_EN;
 	SPI1->CR1 &= ~SPI_CR1_SPE;
 }
 
 inline __attribute__((always_inline)) void radio_uart_dma_enable(uint8_t size)
 {
-	DMA1_Channel3->CNDTR = size;
-	DMA1_Channel3->CCR |= DMA_CCR_EN;
-	USART3->CR1 |= USART_CR1_RE;
+	DMA1_Channel6->CNDTR = size;
+	DMA1_Channel6->CCR |= DMA_CCR_EN;
+	USART2->CR1 |= USART_CR1_RE;
 }
 
 inline __attribute__((always_inline)) void radio_uart_dma_disable()
 {
-	DMA1->IFCR = DMA_IFCR_CGIF3; // Clear all DMA flags
-	DMA1_Channel3->CCR &= ~DMA_CCR_EN;
-	USART3->CR1 &= ~USART_CR1_RE;
+	DMA1->IFCR = DMA_IFCR_CGIF6; // Clear all DMA flags
+	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
+	USART2->CR1 &= ~USART_CR1_RE;
 }
 
 void sensor_write(uint8_t addr, uint8_t data)
 {
-	spi1_tx_bytes_to_write = 0;
-	SPI1->DR = (data << 8) | (addr & 0x7F);
+	spi1_tx_buffer[0] = addr & 0x7F;
+	spi1_tx_buffer[1] = data;
 	sensor_spi_dma_enable(1);
 	sensor_busy = 1;
 	// Wait for end of transaction
@@ -68,33 +70,25 @@ void sensor_write(uint8_t addr, uint8_t data)
 
 void sensor_read(uint8_t addr, uint8_t size)
 {
-	spi1_tx_bytes_to_write = size - 1;
-	SPI1->DR = 0x80 | (addr & 0x7F);
+	spi1_tx_buffer[0] = 0x80 | (addr & 0x7F);
 	sensor_spi_dma_enable(size);
 	sensor_busy = 1;
-	while (spi1_tx_bytes_to_write > 0) {
-		if (SPI1->SR & SPI_SR_TXE) {
-			*((uint8_t *)&SPI1->DR) = 0;
-			spi1_tx_bytes_to_write--;
-		}
-	}
 }
 
 void radio_sync()
 {
 	radio_uart_dma_disable();
-	radio_sync_first_idle = 1;
-	USART3->CR1 |= USART_CR1_RE | USART_CR1_IDLEIE; // Enable UART with IDLE line detection
+	USART2->CR1 |= USART_CR1_RE | USART_CR1_IDLEIE; // Enable UART with IDLE line detection
 }
 
 void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
 {
 #if (ESC == DSHOT)
 	int i;
-	uint32_t motor1_dshot[16];
-	uint32_t motor2_dshot[16];
-	uint32_t motor3_dshot[16];
-	uint32_t motor4_dshot[16];
+	uint8_t motor1_dshot[16];
+	uint8_t motor2_dshot[16];
+	uint8_t motor3_dshot[16];
+	uint8_t motor4_dshot[16];
 
 	if ((DMA2_Channel1->CNDTR == 0) && (DMA1_Channel5->CNDTR == 0)) {
 		TIM8->DIER = 0;
@@ -114,10 +108,10 @@ void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
 		dshot_encode(&motor_raw[2], motor4_dshot, motor_telemetry[2]);
 		dshot_encode(&motor_raw[3], motor3_dshot, motor_telemetry[3]);
 		for (i=0; i<16; i++) {
-			dshot12[i*2+0] = motor1_dshot[i];
-			dshot12[i*2+1] = motor2_dshot[i];
-			dshot34[i*2+0] = motor3_dshot[i];
-			dshot34[i*2+1] = motor4_dshot[i];
+			dshot12[i*2+0] = (uint32_t)motor1_dshot[i];
+			dshot12[i*2+1] = (uint32_t)motor2_dshot[i];
+			dshot34[i*2+0] = (uint32_t)motor3_dshot[i];
+			dshot34[i*2+1] = (uint32_t)motor4_dshot[i];
 		}
 
 		DMA2_Channel1->CNDTR = 17*2;
@@ -162,13 +156,13 @@ void set_mpu_host(_Bool host)
 
 	if (host) {
 		DMA1_Channel2->CMAR = (uint32_t)spi1_rx_buffer;
-		//SPI1->CR1 &= ~SPI_CR1_BR_Msk;
-		//SPI1->CR1 |= 5 << SPI_CR1_BR_Pos; // 750kHz
+		SPI1->CR1 &= ~SPI_CR1_BR_Msk;
+		SPI1->CR1 |= 5 << SPI_CR1_BR_Pos; // 750kHz
 	}
 	else {
 		DMA1_Channel2->CMAR = (uint32_t)&sensor_raw;
-		//SPI1->CR1 &= ~SPI_CR1_BR_Msk;
-		//SPI1->CR1 |= 1 << SPI_CR1_BR_Pos; // 12MHz
+		SPI1->CR1 &= ~SPI_CR1_BR_Msk;
+		SPI1->CR1 |= 1 << SPI_CR1_BR_Pos; // 12MHz
 	}
 }
 
@@ -226,22 +220,15 @@ void DMA1_Channel2_IRQHandler()
 
 /* Radio UART IRQ ------------------------------*/
 
-void USART3_IRQHandler()
+void USART2_IRQHandler()
 {
-	if (USART3->ISR & USART_ISR_IDLE) {
-		USART3->ICR = USART_ICR_IDLECF; // Clear status flags
-		if (radio_sync_first_idle) {
-			radio_sync_first_idle = 0;
-			USART3->CR1 &= ~USART_CR1_RE;
-			USART3->CR1 |= USART_CR1_RE;
-		}
-		else {
-			USART3->CR1 &= ~(USART_CR1_IDLEIE | USART_CR1_RE); // Disable idle line detection
-			radio_uart_dma_enable(sizeof(radio_frame));
-		}
+	if (USART2->ISR & USART_ISR_IDLE) {
+		USART2->ICR = USART_ICR_IDLECF; // Clear status flags
+		USART2->CR1 &= ~(USART_CR1_IDLEIE | USART_CR1_RE); // Disable idle line detection
+		radio_uart_dma_enable(sizeof(radio_frame));
 	}
 	else {
-		USART3->ICR = USART_ICR_ORECF | USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NCF; // Clear all flags
+		USART2->ICR = USART_ICR_ORECF | USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NCF; // Clear all flags
 		radio_error_count++;
 		radio_sync();
 	}
@@ -249,7 +236,7 @@ void USART3_IRQHandler()
 
 /* DMA IRQ of radio Rx UART-----------------------*/
 
-void DMA1_Channel3_IRQHandler()
+void DMA1_Channel6_IRQHandler()
 {
 	radio_uart_dma_disable();
 	radio_uart_dma_enable(sizeof(radio_frame));
@@ -376,7 +363,7 @@ void board_init()
 	// SPI config
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
 	SPI1->CR1 = SPI_CR1_MSTR | (5 << SPI_CR1_BR_Pos) | SPI_CR1_CPOL | SPI_CR1_CPHA; // SPI clock = clock APB2/64 = 24MHz/64 = 750 kHz
-	SPI1->CR2 = SPI_CR2_SSOE | SPI_CR2_RXDMAEN | SPI_CR2_FRXTH | SPI_CR2_ERRIE;
+	SPI1->CR2 = SPI_CR2_SSOE | SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN | SPI_CR2_FRXTH | SPI_CR2_ERRIE;
 	NVIC_EnableIRQ(SPI1_IRQn);
 	NVIC_SetPriority(SPI1_IRQn,0);
 
@@ -393,6 +380,11 @@ void board_init()
 	NVIC_EnableIRQ(DMA1_Channel2_IRQn);
 	NVIC_SetPriority(DMA1_Channel2_IRQn,0);
 
+	// DMA SPI1 Tx
+	DMA1_Channel3->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL_1;
+	DMA1_Channel3->CMAR = (uint32_t)spi1_tx_buffer;
+	DMA1_Channel3->CPAR = (uint32_t)&(SPI1->DR);
+
 	// Init
 	mpu_spi_init();
 	set_mpu_host(0);
@@ -400,25 +392,25 @@ void board_init()
 
 	/* Radio Rx UART ---------------------------------------------------*/
 
-	// B11 : UART3 Rx, AF7, pull-up for IDLE
-	GPIOB->MODER |= GPIO_MODER_MODER11_1;
-	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR11_0;
-	GPIOB->AFR[1] |= 7 << GPIO_AFRH_AFRH3_Pos;
+	// B4 : UART2 Rx, AF7, pull-up for IDLE
+	GPIOB->MODER |= GPIO_MODER_MODER4_1;
+	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR4_0;
+	GPIOB->AFR[0] |= 7 << GPIO_AFRL_AFRL4_Pos;
 
 	// UART config
-	RCC->APB1ENR |= RCC_APB1ENR_USART3EN;
-	USART3->BRR = 417; // 48MHz/115200bps
-	USART3->CR1 = USART_CR1_UE;
-	USART3->CR3 = USART_CR3_DMAR | USART_CR3_EIE;
-	NVIC_EnableIRQ(USART3_IRQn);
-	NVIC_SetPriority(USART3_IRQn,0);
+	RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
+	USART2->BRR = 417; // 48MHz/115200bps
+	USART2->CR1 = USART_CR1_UE;
+	USART2->CR3 = USART_CR3_DMAR | USART_CR3_EIE;
+	NVIC_EnableIRQ(USART2_IRQn);
+	NVIC_SetPriority(USART2_IRQn,0);
 
-	// DMA UART3 Rx
-	DMA1_Channel3->CCR = DMA_CCR_TCIE | DMA_CCR_MINC;
-	DMA1_Channel3->CMAR = (uint32_t)&radio_frame;
-	DMA1_Channel3->CPAR = (uint32_t)&(USART3->RDR);
-	NVIC_EnableIRQ(DMA1_Channel3_IRQn);
-	NVIC_SetPriority(DMA1_Channel3_IRQn,0);
+	// DMA UART2 Rx
+	DMA1_Channel6->CCR = DMA_CCR_TCIE | DMA_CCR_MINC;
+	DMA1_Channel6->CMAR = (uint32_t)&radio_frame;
+	DMA1_Channel6->CPAR = (uint32_t)&(USART2->RDR);
+	NVIC_EnableIRQ(DMA1_Channel6_IRQn);
+	NVIC_SetPriority(DMA1_Channel6_IRQn,0);
 
 	// Init
 	radio_sync();
