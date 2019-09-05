@@ -226,7 +226,8 @@ while ~KEY_IS_PRESSED
 	
 end
 
-fc.CTRL__DEBUG(0);
+% fc.CTRL__DEBUG(0);
+fc.CTRL(0);
 pause(0.5)
 
 while ser.BytesAvailable > 0

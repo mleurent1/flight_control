@@ -46,8 +46,7 @@ struct angle_s {
 
 /* Public functions -----------------*/
 
-void mpu_spi_init(void);
-void mpu_i2c_init(void);
+void mpu_init(void);
 void mpu_process_samples(sensor_raw_t * sensor_raw, struct sensor_s * sensor);
 void mpu_cal(sensor_raw_t * sensor_raw);
 void angle_estimate(struct sensor_s * sensor, struct angle_s * angle);

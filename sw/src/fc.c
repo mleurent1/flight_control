@@ -203,7 +203,7 @@ int main(void)
 
 	board_init();
 
-	// Do not disable Systick interrupt, needed by reg write update
+	// Disable Systick interrupt, not needed anymore
 	SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
 
 	/* Loop ----------------------------------------------------------------------------
@@ -213,6 +213,15 @@ int main(void)
 	{
 		// record processing time
 		time_process = -get_timer_process();
+
+		/* Host request ------------------------------------------------------------------*/
+
+		if (flag_host)
+		{
+			flag_host = 0; // reset flag
+
+			reg_access(&host_buffer_rx);
+		}
 
 		/* Process radio commands -----------------------------------------------------*/
 
@@ -439,15 +448,6 @@ int main(void)
 				vbat_smoothed += filter_alpha_vbat * vbat - filter_alpha_vbat * vbat_smoothed;
 		}
 #endif
-
-		/* Host request ------------------------------------------------------------------*/
-
-		if (flag_host)
-		{
-			flag_host = 0; // reset flag
-
-			reg_access(&host_buffer_rx);
-		}
 
 		/* Flight controller status: LED, beeper, timeout and debug output -----------------------------------------------*/
 

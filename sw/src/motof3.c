@@ -396,7 +396,7 @@ void board_init()
 	NVIC_SetPriority(DMA1_Channel5_IRQn,0);
 
 	// Init
-	mpu_i2c_init();
+	mpu_init();
 	set_mpu_host(0);
 	EXTI->IMR = EXTI_IMR_MR15; // enable external interrupt now
 

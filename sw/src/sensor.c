@@ -22,14 +22,16 @@
 
 /* Function definitions ----------------------------------*/
 
-void mpu_spi_init(void)
+void mpu_init(void)
 {
 	wait_ms(SENSOR_SETTLING_TIME);
 	sensor_write(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__DEVICE_RST);
 	wait_ms(100);
+#if (SENSOR != 6050)
 	sensor_write(MPU_SIGNAL_PATH_RST, MPU_SIGNAL_PATH_RST__ACCEL_RST | MPU_SIGNAL_PATH_RST__GYRO_RST | MPU_SIGNAL_PATH_RST__TEMP_RST);
 	wait_ms(100);
 	sensor_write(MPU_USER_CTRL, MPU_USER_CTRL__I2C_IF_DIS);
+#endif
 	sensor_write(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1));// | MPU_PWR_MGMT_1__TEMP_DIS); // Get MPU out of sleep, set CLK = gyro X clock, and disable temperature sensor
 	wait_ms(100);
 	//sensor_write(MPU_PWR_MGMT_2, MPU_PWR_MGMT_2__STDBY_XA | MPU_PWR_MGMT_2__STDBY_YA | MPU_PWR_MGMT_2__STDBY_ZA); // Disable accelerometers
@@ -38,20 +40,6 @@ void mpu_spi_init(void)
 	sensor_write(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
 	sensor_write(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
 	//wait_ms(100); // wait for filter to settle
-	sensor_write(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
-}
-
-void mpu_i2c_init(void)
-{
-	wait_ms(SENSOR_SETTLING_TIME);
-	sensor_write(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__DEVICE_RST);
-	wait_ms(100);
-	sensor_write(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1));
-	wait_ms(100);
-	sensor_write(MPU_SMPLRT_DIV, REG_MPU_CFG__RATE); // Sample rate = Fs/(x+1)
-	sensor_write(MPU_CFG, MPU_CFG__DLPF_CFG(REG_MPU_CFG__FILT)); // Filter ON => Fs=1kHz, else 8kHz
-	sensor_write(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
-	sensor_write(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
 	sensor_write(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
 }
 

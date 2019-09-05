@@ -386,7 +386,7 @@ void board_init()
 	DMA1_Channel3->CPAR = (uint32_t)&(SPI1->DR);
 
 	// Init
-	mpu_spi_init();
+	mpu_init();
 	set_mpu_host(0);
 	EXTI->IMR = EXTI_IMR_MR13; // enable external interrupt now
 
@@ -437,7 +437,7 @@ void board_init()
 
 #if (ESC == DSHOT)
 	// DMA driven timer for DShot600, 48Mhz: 0:30, 1:60, T:80
-	TIM8->PSC = 0; // 0:DShot600, 1:DShot300
+	TIM8->PSC = 1; // 1:DShot600, 3:DShot300
 	TIM8->ARR = 80;
 	//TIM8->DIER = TIM_DIER_UDE; // Managed in motor function
 	TIM8->CCER = TIM_CCER_CC2E | TIM_CCER_CC3E;
@@ -445,7 +445,7 @@ void board_init()
 	TIM8->CCMR2 = (6 << TIM_CCMR2_OC3M_Pos) | TIM_CCMR2_OC3PE;
 	TIM8->DCR = (1 << TIM_DCR_DBL_Pos) | (14 << TIM_DCR_DBA_Pos);
 
-	TIM15->PSC = 0;
+	TIM15->PSC = 1;
 	TIM15->ARR = 80;
 	//TIM15->DIER = TIM_DIER_UDE; // Managed in motor function
 	TIM15->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;

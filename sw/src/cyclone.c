@@ -382,7 +382,7 @@ void board_init()
 	DMA1_Channel5->CPAR = (uint32_t)&(SPI2->DR);
 
 	// Init
-	mpu_spi_init();
+	mpu_init();
 	set_mpu_host(0);
 	EXTI->IMR = EXTI_IMR_MR15; // enable external interrupt now
 

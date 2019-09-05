@@ -44,7 +44,7 @@ n = n + 1;
 reg(n).name = 'VBAT_MIN';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VBAT_MIN',31,0,'single',14.8};
+reg(n).subf{1} = {'VBAT_MIN',31,0,'single',7.2};
 
 n = n + 1;
 reg(n).name = 'TIME_CONSTANT';
@@ -84,9 +84,9 @@ n = n + 1;
 reg(n).name = 'RATE';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'PITCH_ROLL',11,0,'uint16',1080};
+reg(n).subf{1} = {'PITCH_ROLL',11,0,'uint16',900};
 reg(n).subf{2} = {'YAW',23,12,'uint16',540};
-reg(n).subf{3} = {'ANGLE',31,24,'uint8',60};
+reg(n).subf{3} = {'ANGLE',31,24,'uint8',45};
 
 n = n + 1;
 reg(n).name = 'P_PITCH';
@@ -134,7 +134,7 @@ n = n + 1;
 reg(n).name = 'I_YAW';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'I_YAW',31,0,'single',0.02};
+reg(n).subf{1} = {'I_YAW',31,0,'single',0.01};
 
 n = n + 1;
 reg(n).name = 'D_YAW';

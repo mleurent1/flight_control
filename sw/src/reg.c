@@ -18,13 +18,13 @@ reg_properties_t reg_properties[NB_REG] =
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
 	{1, 0, 0, 0}, // ERROR
-	{0, 1, 1, 1097649357}, // VBAT_MIN
+	{0, 1, 1, 1088841318}, // VBAT_MIN
 	{0, 1, 0, 327682000}, // TIME_CONSTANT
 	{0, 1, 0, 100}, // TIME_CONSTANT_RADIO
 	{0, 1, 1, 1077936128}, // EXPO_PITCH_ROLL
 	{0, 1, 1, 1073741824}, // EXPO_YAW
 	{0, 1, 0, 1782784050}, // MOTOR
-	{0, 1, 0, 1008845880}, // RATE
+	{0, 1, 0, 757187460}, // RATE
 	{0, 1, 1, 1073741824}, // P_PITCH
 	{0, 1, 1, 1000593162}, // I_PITCH
 	{0, 1, 1, 0}, // D_PITCH
@@ -32,7 +32,7 @@ reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 1, 1000593162}, // I_ROLL
 	{0, 1, 1, 0}, // D_ROLL
 	{0, 1, 1, 1082130432}, // P_YAW
-	{0, 1, 1, 1017370378}, // I_YAW
+	{0, 1, 1, 1008981770}, // I_YAW
 	{0, 1, 1, 0}, // D_YAW
 	{0, 1, 1, 1084227584}, // P_PITCH_ANGLE
 	{0, 1, 1, 0}, // I_PITCH_ANGLE
