@@ -37,5 +37,7 @@ reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 0, 32769500}, // RUDDER
 	{0, 1, 0, 65537000}, // AUX
 	{0, 1, 0, 1}, // MPU_CFG
-	{0, 0, 0, 0} // DEBUG_REG
+	{0, 1, 0, 1}, // FC_CFG
+	{0, 0, 0, 0}, // DEBUG_INT
+	{0, 0, 1, 0} // DEBUG_FLOAT
 };

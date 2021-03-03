@@ -17,7 +17,8 @@
 
 extern sensor_raw_t sensor_raw;
 extern radio_frame_t radio_frame;
-extern volatile float vbat;
+extern volatile float vbat, vbat_smoothed;
+extern volatile float ibat;
 
 extern volatile uint8_t sensor_error_count;
 extern volatile uint8_t radio_error_count;

@@ -255,18 +255,16 @@ void TIM6_DAC_IRQHandler()
 
 /* VBAT sampling time -----------------------------*/
 
-#ifdef VBAT
-	void TIM1_BRK_TIM15_IRQHandler()
-	{
-		TIM15->SR &= ~TIM_SR_UIF;
+void TIM1_BRK_TIM15_IRQHandler()
+{
+	TIM15->SR &= ~TIM_SR_UIF;
 
-		if (ADC2->ISR & ADC_ISR_EOC)
-			vbat = (float)ADC2->DR * ADC_SCALE;
-		ADC2->CR |= ADC_CR_ADSTART;
+	if (ADC2->ISR & ADC_ISR_EOC)
+		vbat = (float)ADC2->DR * ADC_SCALE;
+	ADC2->CR |= ADC_CR_ADSTART;
 
-		flag_vbat = 1;
-	}
-#endif
+	flag_vbat = 1;
+}
 
 /* USB interrupt -----------------------------*/
 
@@ -510,7 +508,7 @@ void board_init()
 	// Get first vbat value
 	ADC2->CR |= ADC_CR_ADSTART;
 	while ((ADC2->ISR & ADC_ISR_EOC) == 0) {}
-	vbat = (float)ADC2->DR * ADC_SCALE;
+	vbat_smoothed = (float)ADC2->DR * ADC_SCALE;
 
 	// Timer
 	RCC->APB2ENR |= RCC_APB2ENR_TIM15EN;

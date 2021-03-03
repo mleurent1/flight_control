@@ -3,7 +3,7 @@ function save_config
 global fc
 global ser
 
-fwrite(ser,[6,0,0,0,0,0]);
+fwrite(ser,6);
 sleep(3000)
 
 reg = fieldnames(fc.info);

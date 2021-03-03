@@ -4,12 +4,12 @@ classdef fc_reg
 			global ser
 			if obj.method
 				r = sx1272_receive(0);
-				sx1272_send([0,addr,0,0,0,0],1);
+				sx1272_send([0,addr],1);
 				sleep(300);
 				r = sx1272_receive(0);
 				data = uint32(sum(r.payload(3:6) .* 2.^(0:8:24)));
 			else
-				fwrite(ser,[obj.target*4+0,addr,0,0,0,0]);
+				fwrite(ser,[obj.target*4+0,addr]);
 				data = uint32(sum(fread(ser,4) .* 2.^(0:8:24)'));
 			end
 		end
@@ -89,6 +89,26 @@ classdef fc_reg
 				y = z(1);
 			else
 				w = bitand(bitshift(double(x), 5), 32) + bitand(r, 4294967263);
+				obj.write(2, uint32(w));
+			end
+		end
+		function y = CTRL__RF_HOST_CTRL(obj,x)
+			r = double(obj.read(2));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 64), -6)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 6), 64) + bitand(r, 4294967231);
+				obj.write(2, uint32(w));
+			end
+		end
+		function y = CTRL__DEBUG_RADIO(obj,x)
+			r = double(obj.read(2));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 128), -7)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 7), 128) + bitand(r, 4294967167);
 				obj.write(2, uint32(w));
 			end
 		end
@@ -650,11 +670,25 @@ classdef fc_reg
 				obj.write(36, uint32(w));
 			end
 		end
-		function y = DEBUG_REG(obj,x)
+		function y = FC_CFG(obj,x)
 			if nargin < 2
 				y = obj.read(37);
 			else
 				obj.write(37, uint32(x));
+			end
+		end
+		function y = DEBUG_INT(obj,x)
+			if nargin < 2
+				y = obj.read(38);
+			else
+				obj.write(38, uint32(x));
+			end
+		end
+		function y = DEBUG_FLOAT(obj,x)
+			if nargin < 2
+				y = typecast(obj.read(39), 'single');
+			else
+				obj.write(39, typecast(single(x), 'uint32'));
 			end
 		end
 	end
@@ -670,6 +704,8 @@ classdef fc_reg
 			'CTRL__BEEP_TEST', [2,0,0,2],...
 			'CTRL__SENSOR_CAL', [2,0,0,2],...
 			'CTRL__DEBUG', [2,0,0,2],...
+			'CTRL__RF_HOST_CTRL', [2,0,0,2],...
+			'CTRL__DEBUG_RADIO', [2,0,0,2],...
 			'MOTOR_TEST', [3,0,0,1],...
 			'MOTOR_TEST__VALUE', [3,0,0,2],...
 			'MOTOR_TEST__SELECT', [3,0,0,2],...
@@ -736,6 +772,8 @@ classdef fc_reg
 			'MPU_CFG', [36,1,0,1],...
 			'MPU_CFG__FILT', [36,1,0,2],...
 			'MPU_CFG__RATE', [36,1,0,2],...
-			'DEBUG_REG', [37,0,0,0] );
+			'FC_CFG', [37,1,0,0],...
+			'DEBUG_INT', [38,0,0,0],...
+			'DEBUG_FLOAT', [39,0,1,0] );
 	end
 end

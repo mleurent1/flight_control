@@ -5,8 +5,8 @@ global ser
 global KEY_IS_PRESSED
 
 t_max = 10;
-status_period = 63e-3;
-buf_len = 24*4;
+status_period = 0.1;
+buf_len = 27*4;
 
 KEY_IS_PRESSED = 0;
 
@@ -38,11 +38,12 @@ set(a{3},'XLim',[t(1),t(end)],'YLabel',text('String','angle (deg)'),'YLim',[-95,
 l{3,1} = line(t,nan(1,len),'Parent',a{3},'Color','b','DisplayName','pitch');
 l{3,2} = line(t,nan(1,len),'Parent',a{3},'Color','r','DisplayName','roll');
 
-l{4,1} = bar(1:6,zeros(1,6),'Parent',a{4});
-set(a{4},'XTickLabel',{'throttle','pitch','roll','yaw','arm','beep'},'YLim',[-1.05,1.05]);
+l{4,1} = bar(1:8,zeros(1,8),'Parent',a{4});
+set(a{4},'XTickLabel',{'throttle','pitch','roll','yaw','arm','mode','beep','knob'},'YLim',[-1.05,1.05]);
 
-set(a{5},'XLim',[t(1),t(end)],'YLabel',text('String','vbat (V)'));
+set(a{5},'XLim',[t(1),t(end)],'YLabel',text('String','vbat (V) ibat (A)'));
 l{5,1} = line(t,nan(1,len),'Parent',a{5},'Color','b');
+l{5,2} = line(t,nan(1,len),'Parent',a{5},'Color','r');
 
 set(a{6},'XLim',[t(1),t(end)],'YLabel',text('String','correction'),'YLim',[-605,605]);
 l{6,1} = line(t,nan(1,len),'Parent',a{6},'Color','b','DisplayName','pitch');
@@ -83,9 +84,10 @@ radio.throttle = 0;
 radio.pitch = 0;
 radio.roll = 0;
 radio.yaw = 0;
-radio.aux = zeros(2,1);
+radio.aux = zeros(4,1);
 
 vbat = nan(1,len);
+ibat = nan(1,len);
 
 pitch = nan(1,len);
 roll = nan(1,len);
@@ -122,6 +124,7 @@ while ~KEY_IS_PRESSED
 		angle.roll(1:len-d) = angle.roll(d+1:len);
 
 		vbat(1:len-d) = vbat(d+1:len);
+      ibat(1:len-d) = ibat(d+1:len);
 
 		pitch(1:len-d) = pitch(d+1:len);
 		roll(1:len-d) = roll(d+1:len);
@@ -161,12 +164,14 @@ while ~KEY_IS_PRESSED
 		n = n + 4;
 		radio.yaw = typecast(uint32(2^24*r(n+4,end) + 2^16*r(n+3,end) + 2^8*r(n+2,end) + r(n+1,end)), 'single');
 		n = n + 4;
-		for m = 1:2
+		for m = 1:4
 			radio.aux(m) = typecast(uint32(2^24*r(n+4,end) + 2^16*r(n+3,end) + 2^8*r(n+2,end) + r(n+1,end)), 'single');
 			n = n + 4;
 		end
 
 		vbat(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
+		n = n + 4;
+      ibat(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
 		n = n + 4;
 
 		pitch(len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
@@ -205,9 +210,10 @@ while ~KEY_IS_PRESSED
 		set(l{3,1},'YData',angle.pitch);
 		set(l{3,2},'YData',angle.roll);
 
-		set(l{4,1},'YData',[radio.throttle, radio.pitch, radio.roll, radio.yaw, radio.aux(1), radio.aux(2)]);
+		set(l{4,1},'YData',[radio.throttle, radio.pitch, radio.roll, radio.yaw, radio.aux(1), radio.aux(2), radio.aux(3), radio.aux(4)]);
 
 		set(l{5,1},'YData',vbat);
+      set(l{5,2},'YData',ibat);
 		
 		set(l{6,1},'YData',pitch);
 		set(l{6,2},'YData',roll);

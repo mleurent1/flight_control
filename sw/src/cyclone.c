@@ -143,11 +143,11 @@ void set_mpu_host(_Bool host)
 	if (host) {
 		DMA1_Channel4->CMAR = (uint32_t)spi2_rx_buffer;
 		SPI2->CR1 &= ~SPI_CR1_BR_Msk;
-		SPI2->CR1 |= 4 << SPI_CR1_BR_Pos; // 750kHz
+		SPI2->CR1 |= 4 << SPI_CR1_BR_Pos; // SPI clock = clock APB1/32 = 24MHz/32 = 750kHz
 	}
 	else {
 		DMA1_Channel4->CMAR = (uint32_t)&sensor_raw;
-		SPI2->CR1 &= ~SPI_CR1_BR_Msk; // 12MHz
+		SPI2->CR1 &= ~SPI_CR1_BR_Msk; // SPI clock = clock APB1/2 = 24MHz/2 = 12MHz
 	}
 }
 
@@ -238,18 +238,16 @@ void TIM6_DAC_IRQHandler()
 
 /* VBAT sampling time -----------------------------*/
 
-#ifdef VBAT
-	void TIM1_BRK_TIM15_IRQHandler()
-	{
-		TIM15->SR &= ~TIM_SR_UIF;
+void TIM1_BRK_TIM15_IRQHandler()
+{
+	TIM15->SR &= ~TIM_SR_UIF;
 
-		if (ADC2->ISR & ADC_ISR_EOC)
-			vbat = (float)ADC2->DR * ADC_SCALE;
-		ADC2->CR |= ADC_CR_ADSTART;
+	if (ADC2->ISR & ADC_ISR_EOC)
+		vbat = (float)ADC2->DR * ADC_SCALE;
+	ADC2->CR |= ADC_CR_ADSTART;
 
-		flag_vbat = 1;
-	}
-#endif
+	flag_vbat = 1;
+}
 
 /* USB interrupt -----------------------------*/
 
@@ -348,7 +346,7 @@ void board_init()
 	/* Gyro/accel sensor ----------------------------------------------------*/
 
 	// B12: SPI2 CS, AF5, need pull-up
-	// B13: SPI2 CLK, AF5, need pull-up
+	// B13: SPI2 CLK, AF5, need pull-up (CPOL = 1)
 	// B14: SPI2 MISO, AF5
 	// B15: SPI2 MOSI, AF5
 	GPIOB->MODER |= GPIO_MODER_MODER12_1 | GPIO_MODER_MODER13_1 | GPIO_MODER_MODER14_1 | GPIO_MODER_MODER15_1;
@@ -358,7 +356,7 @@ void board_init()
 
 	// SPI config
 	RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
-	SPI2->CR1 = SPI_CR1_MSTR | (4 << SPI_CR1_BR_Pos) | SPI_CR1_CPOL | SPI_CR1_CPHA; // SPI clock = clock APB1/32 = 24MHz/32 = 700 kHz
+	SPI2->CR1 = SPI_CR1_MSTR | (4 << SPI_CR1_BR_Pos) | SPI_CR1_CPOL | SPI_CR1_CPHA; // SPI clock = clock APB1/32 = 24MHz/32 = 750 kHz
 	SPI2->CR2 = SPI_CR2_SSOE | SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN | SPI_CR2_FRXTH | SPI_CR2_ERRIE;
 	NVIC_EnableIRQ(SPI2_IRQn);
 	NVIC_SetPriority(SPI2_IRQn,0);
@@ -496,7 +494,7 @@ void board_init()
 	// Get first vbat value
 	ADC2->CR |= ADC_CR_ADSTART;
 	while ((ADC2->ISR & ADC_ISR_EOC) == 0) {}
-	vbat = (float)ADC2->DR * ADC_SCALE;
+	vbat_smoothed = (float)ADC2->DR * ADC_SCALE;
 
 	// Timer
 	RCC->APB2ENR |= RCC_APB2ENR_TIM15EN;

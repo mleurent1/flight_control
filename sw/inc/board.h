@@ -22,5 +22,6 @@ void toggle_beeper(_Bool en);
 void set_mpu_host(_Bool host);
 int32_t get_timer_process(void);
 void radio_sync(void);
+void runcam_send(uint8_t size);
 
 #endif

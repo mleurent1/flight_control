@@ -1,4 +1,4 @@
-#define NB_REG 38
+#define NB_REG 40
 
 #define REG_VERSION reg[0]
 #define REG_VERSION_Addr 0
@@ -20,6 +20,12 @@
 #define REG_CTRL__DEBUG (uint8_t)((reg[2] & 32U) >> 5)
 #define REG_CTRL__DEBUG_Msk 32U
 #define REG_CTRL__DEBUG_Pos 5U
+#define REG_CTRL__RF_HOST_CTRL (uint8_t)((reg[2] & 64U) >> 6)
+#define REG_CTRL__RF_HOST_CTRL_Msk 64U
+#define REG_CTRL__RF_HOST_CTRL_Pos 6U
+#define REG_CTRL__DEBUG_RADIO (uint8_t)((reg[2] & 128U) >> 7)
+#define REG_CTRL__DEBUG_RADIO_Msk 128U
+#define REG_CTRL__DEBUG_RADIO_Pos 7U
 #define REG_CTRL_Addr 2
 #define REG_MOTOR_TEST reg[3]
 #define REG_MOTOR_TEST__VALUE (uint16_t)((reg[3] & 65535U) >> 0)
@@ -185,5 +191,9 @@
 #define REG_MPU_CFG__RATE_Msk 65280U
 #define REG_MPU_CFG__RATE_Pos 8U
 #define REG_MPU_CFG_Addr 36
-#define REG_DEBUG_REG reg[37]
-#define REG_DEBUG_REG_Addr 37
+#define REG_I_TRANSFER reg[37]
+#define REG_FC_CFG_Addr 37
+#define REG_DEBUG_REG reg[38]
+#define REG_DEBUG_INT_Addr 38
+#define REG_DEBUG_FLOAT regf[39]
+#define REG_DEBUG_FLOAT_Addr 39

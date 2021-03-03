@@ -13,7 +13,7 @@ uint32_t reg[NB_REG];
 float regf[NB_REG];
 reg_properties_t reg_properties[NB_REG] =
 {
-	{1, 1, 0, 34}, // VERSION
+	{1, 1, 0, 35}, // VERSION
 	{1, 0, 0, 0}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
@@ -50,7 +50,9 @@ reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 0, 32769500}, // RUDDER
 	{0, 1, 0, 65537000}, // AUX
 	{0, 1, 0, 1}, // MPU_CFG
-	{0, 0, 0, 0} // DEBUG_REG
+	{0, 1, 0, 1}, // FC_CFG
+	{0, 0, 0, 0}, // DEBUG_INT
+	{0, 0, 1, 0} // DEBUG_FLOAT
 };
 
 #ifdef STM32F3
@@ -58,7 +60,8 @@ reg_properties_t reg_properties[NB_REG] =
 	uint32_t* flash_r = (uint32_t*)REG_FLASH_ADDR;
 	uint16_t* flash_w = (uint16_t*)REG_FLASH_ADDR;
 #elif defined(STM32F4)
-	#define REG_FLASH_ADDR 0x080E0000
+	//#define REG_FLASH_ADDR 0x080E0000
+	#define REG_FLASH_ADDR 0x08060000
 	uint32_t* flash_r = (uint32_t*)REG_FLASH_ADDR;
 	uint32_t* flash_w = (uint32_t*)REG_FLASH_ADDR;
 #endif
@@ -122,8 +125,11 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			else {
 				if (addr == REG_ERROR_Addr)
 					REG_ERROR = ((uint32_t)rf_error_count << 16) | ((uint32_t)radio_error_count << 8) | (uint32_t)sensor_error_count;
-				else if (addr == REG_DEBUG_REG_Addr) {
-					/* Print your debug value here */
+				else if (addr == REG_DEBUG_INT_Addr) {
+					/* REG_DEBUG_INT = Put your debug value here */
+				}
+				else if (addr == REG_DEBUG_FLOAT_Addr) {
+					/* REG_DEBUG_FLOAT = Put your debug value here */
 				}
 				host_send((uint8_t*)&reg[addr], 4);
 			}
@@ -134,10 +140,10 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			if (!reg_properties[addr].read_only)
 			{
 				if (reg_properties[addr].is_float)
-					regf[addr] = host_buffer_rx->data.f;
+					regf[addr] = host_buffer_rx->data.f[0];
 				else {
 					old_data = reg[addr];
-					reg[addr] = host_buffer_rx->data.u32;
+					reg[addr] = host_buffer_rx->data.u32[0];
 					if (addr == REG_CTRL_Addr) {
 						if (REG_CTRL__SENSOR_HOST_CTRL != (old_data & REG_CTRL__SENSOR_HOST_CTRL_Msk) >> REG_CTRL__SENSOR_HOST_CTRL_Pos) {
 							set_mpu_host(REG_CTRL__SENSOR_HOST_CTRL == 1);
@@ -172,7 +178,10 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 						else
 							filter_alpha_vbat  = (float)VBAT_PERIOD / (float)REG_TIME_CONSTANT__VBAT;
 					}
-					else if (addr == REG_DEBUG_REG_Addr) {
+					else if (addr == REG_DEBUG_INT_Addr) {
+						/* Put your debug command here */
+					}
+					else if (addr == REG_DEBUG_FLOAT_Addr) {
 						/* Put your debug command here */
 					}
 				}
@@ -210,7 +219,7 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 				FLASH->CR &= ~FLASH_CR_PG;
 			#elif defined(STM32F4)
 				FLASH->CR |= FLASH_CR_PG | (2 << FLASH_CR_PSIZE_Pos);
-				flash_w[addr] = host_buffer_rx->data.u32;
+				flash_w[addr] = host_buffer_rx->data.u32[0];
 				while (FLASH->SR & FLASH_SR_BSY) {}
 				FLASH->CR &= ~FLASH_CR_PG;
 			#endif
@@ -229,7 +238,7 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 				while (FLASH->SR & FLASH_SR_BSY) {}
 				FLASH->CR &= ~FLASH_CR_PER;
 			#elif defined(STM32F4)
-				FLASH->CR |= FLASH_CR_SER | (11 << FLASH_CR_SNB_Pos);
+				FLASH->CR |= FLASH_CR_SER | (7 << FLASH_CR_SNB_Pos);
 				FLASH->CR |= FLASH_CR_STRT;
 				while (FLASH->SR & FLASH_SR_BSY) {}
 				FLASH->CR &= ~FLASH_CR_SER;
@@ -246,6 +255,13 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 		case 8: // SPI write to RF
 		{
 			RF_WRITE_1(addr, host_buffer_rx->data.u8[3]);
+			break;
+		}
+	#endif
+	#ifdef RUNCAM
+		case 9: // UART send to Runcam
+		{
+			runcam_send(host_buffer_rx->addr);
 			break;
 		}
 	#endif

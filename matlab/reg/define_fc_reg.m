@@ -22,6 +22,8 @@ reg(n).subf{2} = {'ARM_TEST',2,1,'uint8',0};
 reg(n).subf{3} = {'BEEP_TEST',3,3,'uint8',0};
 reg(n).subf{4} = {'SENSOR_CAL',4,4,'uint8',0};
 reg(n).subf{5} = {'DEBUG',5,5,'uint8',0};
+reg(n).subf{6} = {'RF_HOST_CTRL',6,6,'uint8',0};
+reg(n).subf{7} = {'DEBUG_RADIO',7,7,'uint8',0};
 
 n = n + 1;
 reg(n).name = 'MOTOR_TEST';
@@ -247,7 +249,19 @@ reg(n).subf{1} = {'FILT',7,0,'uint8',1};
 reg(n).subf{2} = {'RATE',15,8,'uint8',0};
 
 n = n + 1;
-reg(n).name = 'DEBUG_REG';
+reg(n).name = 'FC_CFG';
+reg(n).read_only = 0;
+reg(n).flash = 1;
+reg(n).subf{1} = {'I_TRANSFER',0,0,'uint8',1};
+
+n = n + 1;
+reg(n).name = 'DEBUG_INT';
 reg(n).read_only = 0;
 reg(n).flash = 0;
-reg(n).subf{1} = {'DEBUG_REG',7,0,'uint8',0};
+reg(n).subf{1} = {'DEBUG_REG',31,0,'uint32',0};
+
+n = n + 1;
+reg(n).name = 'DEBUG_FLOAT';
+reg(n).read_only = 0;
+reg(n).flash = 0;
+reg(n).subf{1} = {'DEBUG_FLOAT',31,0,'single',0};

@@ -1,8 +1,8 @@
-CC = "/mnt/c/Program Files (x86)/GNU Tools ARM Embedded/8 2018-q4-major/bin/arm-none-eabi-gcc.exe"
-OBJCOPY = "/mnt/c/Program Files (x86)/GNU Tools ARM Embedded/7 2018-q2-update/bin/arm-none-eabi-objcopy.exe"
-SIZE = "/mnt/c/Program Files (x86)/GNU Tools ARM Embedded/8 2018-q4-major/bin/arm-none-eabi-size.exe"
+CC = /mnt/c/wsl/gcc-arm-none-eabi-9-2020-q2-update/bin/arm-none-eabi-gcc
+OBJCOPY = /mnt/c/wsl/gcc-arm-none-eabi-9-2020-q2-update/bin/arm-none-eabi-objcopy
+SIZE = /mnt/c/wsl/gcc-arm-none-eabi-9-2020-q2-update/bin/arm-none-eabi-size
 STLINK = "/mnt/c/Program Files (x86)/STMicroelectronics/STM32 ST-LINK Utility/ST-LINK Utility/ST-LINK_CLI.exe"
-DFU = "/mnt/c/programs/dfu-util-0.9-win64/dfu-util.exe"
+DFU = /mnt/c/programs/dfu-util-0.9/dfu-util.exe
 LDFLAGS = *.o -lm -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs --specs=nosys.specs
 #-L/home/mleurent/gcc-arm-none-eabi-8-2018-q4-major/arm-none-eabi/lib -L/home/mleurent/gcc-arm-none-eabi-8-2018-q4-major/lib/gcc/arm-none-eabi/8.2.1
 #KEIL:-mthumb-interwork -nostartfiles
@@ -21,6 +21,10 @@ else ifeq ($(BOARD),revolution)
    STM32_FLAGS = -DSTM32F4 -DSTM32F405xx -Istm32f4/cmsis/inc -DHAL_PCD_MODULE_ENABLED -DHAL_RCC_MODULE_ENABLED -Istm32f4/hal/inc
    LD_SCRIPT = stm32f4/ldscripts/stm32f405rgtx.ld
    FC_OBJ += system_stm32f4xx.o startup_stm32f405xx.o $(USB_OBJ) stm32f4xx_hal_pcd.o stm32f4xx_hal_pcd_ex.o stm32f4xx_ll_usb.o
+else ifeq ($(BOARD),toothpick)
+   STM32_FLAGS = -DSTM32F4 -DSTM32F411xE -Istm32f4/cmsis/inc -DHAL_PCD_MODULE_ENABLED -DHAL_RCC_MODULE_ENABLED -Istm32f4/hal/inc
+   LD_SCRIPT = stm32f4/ldscripts/stm32f411cetx.ld
+   FC_OBJ += system_stm32f4xx.o startup_stm32f411xe.o $(USB_OBJ) stm32f4xx_hal_pcd.o stm32f4xx_hal_pcd_ex.o stm32f4xx_ll_usb.o
 else
    STM32_FLAGS = -DSTM32F3 -DSTM32F303xC -Istm32f3/cmsis/inc -DHAL_PCD_MODULE_ENABLED -Istm32f3/hal/inc
    LD_SCRIPT = stm32f3/ldscripts/stm32f303cctx.ld
@@ -40,6 +44,8 @@ else ifeq ($(BOARD),magnum)
    FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=0 -DBEEPER -DVBAT
 else ifeq ($(BOARD),revolution)
    FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=180 #-DRF
+else ifeq ($(BOARD),toothpick)
+   FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=90 -DVBAT -DRUNCAM
 else
    FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=0
 endif

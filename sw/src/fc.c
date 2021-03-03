@@ -3,6 +3,7 @@
 #include "sensor.h" // mpu_process_samples()
 #include "radio.h" // radio_decode()
 #include "reg.h" // REG__*
+#include "utils.h" // SINUS
 #ifdef STM32F4
 	#include "stm32f4xx.h" // __WFI()
 #else
@@ -25,7 +26,8 @@
 
 sensor_raw_t sensor_raw;
 radio_frame_t radio_frame;
-volatile float vbat;
+volatile float vbat, vbat_smoothed;
+volatile float ibat;
 
 volatile uint8_t sensor_error_count;
 volatile uint8_t radio_error_count;
@@ -58,12 +60,7 @@ int main(void)
 	_Bool flag_armed;
 	_Bool flag_acro;
 	_Bool flag_acro_z;
-#ifdef BEEPER
 	_Bool flag_beep_radio;
-#endif
-#ifdef VBAT
-	_Bool flag_vbat_first_value;
-#endif
 	_Bool flag_sensor_timeout;
 	_Bool flag_radio_timeout;
 
@@ -102,6 +99,8 @@ int main(void)
 	float yaw_i_term;
 	float yaw_d_term;
 
+	float i_transfer;
+
 	float pitch;
 	float roll;
 	float yaw;
@@ -110,8 +109,6 @@ int main(void)
 	int16_t motor_clip[4];
 	uint16_t motor_raw[4];
 	_Bool motor_telemetry[4];
-
-	float vbat_smoothed;
 
 	uint8_t status_cnt;
 	float time_sensor_mean;
@@ -122,6 +119,8 @@ int main(void)
 	uint16_t time_process_max;
 	uint16_t time_process_min;
 	host_buffer_tx_t host_buffer_tx;
+
+	radio_frame_t radio_frame1;
 
 	/* Register init --------------------------------------------------*/
 
@@ -142,12 +141,7 @@ int main(void)
 	flag_armed = 0;
 	flag_acro = 1;
 	flag_acro_z = 0;
-#ifdef BEEPER
 	flag_beep_radio = 0;
-#endif
-#ifdef VBAT
-	flag_vbat_first_value = 1;
-#endif
 	flag_sensor_timeout = 0;
 	flag_radio_timeout = 0;
 
@@ -161,6 +155,8 @@ int main(void)
 	radio.yaw = 0;
 	radio.aux[0] = 0;
 	radio.aux[1] = 0;
+	radio.aux[2] = 0;
+	radio.aux[3] = 0;
 
 	radio_pitch_smooth = 0;
 	radio_roll_smooth = 0;
@@ -231,6 +227,7 @@ int main(void)
 
 			// Decode radio commands
 			error = radio_decode(&radio_frame, &radio_raw, &radio);
+			radio_frame1 = radio_frame;
 			if (error) {
 				radio_error_count++;
 				radio_sync();
@@ -241,11 +238,11 @@ int main(void)
 				flag_radio_connected = 1; // if we get here, there is a working radio receiver
 
 				// Arm procedure: cannot arm when throttle is not low
-				if (radio.aux[0] < 0.33f)
-					flag_armed = 0;
-				else if (!flag_armed && (radio.aux[0] > 0.33f) && ((radio.throttle < 0.02f)))
-					flag_armed = 1;
 				if (radio.aux[0] < 0.66f)
+					flag_armed = 0;
+				else if (!flag_armed && (radio.aux[0] > 0.66f) && ((radio.throttle < 0.02f)))
+					flag_armed = 1;
+				if (radio.aux[1] < 0.66f)
 					flag_acro = 1;
 				else
 					flag_acro = 0;
@@ -254,12 +251,10 @@ int main(void)
 				radio_expo(&radio, flag_acro);
 
 				// Beep command
-#ifdef BEEPER
-				if (radio.aux[1] > 0.33f)
+				if (radio.aux[2] > 0.5f)
 					flag_beep_radio = 1;
 				else
 					flag_beep_radio = 0;
-#endif
 			}
 		}
 
@@ -350,7 +345,7 @@ int main(void)
 			roll_p_term = error_roll * p_roll;
 			yaw_p_term = error_yaw * REG_P_ROLL;
 
-			// Reset integral when disarmed or acro/angle mode change
+			// I term, reset when disarmed or acro/angle mode change
 			if (!flag_armed || (flag_acro != flag_acro_z)) {
 				pitch_i_term = 0;
 				roll_i_term = 0;
@@ -363,6 +358,13 @@ int main(void)
 				yaw_i_term = 0;
 			else
 				yaw_i_term += error_yaw * REG_I_YAW;
+
+			// Yaw induced I transfer
+			if (REG_I_TRANSFER) {
+				i_transfer = SINUS(sensor.gyro_z * 1.745329252e-5f);
+				pitch_i_term += pitch_i_term  * i_transfer;
+				roll_i_term  -= roll_i_term * i_transfer;
+			}
 
 			// D term
 			pitch_d_term = (error_pitch - error_pitch_z) * d_pitch;
@@ -435,19 +437,13 @@ int main(void)
 
 		/* VBAT ---------------------------------------------------------------------*/
 
-#ifdef VBAT
 		if (flag_vbat) // New vbat value is available
 		{
 			flag_vbat = 0; // reset flag
 
-			if (flag_vbat_first_value) { // initialise low-pass filter
-				flag_vbat_first_value = 0;
-				vbat_smoothed = vbat;
-			}
-			else  // low-pass filter
-				vbat_smoothed += filter_alpha_vbat * vbat - filter_alpha_vbat * vbat_smoothed;
+			// low-pass filter
+			vbat_smoothed += filter_alpha_vbat * vbat - filter_alpha_vbat * vbat_smoothed;
 		}
-#endif
 
 		/* Flight controller status: LED, beeper, timeout and debug output -----------------------------------------------*/
 
@@ -470,6 +466,7 @@ int main(void)
 			}
 
 			// Update status reg
+			REG_STATUS = 0;
 			if (flag_sensor_timeout)
 				REG_STATUS |= 0x01;
 			if (flag_radio_timeout)
@@ -479,27 +476,25 @@ int main(void)
 
 			// LED double blinks when timeout on sensor or radio samples, or vbat too low
 			if (flag_sensor_timeout || flag_radio_timeout || ((vbat_smoothed < REG_VBAT_MIN) && (vbat_smoothed > 3.0f))) {
-				if ((status_cnt & 0x04))
+				if ((status_cnt & 0x01) == 0)
 					toggle_led();
 			}
 			else {
-				if ((status_cnt & 0x03) == 0)
+				if ((status_cnt & 0x07) == 0)
 					toggle_led();
 			}
 
 			// beep when requested by user or, timeout on sensor or radio samples, or vbat too low
-#ifdef BEEPER
 			if (flag_beep_radio || flag_sensor_timeout || flag_radio_timeout || ((vbat_smoothed < REG_VBAT_MIN) && (vbat_smoothed > 3.0f)) || (REG_CTRL__BEEP_TEST == 1)) {
 				if ((status_cnt & 0x03) == 0)
 					toggle_beeper(1);
 			}
 			else
 				toggle_beeper(0);
-#endif
 
 			// Set flags, to be cleared when new samples are ready
 			flag_sensor_timeout = 1;
-			if (flag_radio_connected && ((status_cnt & 0x03) == 0x03))
+			if (flag_radio_connected && ((status_cnt & 0x03) == 0))
 				flag_radio_timeout = 1;
 
 			// Send data to host
@@ -524,21 +519,28 @@ int main(void)
 				host_buffer_tx.f[11] = radio.yaw;
 				host_buffer_tx.f[12] = radio.aux[0];
 				host_buffer_tx.f[13] = radio.aux[1];
-				host_buffer_tx.f[14] = vbat_smoothed;
-				host_buffer_tx.f[15] = pitch;
-				host_buffer_tx.f[16] = roll;
-				host_buffer_tx.f[17] = yaw;
-				host_buffer_tx.u16[18*2]   = motor_raw[0];
-				host_buffer_tx.u16[18*2+1] = motor_raw[1];
-				host_buffer_tx.u16[19*2]   = motor_raw[2];
-				host_buffer_tx.u16[19*2+1] = motor_raw[3];
-				host_buffer_tx.f[20] = time_sensor_mean;
-				host_buffer_tx.u16[21*2]   = time_sensor_max;
-				host_buffer_tx.u16[21*2+1] = time_sensor_min;
-				host_buffer_tx.f[22] = time_process_mean;
-				host_buffer_tx.u16[23*2]   = time_process_max;
-				host_buffer_tx.u16[23*2+1] = time_process_min;
-				host_send(host_buffer_tx.u8, 24*4);
+				host_buffer_tx.f[14] = radio.aux[2];
+				host_buffer_tx.f[15] = radio.aux[3];
+				host_buffer_tx.f[16] = vbat_smoothed;
+				host_buffer_tx.f[17] = ibat;
+				host_buffer_tx.f[18] = pitch;
+				host_buffer_tx.f[19] = roll;
+				host_buffer_tx.f[20] = yaw;
+				host_buffer_tx.u16[21*2]   = motor_raw[0];
+				host_buffer_tx.u16[21*2+1] = motor_raw[1];
+				host_buffer_tx.u16[22*2]   = motor_raw[2];
+				host_buffer_tx.u16[22*2+1] = motor_raw[3];
+				host_buffer_tx.f[23] = time_sensor_mean;
+				host_buffer_tx.u16[24*2]   = time_sensor_max;
+				host_buffer_tx.u16[24*2+1] = time_sensor_min;
+				host_buffer_tx.f[25] = time_process_mean;
+				host_buffer_tx.u16[26*2]   = time_process_max;
+				host_buffer_tx.u16[26*2+1] = time_process_min;
+				host_send(host_buffer_tx.u8, 27*4);
+			}
+			else if (REG_CTRL__DEBUG_RADIO) {
+				memcpy(host_buffer_tx.u8, radio_frame1.bytes, sizeof(radio_frame1));
+				host_send(host_buffer_tx.u8, sizeof(radio_frame1));
 			}
 
 			// Reset min/max time
