@@ -2,7 +2,7 @@ clear
 
 %% parse definitions
 
-f = fopen('../../sw/inc/sx1276_reg.h','r');
+f = fopen('../../c/inc/sx1276_reg.h','r');
 
 n = 0;
 

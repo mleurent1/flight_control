@@ -8,11 +8,13 @@ clear all
 global fc
 global mpu
 global rf
+global osd
 global ser
 
 fc = fc_reg;
 mpu = mpu_reg;
 rf = sx1276_reg;
+osd = max7456_reg;
 
 delete(instrfindall);
 ser = serial('COM21');

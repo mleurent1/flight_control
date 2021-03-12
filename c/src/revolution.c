@@ -600,43 +600,23 @@ void board_init()
 	GPIOB->OTYPER |= GPIO_OTYPER_OT_5;
 	GPIOB->BSRR = GPIO_BSRR_BS_5;
 
-	/* RF ------------------------*/
-	
-#ifdef RF
 
-	// A0 : Servo 6, used as SX1276 DIO[0]
-	// A15: SPI3 CS, AF6, need open-drain (external pull-up)
-	// C10: SPI3 CLK, AF6, need pull-down (CPOL = 0)
-	// C11: SPI3 MISO, AF6
-	// C12: SPI3 MOSI, AF6
-	// D2 : RF reset, need open-drain (external pull-up)
-	GPIOA->MODER |= GPIO_MODER_MODER15_1;
-	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR15_1;
-	GPIOA->OTYPER |= GPIO_OTYPER_OT_15;
-	GPIOA->AFR[1] |= 6 << GPIO_AFRH_AFSEL15_Pos;
-	GPIOC->MODER |= GPIO_MODER_MODER10_1 | GPIO_MODER_MODER11_1 | GPIO_MODER_MODER12_1;
-	GPIOC->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR10_1 | GPIO_OSPEEDER_OSPEEDR12_1;
-	GPIOC->PUPDR |= GPIO_PUPDR_PUPDR10_1;
-	GPIOC->AFR[1] |= (6 << GPIO_AFRH_AFSEL10_Pos) | (6 << GPIO_AFRH_AFSEL11_Pos) | (6 << GPIO_AFRH_AFSEL12_Pos);
-	GPIOD->MODER |= GPIO_MODER_MODER2_0;
-	GPIOD->OTYPER |= GPIO_OTYPER_OT_2;
+	/* Status and processing time timers --------------------------------------------------------------------------*/
 
-	// SPI config
-	RCC->APB1ENR |= RCC_APB1ENR_SPI3EN;
-	SPI3->CR1 = SPI_CR1_MSTR | (1 << SPI_CR1_BR_Pos); // SPI clock = clock APB1/4 = 24MHz/4 = 6 MHz
-	SPI3->CR2 = SPI_CR2_SSOE | SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN | SPI_CR2_ERRIE;
-	NVIC_EnableIRQ(SPI3_IRQn);
-	NVIC_SetPriority(SPI3_IRQn,0);
-	
-	// Init
-	GPIOD->BSRR = GPIO_BSRR_BR_2; // Reset
-	wait_ms(1);
-	GPIOD->BSRR = GPIO_BSRR_BS_2;
-	wait_ms(1);
-	sx1276_init();
-	EXTI->IMR |= EXTI_IMR_MR0; // Enable external interrupts now
+	// status timer
+	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
+	TIM6->PSC = 48000-1; // 1ms
+	TIM6->ARR = STATUS_PERIOD;
+	TIM6->DIER = TIM_DIER_UIE;
+	TIM6->CR1 = TIM_CR1_CEN;
+	NVIC_EnableIRQ(TIM6_DAC_IRQn);
+	NVIC_SetPriority(TIM6_DAC_IRQn,0);
 
-#endif
+	// timer to record processing time
+	RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
+	TIM7->PSC = 48-1; // 1us
+	TIM7->ARR = 65535;
+	TIM7->CR1 = TIM_CR1_CEN;
 
 	/* VBAT ADC -----------------------------------------------------*/
 
@@ -681,21 +661,42 @@ void board_init()
 
 #endif
 
-	/* Status and processing time timers --------------------------------------------------------------------------*/
+	/* RF ------------------------*/
+	
+#ifdef RF
 
-	// status timer
-	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
-	TIM6->PSC = 48000-1; // 1ms
-	TIM6->ARR = STATUS_PERIOD;
-	TIM6->DIER = TIM_DIER_UIE;
-	TIM6->CR1 = TIM_CR1_CEN;
-	NVIC_EnableIRQ(TIM6_DAC_IRQn);
-	NVIC_SetPriority(TIM6_DAC_IRQn,0);
+	// A0 : Servo 6, used as SX1276 DIO[0]
+	// A15: SPI3 CS, AF6, need open-drain (external pull-up)
+	// C10: SPI3 CLK, AF6, need pull-down (CPOL = 0)
+	// C11: SPI3 MISO, AF6
+	// C12: SPI3 MOSI, AF6
+	// D2 : RF reset, need open-drain (external pull-up)
+	GPIOA->MODER |= GPIO_MODER_MODER15_1;
+	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR15_1;
+	GPIOA->OTYPER |= GPIO_OTYPER_OT_15;
+	GPIOA->AFR[1] |= 6 << GPIO_AFRH_AFSEL15_Pos;
+	GPIOC->MODER |= GPIO_MODER_MODER10_1 | GPIO_MODER_MODER11_1 | GPIO_MODER_MODER12_1;
+	GPIOC->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR10_1 | GPIO_OSPEEDER_OSPEEDR12_1;
+	GPIOC->PUPDR |= GPIO_PUPDR_PUPDR10_1;
+	GPIOC->AFR[1] |= (6 << GPIO_AFRH_AFSEL10_Pos) | (6 << GPIO_AFRH_AFSEL11_Pos) | (6 << GPIO_AFRH_AFSEL12_Pos);
+	GPIOD->MODER |= GPIO_MODER_MODER2_0;
+	GPIOD->OTYPER |= GPIO_OTYPER_OT_2;
 
-	// timer to record processing time
-	RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
-	TIM7->PSC = 48-1; // 1us
-	TIM7->ARR = 65535;
-	TIM7->CR1 = TIM_CR1_CEN;
+	// SPI config
+	RCC->APB1ENR |= RCC_APB1ENR_SPI3EN;
+	SPI3->CR1 = SPI_CR1_MSTR | (1 << SPI_CR1_BR_Pos); // SPI clock = clock APB1/4 = 24MHz/4 = 6 MHz
+	SPI3->CR2 = SPI_CR2_SSOE | SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN | SPI_CR2_ERRIE;
+	NVIC_EnableIRQ(SPI3_IRQn);
+	NVIC_SetPriority(SPI3_IRQn,0);
+	
+	// Init
+	GPIOD->BSRR = GPIO_BSRR_BR_2; // Reset
+	wait_ms(1);
+	GPIOD->BSRR = GPIO_BSRR_BS_2;
+	wait_ms(1);
+	sx1276_init();
+	EXTI->IMR |= EXTI_IMR_MR0; // Enable external interrupts now
+
+#endif
 
 }

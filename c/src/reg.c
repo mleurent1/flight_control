@@ -1,7 +1,7 @@
 #include "reg.h"
 #include "fc.h" // flags, sensor_raw, radio_raw
 #include "sensor.h" // mpu_cal()
-#include "sensor_reg.h"
+#include "mpu_reg.h"
 #include "utils.h" // uint32_to_float()
 #ifdef STM32F4
 	#include "stm32f4xx.h"
@@ -11,7 +11,7 @@
 
 uint32_t reg[NB_REG];
 float regf[NB_REG];
-reg_properties_t reg_properties[NB_REG] =
+const reg_properties_t reg_properties[NB_REG] =
 {
 	{1, 1, 0, 35}, // VERSION
 	{1, 0, 0, 0}, // STATUS
@@ -71,10 +71,51 @@ float filter_alpha_radio;
 float filter_alpha_accel;
 float filter_alpha_vbat;
 
-void reg_init()
-{
-	int i;
+/* Private functions ---------------------------------------*/
 
+void flash_erase(void)
+{
+	if (FLASH->CR & FLASH_CR_LOCK) {
+		FLASH->KEYR = 0x45670123;
+		FLASH->KEYR = 0xCDEF89AB;
+	}
+	#ifdef STM32F3
+		FLASH->CR |= FLASH_CR_PER;
+		FLASH->AR = REG_FLASH_ADDR;
+		FLASH->CR |= FLASH_CR_STRT;
+		while (FLASH->SR & FLASH_SR_BSY) {}
+		FLASH->CR &= ~FLASH_CR_PER;
+	#elif defined(STM32F4)
+		FLASH->CR |= FLASH_CR_SER | (7 << FLASH_CR_SNB_Pos);
+		FLASH->CR |= FLASH_CR_STRT;
+		while (FLASH->SR & FLASH_SR_BSY) {}
+		FLASH->CR &= ~FLASH_CR_SER;
+	#endif
+}
+
+void flash_write(uint8_t addr, uint32_t data) {
+	if (FLASH->CR & FLASH_CR_LOCK) {
+		FLASH->KEYR = 0x45670123;
+		FLASH->KEYR = 0xCDEF89AB;
+	}
+	#ifdef STM32F3
+		FLASH->CR |= FLASH_CR_PG;
+		flash_w[addr*2] = (uint16_t)(data & 0x0000FFFF);
+		flash_w[addr*2+1] = (uint16_t)((data & 0xFFFF0000) >> 16);
+		while (FLASH->SR & FLASH_SR_BSY) {}
+		FLASH->CR &= ~FLASH_CR_PG;
+	#elif defined(STM32F4)
+		FLASH->CR |= FLASH_CR_PG | (2 << FLASH_CR_PSIZE_Pos);
+		flash_w[addr] = data;
+		while (FLASH->SR & FLASH_SR_BSY) {}
+		FLASH->CR &= ~FLASH_CR_PG;
+	#endif
+}
+
+/* Public functions ----------------------------------------*/
+
+void reg_init(void)
+{
 	_Bool reg_flash_valid;
 	uint32_t reg_default;
 
@@ -83,8 +124,7 @@ void reg_init()
 	else
 		reg_flash_valid = 0;
 
-	for(i=0; i<NB_REG; i++)
-	{
+	for (int i=0; i<NB_REG; i++) {
 		if (reg_properties[i].flash && reg_flash_valid)
 			reg_default = flash_r[i];
 		else
@@ -115,11 +155,9 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 {
 	uint8_t addr = host_buffer_rx->addr;
 	uint32_t old_data;
-
-	switch (host_buffer_rx->instr)
-	{
-		case 0: // REG read
-		{
+	
+	switch (host_buffer_rx->instr) {
+		case 0: { // REG read
 			if (reg_properties[addr].is_float)
 				host_send((uint8_t*)&regf[addr], 4);
 			else {
@@ -135,8 +173,7 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			}
 			break;
 		}
-		case 1: // REG write
-		{
+		case 1: { // REG write
 			if (!reg_properties[addr].read_only)
 			{
 				if (reg_properties[addr].is_float)
@@ -145,9 +182,6 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 					old_data = reg[addr];
 					reg[addr] = host_buffer_rx->data.u32[0];
 					if (addr == REG_CTRL_Addr) {
-						if (REG_CTRL__SENSOR_HOST_CTRL != (old_data & REG_CTRL__SENSOR_HOST_CTRL_Msk) >> REG_CTRL__SENSOR_HOST_CTRL_Pos) {
-							set_mpu_host(REG_CTRL__SENSOR_HOST_CTRL == 1);
-						}
 						if (REG_CTRL__SENSOR_CAL) {
 							mpu_cal(&sensor_raw);
 							REG_CTRL &= ~REG_CTRL__SENSOR_CAL_Msk;
@@ -155,10 +189,11 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 					}
 					else if (addr == REG_MPU_CFG_Addr) {
 						if (REG_MPU_CFG != old_data) {
-							set_mpu_host(1);
+							// Wait for end of current SPI transaction
+							while (sensor_busy)
+								__WFI();
 							sensor_write(MPU_CFG, MPU_CFG__DLPF_CFG(REG_MPU_CFG__FILT));
 							sensor_write(MPU_SMPLRT_DIV, REG_MPU_CFG__RATE);
-							set_mpu_host(REG_CTRL__SENSOR_HOST_CTRL == 1);
 							sensor_rate = 1000.0f / (float)(REG_MPU_CFG__RATE+1);
 						}
 					}
@@ -188,82 +223,60 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			}
 			break;
 		}
-		case 2: // SPI read to MPU
-		{
+		case 2: { // SPI read to MPU
 			if (REG_CTRL__SENSOR_HOST_CTRL == 1)
 				sensor_read(addr,1);
 			break;
 		}
-		case 3: // SPI write to MPU
-		{
+		case 3: { // SPI write to MPU
 			if (REG_CTRL__SENSOR_HOST_CTRL == 1)
 				sensor_write(addr, host_buffer_rx->data.u8[3]);
 			break;
 		}
-		case 4: // Flash read
-		{
+		case 4: { // Flash read
 			host_send((uint8_t*)&flash_r[addr], 4);
 			break;
 		}
-		case 5: // Flash write
-		{
-			if (FLASH->CR & FLASH_CR_LOCK) {
-				FLASH->KEYR = 0x45670123;
-				FLASH->KEYR = 0xCDEF89AB;
-			}
-			#ifdef STM32F3
-				FLASH->CR |= FLASH_CR_PG;
-				flash_w[addr*2] = host_buffer_rx->data.u16[0];
-				flash_w[addr*2+1] = host_buffer_rx->data.u16[1];
-				while (FLASH->SR & FLASH_SR_BSY) {}
-				FLASH->CR &= ~FLASH_CR_PG;
-			#elif defined(STM32F4)
-				FLASH->CR |= FLASH_CR_PG | (2 << FLASH_CR_PSIZE_Pos);
-				flash_w[addr] = host_buffer_rx->data.u32[0];
-				while (FLASH->SR & FLASH_SR_BSY) {}
-				FLASH->CR &= ~FLASH_CR_PG;
-			#endif
+		case 5: { // Flash write
+			flash_write(addr, host_buffer_rx->data.u32[0]);
 			break;
 		}
-		case 6: // Flash page erase
-		{
-			if (FLASH->CR & FLASH_CR_LOCK) {
-				FLASH->KEYR = 0x45670123;
-				FLASH->KEYR = 0xCDEF89AB;
-			}
-			#ifdef STM32F3
-				FLASH->CR |= FLASH_CR_PER;
-				FLASH->AR = REG_FLASH_ADDR;
-				FLASH->CR |= FLASH_CR_STRT;
-				while (FLASH->SR & FLASH_SR_BSY) {}
-				FLASH->CR &= ~FLASH_CR_PER;
-			#elif defined(STM32F4)
-				FLASH->CR |= FLASH_CR_SER | (7 << FLASH_CR_SNB_Pos);
-				FLASH->CR |= FLASH_CR_STRT;
-				while (FLASH->SR & FLASH_SR_BSY) {}
-				FLASH->CR &= ~FLASH_CR_SER;
-			#endif
+		case 6: { // Flash erase
+			flash_erase();
 			break;
 		}
 	#ifdef RF
-		case 7: // SPI read to RF
-		{
+		case 7: { // SPI read to RF
 			flag_rf_host_read = 1;
 			rf_read(addr,1);
 			break;
 		}
-		case 8: // SPI write to RF
-		{
-			RF_WRITE_1(addr, host_buffer_rx->data.u8[3]);
+		case 8: { // SPI write to RF
+			rf_write(addr, host_buffer_rx->data.u8[3], 1);
 			break;
 		}
 	#endif
-	#ifdef RUNCAM
-		case 9: // UART send to Runcam
-		{
-			runcam_send(host_buffer_rx->addr);
+	#ifdef OSD
+		case 9: { // UART send to OSD
+			uint8_t buf[2];
+			buf[0] = host_buffer_rx->addr;
+			buf[1] = host_buffer_rx->data.u8[3];
+			osd_send(buf, 2);
 			break;
 		}
 	#endif
+	}
+}
+
+void reg_save(void)
+{
+	flash_erase();
+	for (uint8_t i=0; i<NB_REG; i++) {
+		if (reg_properties[i].flash) {
+			if (reg_properties[i].is_float)
+				flash_write(i, float_to_uint32(regf[i]));
+			else
+				flash_write(i, reg[i]);
+		}
 	}
 }

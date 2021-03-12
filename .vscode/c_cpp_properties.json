@@ -3,16 +3,16 @@
         {
             "name": "Win32",
             "includePath": [
-                "sw/inc",
-                "sw/stm32f3/cmsis/inc",
-                "sw/stm32f3/hal/inc",
-                "sw/usb_vcp/inc"
+                "c/inc",
+                "c/stm32f3/cmsis/inc",
+                "c/stm32f3/hal/inc",
+                "c/usb_vcp/inc"
             ],
             "defines": [
                 "STM32F3",
                 "STM32F303xC",
                 "HAL_PCD_MODULE_ENABLED",
-                "SENSOR=6000",
+                "SENSOR=6050",
                 "DSHOT=1",
                 "ONESHOT=0",
                 "ESC=1",
@@ -22,7 +22,7 @@
             "compilerPath": "C:/Program Files (x86)/GNU Arm Embedded Toolchain/9 2020-q2-update/bin/arm-none-eabi-gcc.exe",
             "cStandard": "c11",
             "cppStandard": "c++17",
-            "intelliSenseMode": "gcc-x64"
+            "intelliSenseMode": "gcc-arm"
         }
     ],
     "version": 4

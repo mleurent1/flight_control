@@ -3,7 +3,7 @@ define_fc_reg
 
 %% generate register C database
 
-f = fopen('reg.h','w');
+f = fopen('../../c/inc/reg_def.h','w');
 
 fprintf(f,'#define NB_REG %d\n\n', length(reg));
 
@@ -30,7 +30,7 @@ fclose(f);
 
 f = fopen('reg.c','w');
 
-fprintf(f,'reg_properties_t reg_properties[NB_REG] = \n{\n');
+fprintf(f,'const reg_properties_t reg_properties[NB_REG] = \n{\n');
 
 % bools = {'false','true'};
 bools = {'0','1'};

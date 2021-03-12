@@ -15,8 +15,7 @@
 
 /* Global variables --------------------------------------*/
 
-volatile uint8_t spi2_rx_buffer[16];
-volatile uint8_t spi2_tx_buffer[16];
+volatile uint8_t spi2_tx_buffer[15];
 #if (ESC == DSHOT)
 	volatile uint32_t dshot[17*4];
 #endif
@@ -134,23 +133,6 @@ void toggle_beeper(_Bool en)
 		GPIOA->BSRR = GPIO_BSRR_BR_0;
 }
 
-void set_mpu_host(_Bool host)
-{
-	// Wait for end of current transaction
-	while (sensor_busy)
-		__WFI();
-
-	if (host) {
-		DMA1_Channel4->CMAR = (uint32_t)spi2_rx_buffer;
-		SPI2->CR1 &= ~SPI_CR1_BR_Msk;
-		SPI2->CR1 |= 4 << SPI_CR1_BR_Pos; // SPI clock = clock APB1/32 = 24MHz/32 = 750kHz
-	}
-	else {
-		DMA1_Channel4->CMAR = (uint32_t)&sensor_raw;
-		SPI2->CR1 &= ~SPI_CR1_BR_Msk; // SPI clock = clock APB1/2 = 24MHz/2 = 12MHz
-	}
-}
-
 void host_send(uint8_t * data, uint8_t size)
 {
 	USBD_CDC_SetTxBuffer(&USBD_device_handler, data, size);
@@ -196,7 +178,7 @@ void DMA1_Channel4_IRQHandler()
 	sensor_busy = 0;
 
 	if (REG_CTRL__SENSOR_HOST_CTRL == 1) // Send SPI read data to host
-		host_send((uint8_t*)&spi2_rx_buffer[1], 1);
+		host_send((uint8_t*)&sensor_raw.bytes[1], 1);
 	else {
 		flag_sensor = 1; // Raise flag for sample ready
 		time_sensor = (int32_t)TIM7->CNT - time_sensor_start; // Record sensor transaction time
@@ -369,7 +351,7 @@ void board_init()
 
 	// DMA SPI2 Rx
 	DMA1_Channel4->CCR = DMA_CCR_MINC | DMA_CCR_PL_0 | DMA_CCR_TCIE;
-	DMA1_Channel4->CMAR = (uint32_t)spi2_rx_buffer;
+	DMA1_Channel4->CMAR = (uint32_t)&sensor_raw;
 	DMA1_Channel4->CPAR = (uint32_t)&(SPI2->DR);
 	NVIC_EnableIRQ(DMA1_Channel4_IRQn);
 	NVIC_SetPriority(DMA1_Channel4_IRQn,0);
@@ -381,7 +363,6 @@ void board_init()
 
 	// Init
 	mpu_init();
-	set_mpu_host(0);
 	EXTI->IMR = EXTI_IMR_MR15; // enable external interrupt now
 
 	/* Radio Rx UART ---------------------------------------------------*/
@@ -462,6 +443,23 @@ void board_init()
 	GPIOB->OTYPER |= GPIO_OTYPER_OT_5;
 	GPIOB->BSRR = GPIO_BSRR_BS_5;
 
+	/* Status and processing time timers --------------------------------------------------------------------------*/
+
+	// status timer
+	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
+	TIM6->PSC = 48000-1; // 1ms
+	TIM6->ARR = STATUS_PERIOD;
+	TIM6->DIER = TIM_DIER_UIE;
+	TIM6->CR1 = TIM_CR1_CEN;
+	NVIC_EnableIRQ(TIM6_DAC_IRQn);
+	NVIC_SetPriority(TIM6_DAC_IRQn,0);
+
+	// timer to record processing time
+	RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
+	TIM7->PSC = 48-1; // 1us
+	TIM7->ARR = 65535;
+	TIM7->CR1 = TIM_CR1_CEN;
+
 	/* VBAT ADC -----------------------------------------------------*/
 
 #ifdef VBAT
@@ -516,22 +514,5 @@ void board_init()
 	GPIOA->BSRR = GPIO_BSRR_BR_0;
 
 #endif
-
-	/* Status and processing time timers --------------------------------------------------------------------------*/
-
-	// status timer
-	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
-	TIM6->PSC = 48000-1; // 1ms
-	TIM6->ARR = STATUS_PERIOD;
-	TIM6->DIER = TIM_DIER_UIE;
-	TIM6->CR1 = TIM_CR1_CEN;
-	NVIC_EnableIRQ(TIM6_DAC_IRQn);
-	NVIC_SetPriority(TIM6_DAC_IRQn,0);
-
-	// timer to record processing time
-	RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
-	TIM7->PSC = 48-1; // 1us
-	TIM7->ARR = 65535;
-	TIM7->CR1 = TIM_CR1_CEN;
 
 }

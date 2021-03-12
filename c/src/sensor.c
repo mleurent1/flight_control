@@ -1,5 +1,5 @@
 #include "sensor.h"
-#include "sensor_reg.h"
+#include "mpu_reg.h"
 #include "fc.h" // flags
 #include "board.h" // toggle_led_sensor
 #include "reg.h" // alpha coeff

@@ -8,6 +8,10 @@
 #define SERVO_MAX 2000 // us
 #define SERVO_MIN 1000 // us
 
+/* Exported variables -----------------*/
+
+extern volatile _Bool sensor_busy;
+
 /* Public functions -----------------*/
 
 void board_init(void);
@@ -19,9 +23,9 @@ void rf_read(uint8_t addr, uint8_t size);
 void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry);
 void toggle_led(void);
 void toggle_beeper(_Bool en);
-void set_mpu_host(_Bool host);
 int32_t get_timer_process(void);
 void radio_sync(void);
-void runcam_send(uint8_t size);
+void osd_send(uint8_t * data, uint8_t size);
+void runcam_send(uint8_t * data, uint8_t size);
 
 #endif

@@ -2,7 +2,7 @@ clear
 
 %% parse definitions
 
-f = fopen('mpu_reg.h','r');
+f = fopen('../../c/inc/mpu_reg.h','r');
 
 n = 0;
 
@@ -101,7 +101,7 @@ fprintf(f,'classdef mpu_reg\n');
 fprintf(f,'\tmethods\n');
 fprintf(f,'\t\tfunction data = read(obj,addr)\n');
 fprintf(f,'\t\t\tglobal ser\n');
-fprintf(f,'\t\t\tfwrite(ser,[2,addr,0,0,0,0]);\n');
+fprintf(f,'\t\t\tfwrite(ser,[2,addr]);\n');
 fprintf(f,'\t\t\tdata = fread(ser,1);\n');
 fprintf(f,'\t\tend\n');
 fprintf(f,'\t\tfunction write(obj,addr,data)\n');

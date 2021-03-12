@@ -4,15 +4,12 @@ SIZE = /mnt/c/wsl/gcc-arm-none-eabi-9-2020-q2-update/bin/arm-none-eabi-size
 STLINK = "/mnt/c/Program Files (x86)/STMicroelectronics/STM32 ST-LINK Utility/ST-LINK Utility/ST-LINK_CLI.exe"
 DFU = /mnt/c/programs/dfu-util-0.9/dfu-util.exe
 LDFLAGS = *.o -lm -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs --specs=nosys.specs
-#-L/home/mleurent/gcc-arm-none-eabi-8-2018-q4-major/arm-none-eabi/lib -L/home/mleurent/gcc-arm-none-eabi-8-2018-q4-major/lib/gcc/arm-none-eabi/8.2.1
 #KEIL:-mthumb-interwork -nostartfiles
-CFLAGS = -c -Wall -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -Wdouble-promotion -O
-#--fsingle-precision-constant
-#KEIL:-I/home/mleurent/gcc-arm-none-eabi-8-2018-q4-major/arm-none-eabi/include -I/home/mleurent/gcc-arm-none-eabi-8-2018-q4-major/lib/gcc/arm-none-eabi/8.2.1/include
+CFLAGS = -c -Wall -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -Wdouble-promotion -O #--fsingle-precision-constant
 #KEIL:-gdwarf-2 -MD -O -mapcs-frame -mthumb-interwork -D__GCC -D__GCC_VERSION="821"
 
 USB_OBJ = usb.o usbd_cdc_if.o usbd_cdc.o usbd_conf.o usbd_core.o usbd_ctlreq.o usbd_desc.o usbd_ioreq.o
-FC_OBJ = fc.o $(BOARD).o sensor.o radio.o reg.o utils.o
+FC_OBJ = fc.o $(BOARD).o sensor.o radio.o reg.o utils.o osd.o
 ifeq ($(BOARD),nucleo)
    STM32_FLAGS = -DSTM32F3 -DSTM32F303x8 -Ic/stm32f3/cmsis/inc
    LD_SCRIPT = c/stm32f3/ldscripts/stm32f303k8tx.ld
@@ -32,12 +29,12 @@ else
 endif
 
 ONESHOT = 0
-DSHOT   = 1
+DSHOT = 1
 ESC ?= $(DSHOT)
 ifeq ($(BOARD),nucleo)
    FC_FLAGS = -DSENSOR=9150 -DESC=$(ESC) -DSENSOR_ORIENTATION=0
 else ifeq ($(BOARD),motof3)
-   FC_FLAGS = -DSENSOR=6050 -DESC=$(ESC) -DSENSOR_ORIENTATION=90 -DBEEPER -DVBAT
+   FC_FLAGS = -DSENSOR=6050 -DESC=$(ESC) -DSENSOR_ORIENTATION=90 -DBEEPER -DVBAT -DOSD -DRUNCAM
 else ifeq ($(BOARD),cyclone)
    FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=90 -DBEEPER -DVBAT
 else ifeq ($(BOARD),magnum)
@@ -45,7 +42,7 @@ else ifeq ($(BOARD),magnum)
 else ifeq ($(BOARD),revolution)
    FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=180 #-DRF
 else ifeq ($(BOARD),toothpick)
-   FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=90 -DVBAT -DRUNCAM
+   FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=90 -DVBAT
 else
    FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=0
 endif

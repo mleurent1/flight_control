@@ -9,7 +9,8 @@
 #else
 	#include "stm32f3xx.h" // __WFI()
 #endif
-#include <string.h> // memcpy
+#include <string.h> // memcpy()
+#include "osd.h" // osd_menu()
 
 /* Private defines ------------------------------------*/
 
@@ -26,21 +27,21 @@
 
 sensor_raw_t sensor_raw;
 radio_frame_t radio_frame;
-volatile float vbat, vbat_smoothed;
-volatile float ibat;
+volatile float vbat, ibat;
+volatile float vbat_smoothed = 0;
 
-volatile uint8_t sensor_error_count;
-volatile uint8_t radio_error_count;
-volatile uint8_t rf_error_count;
+volatile uint8_t sensor_error_count = 0;
+volatile uint8_t radio_error_count = 0;
+volatile uint8_t rf_error_count = 0;;
 
-volatile _Bool flag_sensor;
-volatile _Bool flag_radio;
-volatile _Bool flag_vbat;
-volatile _Bool flag_rf;
-volatile _Bool flag_host;
-volatile _Bool flag_status;
-volatile _Bool flag_rf_host_read;
-volatile _Bool flag_rf_rxtx_done;
+volatile _Bool flag_sensor = 0;
+volatile _Bool flag_radio = 0;
+volatile _Bool flag_vbat = 0;
+volatile _Bool flag_rf = 0;
+volatile _Bool flag_host = 0;
+volatile _Bool flag_status = 0;
+volatile _Bool flag_rf_host_read = 0;
+volatile _Bool flag_rf_rxtx_done = 0;;
 
 host_buffer_rx_t host_buffer_rx;
 
@@ -56,28 +57,28 @@ int main(void)
 	int i;
 	_Bool error;
 
-	_Bool flag_radio_connected;
-	_Bool flag_armed;
-	_Bool flag_acro;
-	_Bool flag_acro_z;
-	_Bool flag_beep_radio;
-	_Bool flag_sensor_timeout;
-	_Bool flag_radio_timeout;
+	_Bool flag_radio_connected = 0;
+	_Bool flag_armed = 0;
+	_Bool flag_acro = 0;
+	_Bool flag_acro_z = 0;
+	_Bool flag_beep_radio = 0;
+	_Bool flag_sensor_timeout = 0;
+	_Bool flag_radio_timeout = 0;
 
 	struct radio_raw_s radio_raw;
 	struct radio_s radio;
 
-	float radio_pitch_smooth;
-	float radio_roll_smooth;
+	float radio_pitch_smooth = 0;
+	float radio_roll_smooth = 0;
 
 	struct sensor_s sensor;
 	struct angle_s angle;
 
-	uint8_t arm_test_z;
+	uint8_t arm_test_z = 0;
 
-	float error_pitch;
-	float error_roll;
-	float error_yaw;
+	float error_pitch = 0;
+	float error_roll = 0;
+	float error_yaw = 0;
 	float error_pitch_z;
 	float error_roll_z;
 	float error_yaw_z;
@@ -90,34 +91,34 @@ int main(void)
 	float d_roll;
 
 	float pitch_p_term;
-	float pitch_i_term;
+	float pitch_i_term = 0;
 	float pitch_d_term;
 	float roll_p_term;
-	float roll_i_term;
+	float roll_i_term = 0;
 	float roll_d_term;
 	float yaw_p_term;
-	float yaw_i_term;
+	float yaw_i_term =0;
 	float yaw_d_term;
 
 	float i_transfer;
 
-	float pitch;
-	float roll;
-	float yaw;
+	float pitch = 0;
+	float roll = 0;
+	float yaw = 0;
 
 	float motor[4];
 	int16_t motor_clip[4];
 	uint16_t motor_raw[4];
 	_Bool motor_telemetry[4];
 
-	uint8_t status_cnt;
-	float time_sensor_mean;
-	uint16_t time_sensor_max;
-	uint16_t time_sensor_min;
+	uint8_t status_cnt = 0;
+	float time_sensor_mean = 0;
+	uint16_t time_sensor_max = 0;
+	uint16_t time_sensor_min = 0xFFFF;
 	int32_t time_process;
-	float time_process_mean;
-	uint16_t time_process_max;
-	uint16_t time_process_min;
+	float time_process_mean = 0;
+	uint16_t time_process_max = 0;
+	uint16_t time_process_min = 0xFFFF;
 	host_buffer_tx_t host_buffer_tx;
 
 	radio_frame_t radio_frame1;
@@ -128,27 +129,6 @@ int main(void)
 
 	/* Variable initialisation -----------------------------------------------------*/
 
-	flag_sensor = 0;
-	flag_radio = 0;
-	flag_vbat = 0;
-	flag_rf = 0;
-	flag_host = 0;
-	flag_status = 0;
-	flag_rf_host_read = 0;
-	flag_rf_rxtx_done = 0;
-
-	flag_radio_connected = 0;
-	flag_armed = 0;
-	flag_acro = 1;
-	flag_acro_z = 0;
-	flag_beep_radio = 0;
-	flag_sensor_timeout = 0;
-	flag_radio_timeout = 0;
-
-	sensor_error_count = 0;
-	radio_error_count = 0;
-	rf_error_count = 0;
-
 	radio.throttle = 0;
 	radio.pitch = 0;
 	radio.roll = 0;
@@ -158,17 +138,8 @@ int main(void)
 	radio.aux[2] = 0;
 	radio.aux[3] = 0;
 
-	radio_pitch_smooth = 0;
-	radio_roll_smooth = 0;
-
 	angle.pitch = 0;
 	angle.roll = 0;
-
-	arm_test_z = 0;
-
-	error_pitch = 0;
-	error_roll = 0;
-	error_yaw = 0;
 
 	p_pitch = REG_P_PITCH;
 	i_pitch = REG_I_PITCH;
@@ -176,24 +147,6 @@ int main(void)
 	p_roll  = REG_P_ROLL;
 	i_roll  = REG_I_ROLL;
 	d_roll  = REG_D_ROLL;
-
-	pitch_i_term = 0;
-	roll_i_term = 0;
-	yaw_i_term = 0;
-
-	pitch = 0;
-	roll = 0;
-	yaw = 0;
-
-	vbat_smoothed = 0;
-
-	status_cnt = 0;
-	time_sensor_mean = 0;
-	time_sensor_max = 0;
-	time_sensor_min = 0xFFFF;
-	time_process_mean = 0;
-	time_process_max = 0;
-	time_process_min = 0xFFFF;
 
 	/* Init -----------------------------------------------------*/
 
@@ -209,15 +162,6 @@ int main(void)
 	{
 		// record processing time
 		time_process = -get_timer_process();
-
-		/* Host request ------------------------------------------------------------------*/
-
-		if (flag_host)
-		{
-			flag_host = 0; // reset flag
-
-			reg_access(&host_buffer_rx);
-		}
 
 		/* Process radio commands -----------------------------------------------------*/
 
@@ -247,6 +191,12 @@ int main(void)
 				else
 					flag_acro = 0;
 
+			#ifdef OSD
+				// OSD menu navigation from stick moves
+				if (!flag_armed)
+					osd_menu(&radio);
+			#endif
+				
 				// Exponential
 				radio_expo(&radio, flag_acro);
 
@@ -497,6 +447,11 @@ int main(void)
 			if (flag_radio_connected && ((status_cnt & 0x03) == 0))
 				flag_radio_timeout = 1;
 
+			// OSD telemetry
+		#ifdef OSD
+			osd_telemetry(vbat_smoothed, 0, 0);
+		#endif
+
 			// Send data to host
 			if (REG_CTRL__DEBUG) {
 				host_buffer_tx.f[0] = sensor.gyro_x;
@@ -550,9 +505,18 @@ int main(void)
 			time_process_min = 0xFFFF;
 		}
 
+		/* Host request ------------------------------------------------------------------*/
+
+		if (flag_host)
+		{
+			flag_host = 0; 
+
+			reg_access(&host_buffer_rx);
+		}
+
 		/* Wait for interrupts if all flags are processed ------------------------------------------------*/
 
-		if (!flag_radio && !flag_sensor && !flag_vbat && !flag_host && !flag_status)
+		if (!flag_radio && !flag_sensor && !flag_vbat && !flag_status && !flag_host)
 		{
 			// Record processing time
 			time_process += (int32_t)get_timer_process();

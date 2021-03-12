@@ -24,6 +24,7 @@ reg(n).subf{4} = {'SENSOR_CAL',4,4,'uint8',0};
 reg(n).subf{5} = {'DEBUG',5,5,'uint8',0};
 reg(n).subf{6} = {'RF_HOST_CTRL',6,6,'uint8',0};
 reg(n).subf{7} = {'DEBUG_RADIO',7,7,'uint8',0};
+reg(n).subf{8} = {'OSD_HOST_CTRL',8,8,'uint8',0};
 
 n = n + 1;
 reg(n).name = 'MOTOR_TEST';
@@ -258,7 +259,7 @@ n = n + 1;
 reg(n).name = 'DEBUG_INT';
 reg(n).read_only = 0;
 reg(n).flash = 0;
-reg(n).subf{1} = {'DEBUG_REG',31,0,'uint32',0};
+reg(n).subf{1} = {'DEBUG_INT',31,0,'uint32',0};
 
 n = n + 1;
 reg(n).name = 'DEBUG_FLOAT';

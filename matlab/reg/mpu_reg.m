@@ -2,7 +2,7 @@ classdef mpu_reg
 	methods
 		function data = read(obj,addr)
 			global ser
-			fwrite(ser,[2,addr,0,0,0,0]);
+			fwrite(ser,[2,addr]);
 			data = fread(ser,1);
 		end
 		function write(obj,addr,data)

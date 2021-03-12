@@ -30,6 +30,16 @@ float uint32_to_float(uint32_t x)
 	return f2u.f;
 }
 
+uint32_t float_to_uint32(float x)
+{
+	union {
+		float f;
+		uint32_t u;
+	} f2u;
+	f2u.f = x;
+	return f2u.u;
+}
+
 uint32_t int32_to_uint32(int32_t x)
 {
 	union {
@@ -101,4 +111,19 @@ float sinus(float angle)
 	x = x * angle * angle; y += x *  0.008333333f;
 	//x = x * angle * angle; y += x *  2.755731922e-6f;
 	return y;
+}
+
+uint8_t crc8(uint8_t * data, uint8_t size)
+{
+	uint8_t crc = 0;
+	for (int i=0; i<size; i++) {
+		crc ^= data[i];
+		for (int j=0; j<8; j++) {
+			if (crc & 0x80)
+				crc = (crc << 1) ^ 0xD5;
+			else
+				crc = crc << 1;
+		}
+	}
+	return crc;
 }

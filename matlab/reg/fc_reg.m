@@ -112,6 +112,16 @@ classdef fc_reg
 				obj.write(2, uint32(w));
 			end
 		end
+		function y = CTRL__OSD_HOST_CTRL(obj,x)
+			r = double(obj.read(2));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 256), -8)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 8), 256) + bitand(r, 4294967039);
+				obj.write(2, uint32(w));
+			end
+		end
 		function y = MOTOR_TEST(obj,x)
 			if nargin < 2
 				y = obj.read(3);
@@ -706,6 +716,7 @@ classdef fc_reg
 			'CTRL__DEBUG', [2,0,0,2],...
 			'CTRL__RF_HOST_CTRL', [2,0,0,2],...
 			'CTRL__DEBUG_RADIO', [2,0,0,2],...
+			'CTRL__OSD_HOST_CTRL', [2,0,0,2],...
 			'MOTOR_TEST', [3,0,0,1],...
 			'MOTOR_TEST__VALUE', [3,0,0,2],...
 			'MOTOR_TEST__SELECT', [3,0,0,2],...

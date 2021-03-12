@@ -1,9 +1,11 @@
 #include "radio.h"
-#include "radio_reg.h"
+#include "sx1276_reg.h"
 #include "reg.h" // filter_alpha
 #include "utils.h" // EXPO, SIN,...
-#include "board.h" // rf_write
+#include "board.h" // rf_write()
 #include "fc.h" // flag
+
+/* Private defines --------------------------------------*/
 
 /* Private macros --------------------------------------*/
 
@@ -13,7 +15,9 @@
 
 uint8_t rf_data_w[6];
 
-/* Functions -----------------------*/
+/* Private Functions -----------------------*/
+
+/* Public Functions -----------------------*/
 
 // TODO: verify checksum
 

@@ -3,7 +3,9 @@
 #include "fc.h" // flags
 #include "sensor.h" // mpu_spi_init()
 #include "utils.h" // wait_ms()
-#include "usb.h" // usb_init();
+#include "usb.h" // usb_init()
+#include "osd.h" // osd_init()
+#include <string.h> // memcpy()
 
 /* Private defines ------------------------------------*/
 
@@ -24,6 +26,8 @@ volatile uint8_t i2c2_tx_bytes_written;
 #endif
 volatile _Bool sensor_busy;
 volatile int32_t time_sensor_start;
+volatile uint8_t uart2_tx_buffer[4];
+volatile uint8_t uart3_tx_buffer[3];
 
 /* Functions ------------------------------------------------*/
 
@@ -34,7 +38,7 @@ inline __attribute__((always_inline)) void radio_uart_dma_enable(uint8_t size)
 	USART2->CR1 |= USART_CR1_RE;
 }
 
-inline __attribute__((always_inline)) void radio_uart_dma_disable()
+inline __attribute__((always_inline)) void radio_uart_dma_disable(void)
 {
 	DMA1->IFCR = DMA_IFCR_CGIF6; // Clear all DMA flags
 	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
@@ -125,18 +129,6 @@ void toggle_beeper(_Bool en)
 		GPIOA->BSRR = GPIO_BSRR_BR_0;
 }
 
-void set_mpu_host(_Bool host)
-{
-	// Wait for end of current transaction
-	while (sensor_busy)
-		__WFI();
-
-	if (host)
-		DMA1_Channel5->CMAR = (uint32_t)i2c2_rx_buffer;
-	else
-		DMA1_Channel5->CMAR = (uint32_t)&sensor_raw + 1;
-}
-
 void host_send(uint8_t * data, uint8_t size)
 {
 	USBD_CDC_SetTxBuffer(&USBD_device_handler, data, size);
@@ -146,6 +138,29 @@ void host_send(uint8_t * data, uint8_t size)
 int32_t get_timer_process(void)
 {
 	return (int32_t)TIM7->CNT;
+}
+
+void osd_send(uint8_t * data, uint8_t size)
+{
+	uart3_tx_buffer[0] = size;
+	uart3_tx_buffer[1] = data[0];
+	uart3_tx_buffer[2] = data[1];
+	osd_nbytes_to_receive = size;
+	DMA1_Channel2->CNDTR = size + 1;
+	DMA1_Channel2->CCR |= DMA_CCR_EN;
+	USART3->CR1 |= USART_CR1_TE | USART_CR1_RE;
+}
+
+void runcam_send(uint8_t * data, uint8_t size)
+{
+	DMA1->IFCR = DMA_IFCR_CGIF7; // Clear all DMA flags
+	DMA1_Channel7->CCR &= ~DMA_CCR_EN;
+	USART2->CR1 &= ~USART_CR1_TE;
+
+	memcpy((uint8_t*)uart2_tx_buffer, data, size);
+	DMA1_Channel7->CNDTR = size;
+	DMA1_Channel7->CCR |= DMA_CCR_EN;
+	USART2->CR1 |= USART_CR1_TE;
 }
 
 /* --------------------------------------------------------------------------------
@@ -213,7 +228,7 @@ void DMA1_Channel5_IRQHandler()
 	DMA1_Channel5->CCR &= ~DMA_CCR_EN; // Disable DMA
 
 	if (REG_CTRL__SENSOR_HOST_CTRL == 1) // Send I2C read data to host
-		host_send((uint8_t*)&i2c2_rx_buffer[0], 1);
+		host_send((uint8_t*)&sensor_raw.bytes[1], 1);
 	else {
 		flag_sensor = 1; // Raise flag for sample ready
 		time_sensor = (int32_t)TIM7->CNT - time_sensor_start; // Record sensor transaction time
@@ -273,6 +288,24 @@ void USB_LP_CAN_RX0_IRQHandler()
 	HAL_PCD_IRQHandler(&PCD_handler);
 }
 
+/* OSD UART IRQ --------------------------*/
+
+void USART3_IRQHandler()
+{
+	osd_data_received[--osd_nbytes_to_receive] = USART3->RDR;
+
+	if (osd_nbytes_to_receive == 0) {
+		DMA1->IFCR = DMA_IFCR_CGIF2; // Clear all DMA flags
+		DMA1_Channel2->CCR &= ~DMA_CCR_EN;
+		USART3->CR1 &= ~(USART_CR1_TE | USART_CR1_RE);
+
+		if (REG_CTRL__OSD_HOST_CTRL == 1)
+			host_send((uint8_t*)osd_data_received, 2);
+		else if (osd_nbytes_to_send > 0)
+			osd_send((uint8_t*)&osd_data_to_send[--osd_nbytes_to_send], 1);
+	}
+}
+
 /* ---------------------------------------------------------------------
  board init
 --------------------------------------------------------------------- */
@@ -330,7 +363,7 @@ void board_init()
 	GPIOB->OSPEEDR = 0;
 
 	// A1 : Motor 5, to TIM2_CH2, AF1, NOT USED
-	// A2 : Motor 6, to TIM2_CH3, AF1, NOT USED
+	// A2 : Motor 6, to TIM2_CH3, AF1, USED for Runcam
 	// A3 : Motor 7, NOT USED
 	// A7 : PPM
 	// A8 : Motor 8, NOT USED
@@ -341,8 +374,6 @@ void board_init()
 	// B3 : UART2 Tx, AF7, NOT USED
 	// B6 : UART1 Tx, NOT USED
 	// B7 : UART1 Rx, NOT USED
-	// B10: UART3 Tx, AF7, NOT USED
-	// B11: UART3 Rx, AF7, NOT USED
 
 	/* USB ----------------------------------------*/
 
@@ -388,14 +419,13 @@ void board_init()
 
 	// DMA I2C2 Rx
 	DMA1_Channel5->CCR = DMA_CCR_MINC | DMA_CCR_PL_0 | DMA_CCR_TCIE | DMA_CCR_TEIE;
-	DMA1_Channel5->CMAR = (uint32_t)i2c2_rx_buffer;
+	DMA1_Channel5->CMAR = (uint32_t)&sensor_raw + 1;
 	DMA1_Channel5->CPAR = (uint32_t)&(I2C2->RXDR);
 	NVIC_EnableIRQ(DMA1_Channel5_IRQn);
 	NVIC_SetPriority(DMA1_Channel5_IRQn,0);
 
 	// Init
 	mpu_init();
-	set_mpu_host(0);
 	EXTI->IMR = EXTI_IMR_MR15; // enable external interrupt now
 
 	/* Radio Rx UART ---------------------------------------------------*/
@@ -476,6 +506,23 @@ void board_init()
 	GPIOB->OTYPER |= GPIO_OTYPER_OT_5;
 	GPIOB->BSRR = GPIO_BSRR_BS_5;
 
+	/* Status and processing time timers --------------------------------------------------------------------------*/
+
+	// status timer
+	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
+	TIM6->PSC = 48000-1; // 1ms
+	TIM6->ARR = STATUS_PERIOD;
+	TIM6->DIER = TIM_DIER_UIE;
+	TIM6->CR1 = TIM_CR1_CEN;
+	NVIC_EnableIRQ(TIM6_DAC_IRQn);
+	NVIC_SetPriority(TIM6_DAC_IRQn,0);
+
+	// timer to record processing time
+	RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
+	TIM7->PSC = 48-1; // 1us
+	TIM7->ARR = 65535;
+	TIM7->CR1 = TIM_CR1_CEN;
+
 	/* VBAT ADC -----------------------------------------------------*/
 
 #ifdef VBAT
@@ -531,21 +578,51 @@ void board_init()
 
 #endif
 
-	/* Status and processing time timers --------------------------------------------------------------------------*/
+#ifdef OSD
 
-	// status timer
-	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
-	TIM6->PSC = 48000-1; // 1ms
-	TIM6->ARR = STATUS_PERIOD;
-	TIM6->DIER = TIM_DIER_UIE;
-	TIM6->CR1 = TIM_CR1_CEN;
-	NVIC_EnableIRQ(TIM6_DAC_IRQn);
-	NVIC_SetPriority(TIM6_DAC_IRQn,0);
+	/* OSD ----------------------------------------*/
 
-	// timer to record processing time
-	RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
-	TIM7->PSC = 48-1; // 1us
-	TIM7->ARR = 65535;
-	TIM7->CR1 = TIM_CR1_CEN;
+	// B10: UART3 Tx, AF7, pull-up for IDLE
+	// B11: UART3 Rx, AF7, pull-up for IDLE
+	GPIOB->MODER |= GPIO_MODER_MODER10_1 | GPIO_MODER_MODER11_1;
+	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR10_0 | GPIO_PUPDR_PUPDR11_0;
+	GPIOB->AFR[1] |= (7 << GPIO_AFRH_AFRH2_Pos) | (7 << GPIO_AFRH_AFRH3_Pos);
+
+	// UART config
+	RCC->APB1ENR |= RCC_APB1ENR_USART3EN;
+	USART3->BRR = 5000; // 48MHz/9600bps
+	USART3->CR1 = USART_CR1_UE | USART_CR1_RXNEIE;
+	USART3->CR3 = USART_CR3_DMAT;
+	NVIC_EnableIRQ(USART3_IRQn);
+	NVIC_SetPriority(USART3_IRQn,0);
+
+	// DMA UART3 Tx
+	DMA1_Channel2->CCR = DMA_CCR_MINC | DMA_CCR_DIR;
+	DMA1_Channel2->CMAR = (uint32_t)uart3_tx_buffer;
+	DMA1_Channel2->CPAR = (uint32_t)&(USART3->TDR);
+
+	// Init
+	osd_init();
+
+#endif
+
+/* Runcam OSD ---------------------------------------*/
+
+#ifdef RUNCAM
+
+	// A2 : UART2 Tx, AF7, pull-up for IDLE
+	GPIOA->MODER |= GPIO_MODER_MODER2_1;
+	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR2_0;
+	GPIOA->AFR[0] |= 7 << GPIO_AFRL_AFRL2_Pos;
+
+	// UART2 extra config for Tx (already configured for Rx)
+	USART2->CR3 |= USART_CR3_DMAT;
+
+	// DMA UART1 Tx
+	DMA1_Channel7->CCR = DMA_CCR_MINC | DMA_CCR_DIR;
+	DMA1_Channel7->CMAR = (uint32_t)uart2_tx_buffer;
+	DMA1_Channel7->CPAR = (uint32_t)&(USART2->TDR);
+
+#endif
 
 }
