@@ -1,5 +1,3 @@
-#ifdef OSD
-
 #include <stdint.h>
 #include "osd.h"
 #include "max7456_reg.h"
@@ -18,7 +16,7 @@
 /* Private defines --------------------------------------*/
 
 #define DISP_ADDR_MENU (uint8_t)(9*30+5)
-#define DISP_ADDR_TELEMETRY (uint8_t)(13*30+4)
+#define DISP_ADDR_TELEMETRY (uint8_t)(13*30+2)
 
 /* Private macros ------------------------------------------*/
 
@@ -52,7 +50,7 @@ const uint8_t saved_str[6] = {0xFF, 0x0E, 0x0F, 0x20, 0x0B, 0x1D}; // SAVED
 
 /* Global variables -----------------------*/
 
-volatile uint8_t osd_data_to_send[22];
+volatile uint8_t osd_data_to_send[30]; // 30 = nb of char in 1 line
 volatile uint8_t osd_nbytes_to_send = 0;
 volatile uint8_t osd_data_received[2];
 volatile uint8_t osd_nbytes_to_receive = 0;
@@ -98,69 +96,26 @@ void osd_write_str(uint8_t * str, uint8_t size)
 	osd_send(buf,2);
 }
 
-void float_to_str(float num, uint8_t * str_int, uint8_t * str_frac)
+void float_to_str(float num, uint8_t * str_int, uint8_t * str_frac, uint8_t int_size, uint8_t frac_size)
 {
-	float b10_mult[3] = {1000.0,100.0,10.0};
-	float b10_div[3] = {0.001,0.01,0.1};
-	_Bool first_nonzero = 0;
-	float q;
+	uint8_t dec_frac[3];
+	_Bool nonzero = 0;
 	int i;
 
-	for (i=0; i<3; i++) {
-		q = floor(num * b10_div[i]);
-		if (q > 0)
-			first_nonzero = 1;
-		if ((q == 0) && (first_nonzero || (i == 3)))
-			str_int[3-i] = 10;
-		else
-			str_int[3-i] = (uint8_t)q;
-		num = num - q * b10_mult[i];
+	float_to_dec(num, str_int, dec_frac, int_size, frac_size);
+
+	for (i=int_size-1; i>=0; i--) {
+		if (str_int[i] > 0)
+			nonzero = 1;
+		if ((str_int[i] == 0) && (nonzero || (i == 0)))
+			str_int[i] = 10;
 	}
-
-	q = floor(num);
-	if (q == 0)
-		str_int[0] = 10;
-	else
-		str_int[0] = (uint8_t)q;
-	num = num - q;
-
-	for (i=0; i<3; i++) {
-		q = floor(num * b10_mult[2-i]);
-		if (q == 0)
-			str_frac[2-i] = 10;
+	for (i=0; i<frac_size; i++) {
+		if (dec_frac[i] == 0)
+			str_frac[frac_size-i-1] = 10;
 		else
-			str_frac[2-i] = (uint8_t)q;
-		num = num - q * b10_div[2-i];
+			str_frac[frac_size-i-1] = dec_frac[i];
 	}
-}
-
-void float_to_str_short(float num, uint8_t * str_int, uint8_t * str_frac)
-{
-	float q;
-
-	q = floor(num * 0.01f);
-	str_int[2] = (uint8_t)q;
-	num = num - q * 100.0f;
-
-	q = floor(num * 0.1f);
-	if ((q == 0) && (str_int[2] > 0))
-		str_int[1] = 10;
-	else
-		str_int[1] = (uint8_t)q;
-	num = num - q * 10.0f;
-
-	q = floor(num);
-	if (q == 0)
-		str_int[0] = 10;
-	else
-		str_int[0] = (uint8_t)q;
-	num = num - q;
-
-	q = floor(num * 10.0f);
-	if (q == 0)
-		str_frac[0] = 10;
-	else
-		str_frac[0] = (uint8_t)q;
 }
 
 void runcam_send_cmd(enum runcam_cmd_e runcam_cmd)
@@ -230,25 +185,27 @@ void osd_init(void)
 	r = osd_read(MAX7456_OSDBL);
 	osd_write(MAX7456_OSDBL, r & ~MAX7456_OSDBL__AUTO_OSDBL_DISABLE);
 	r = osd_read(MAX7456_STAT);
-	if (r & MAX7456_STAT__PAL_DETECTED)
+	/*if (r & MAX7456_STAT__PAL_DETECTED)
 		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN | MAX7456_VM0__PAL_NOT_NTSC);
 	else
-		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN);
-	//osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN | MAX7456_VM0__PAL_NOT_NTSC);
+		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN);*/
+	osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN | MAX7456_VM0__PAL_NOT_NTSC);
 	//osd_write(MAX7456_HOS, 45); // 40
 	//osd_write(MAX7456_VOS, 28); // 22
 	osd_write(MAX7456_DMAH, MAX7456_DMAH__DMA_8);
-	osd_write(MAX7456_DMAL, (13*30+4) & 0xFF);
+	osd_write(MAX7456_DMAL, DISP_ADDR_TELEMETRY);
 }
 
-void osd_telemetry(float vbat, float ibat, float imah)
+void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_min)
 {
-	uint8_t str[22] = {0xFF,44,11,49,0,0,0,0, 0, 11,0,65,0,0,0, 0, 32,0,65,0,0,0};
+	uint8_t str[27] = {0xFF, 0,0,68,0,0, 0, 44,11,49,0,0,0,0, 0, 11,0,65,0,0,0, 0, 32,0,65,0,0};
 
 	if ((state == TELEMETRY) && (osd_nbytes_to_send == 0) && (osd_nbytes_to_receive == 0)) {
-		float_to_str_short(vbat, &str[19], &str[17]);
-		float_to_str_short(ibat, &str[12], &str[10]);
-		float_to_str_short(imah*0.1f, &str[5], &str[4]);
+		float_to_str(vbat, &str[25], &str[23], 2, 1);
+		float_to_str(ibat, &str[18], &str[16], 3, 1);
+		float_to_str(imah, &str[10], &str[10], 4, 0);
+		float_to_str((float)t_min, &str[4], &str[4], 2, 0);
+		float_to_str((float)t_s, &str[1], &str[1], 2, 0);
 		osd_write_str(str, sizeof(str));
 	}
 }
@@ -499,47 +456,47 @@ void osd_menu(struct radio_s * radio)
 	if ( ((state_prev == REG) && ((state == REG_UP) || (state == REG_DOWN))) || ((state_prev == MENU) && (state == MENU_RIGHT) && (menu_idx < 11)) ) {
 		switch (menu_idx) {
 			case 0 : {
-				float_to_str(REG_P_PITCH, &reg_val_str[9], &reg_val_str[5]);
+				float_to_str(REG_P_PITCH, &reg_val_str[9], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case 1 : {
-				float_to_str(REG_I_PITCH, &reg_val_str[9], &reg_val_str[5]);
+				float_to_str(REG_I_PITCH, &reg_val_str[9], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case 2 : {
-				float_to_str(REG_D_PITCH, &reg_val_str[9], &reg_val_str[5]);
+				float_to_str(REG_D_PITCH, &reg_val_str[9], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case 3 : {
-				float_to_str(REG_P_YAW, &reg_val_str[9], &reg_val_str[5]);
+				float_to_str(REG_P_YAW, &reg_val_str[9], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case 4 : {
-				float_to_str(REG_I_YAW, &reg_val_str[9], &reg_val_str[5]);
+				float_to_str(REG_I_YAW, &reg_val_str[9], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case 5 : {
-				float_to_str((float)REG_RATE__PITCH_ROLL, &reg_val_str[9], &reg_val_str[5]);
+				float_to_str((float)REG_RATE__PITCH_ROLL, &reg_val_str[9], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case 6 : {
-				float_to_str(REG_EXPO_PITCH_ROLL, &reg_val_str[9], &reg_val_str[5]);
+				float_to_str(REG_EXPO_PITCH_ROLL, &reg_val_str[9], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case 7 : {
-				float_to_str((float)REG_MOTOR__START, &reg_val_str[9], &reg_val_str[5]);
+				float_to_str((float)REG_MOTOR__START, &reg_val_str[9], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case 8 : {
-				float_to_str((float)REG_MOTOR__ARMED, &reg_val_str[9], &reg_val_str[5]);
+				float_to_str((float)REG_MOTOR__ARMED, &reg_val_str[9], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case 9 : {
-				float_to_str((float)REG_MOTOR__RANGE, &reg_val_str[9], &reg_val_str[5]);
+				float_to_str((float)REG_MOTOR__RANGE, &reg_val_str[9], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case 10 : {
-				float_to_str((float)REG_I_TRANSFER, &reg_val_str[9], &reg_val_str[5]);
+				float_to_str((float)REG_I_TRANSFER, &reg_val_str[9], &reg_val_str[5], 4, 3);
 				break;
 			}
 			default : {
@@ -597,4 +554,5 @@ void osd_menu(struct radio_s * radio)
 	state_prev = state;
 }
 
-#endif
+void __attribute__((weak)) osd_send(uint8_t * data, uint8_t size) {}
+void __attribute__((weak)) runcam_send(uint8_t * data, uint8_t size) {}

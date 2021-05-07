@@ -13,12 +13,12 @@ uint32_t reg[NB_REG];
 float regf[NB_REG];
 const reg_properties_t reg_properties[NB_REG] =
 {
-	{1, 1, 0, 35}, // VERSION
+	{1, 1, 0, 36}, // VERSION
 	{1, 0, 0, 0}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
 	{1, 0, 0, 0}, // ERROR
-	{0, 1, 1, 1088841318}, // VBAT_MIN
+	{0, 1, 1, 1080872141}, // VBAT_MIN
 	{0, 1, 0, 327682000}, // TIME_CONSTANT
 	{0, 1, 0, 100}, // TIME_CONSTANT_RADIO
 	{0, 1, 1, 1077936128}, // EXPO_PITCH_ROLL
@@ -145,10 +145,10 @@ void reg_init(void)
 		filter_alpha_accel = 1.0f;
 	else
 		filter_alpha_accel = 1.0f / (float)REG_TIME_CONSTANT__ACCEL;
-	if (REG_TIME_CONSTANT__VBAT < VBAT_PERIOD)
+	if (REG_TIME_CONSTANT__VBAT == 0)
 		filter_alpha_vbat  = 1.0f;
 	else
-		filter_alpha_vbat  = (float)VBAT_PERIOD / (float)REG_TIME_CONSTANT__VBAT;
+		filter_alpha_vbat  = 1.0f / (float)REG_TIME_CONSTANT__VBAT;
 }
 
 void reg_access(host_buffer_rx_t * host_buffer_rx)
@@ -208,10 +208,10 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 							filter_alpha_accel = 1.0f;
 						else
 							filter_alpha_accel = 1.0f / (float)REG_TIME_CONSTANT__ACCEL;
-						if (REG_TIME_CONSTANT__VBAT < VBAT_PERIOD)
+						if (REG_TIME_CONSTANT__VBAT == 0)
 							filter_alpha_vbat  = 1.0f;
 						else
-							filter_alpha_vbat  = (float)VBAT_PERIOD / (float)REG_TIME_CONSTANT__VBAT;
+							filter_alpha_vbat  = 1.0f / (float)REG_TIME_CONSTANT__VBAT;
 					}
 					else if (addr == REG_DEBUG_INT_Addr) {
 						/* Put your debug command here */

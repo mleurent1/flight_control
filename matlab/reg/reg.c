@@ -1,11 +1,11 @@
-reg_properties_t reg_properties[NB_REG] = 
+const reg_properties_t reg_properties[NB_REG] = 
 {
 	{1, 1, 0, 0}, // VERSION
 	{1, 0, 0, 0}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
 	{1, 0, 0, 0}, // ERROR
-	{0, 1, 1, 1088841318}, // VBAT_MIN
+	{0, 1, 1, 1080872141}, // VBAT_MIN
 	{0, 1, 0, 327682000}, // TIME_CONSTANT
 	{0, 1, 0, 100}, // TIME_CONSTANT_RADIO
 	{0, 1, 1, 1077936128}, // EXPO_PITCH_ROLL

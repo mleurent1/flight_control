@@ -1,3 +1,4 @@
+# Compiler and tools
 CC = /mnt/c/wsl/gcc-arm-none-eabi-9-2020-q2-update/bin/arm-none-eabi-gcc
 OBJCOPY = /mnt/c/wsl/gcc-arm-none-eabi-9-2020-q2-update/bin/arm-none-eabi-objcopy
 SIZE = /mnt/c/wsl/gcc-arm-none-eabi-9-2020-q2-update/bin/arm-none-eabi-size
@@ -8,8 +9,25 @@ LDFLAGS = *.o -lm -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --s
 CFLAGS = -c -Wall -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -Wdouble-promotion -O #--fsingle-precision-constant
 #KEIL:-gdwarf-2 -MD -O -mapcs-frame -mthumb-interwork -D__GCC -D__GCC_VERSION="821"
 
+# Drone board and feature flags
+ONESHOT = 0
+DSHOT = 1
+ifeq ($(DRONE),warpquad)
+   BOARD = motof3
+   FC_FLAGS = -DM1_CCW -DESC=$(ONESHOT) -DBEEPER -DVBAT
+else ifeq ($(DRONE),alien6)
+   BOARD = cyclone
+   FC_FLAGS = -DM1_CCW -DESC=$(DSHOT) -DSHOT_RATE=600 -DBEEPER -DVBAT
+else ifeq ($(DRONE),practice)
+   BOARD = motof3
+   FC_FLAGS = -DESC=$(DSHOT) -DSHOT_RATE=600 -DBEEPER -DVBAT -DVBAT_USE_RSSI -DOSD -DRUNCAM
+endif
+
+# Source list
 USB_OBJ = usb.o usbd_cdc_if.o usbd_cdc.o usbd_conf.o usbd_core.o usbd_ctlreq.o usbd_desc.o usbd_ioreq.o
 FC_OBJ = fc.o $(BOARD).o sensor.o radio.o reg.o utils.o osd.o
+
+# STM32 sources, flags and link files
 ifeq ($(BOARD),nucleo)
    STM32_FLAGS = -DSTM32F3 -DSTM32F303x8 -Ic/stm32f3/cmsis/inc
    LD_SCRIPT = c/stm32f3/ldscripts/stm32f303k8tx.ld
@@ -28,46 +46,44 @@ else
    FC_OBJ += system_stm32f3xx.o startup_stm32f303xc.o $(USB_OBJ) stm32f3xx_hal_pcd.o stm32f3xx_hal_pcd_ex.o
 endif
 
-ONESHOT = 0
-DSHOT = 1
-ESC ?= $(DSHOT)
+# Board flags
 ifeq ($(BOARD),nucleo)
-   FC_FLAGS = -DSENSOR=9150 -DESC=$(ESC) -DSENSOR_ORIENTATION=0
+   FC_FLAGS += -DSENSOR=9150 -DSENSOR_ORIENTATION=0
 else ifeq ($(BOARD),motof3)
-   FC_FLAGS = -DSENSOR=6050 -DESC=$(ESC) -DSENSOR_ORIENTATION=90 -DBEEPER -DVBAT -DOSD -DRUNCAM
+   FC_FLAGS += -DSENSOR=6050 -DSENSOR_ORIENTATION=90
 else ifeq ($(BOARD),cyclone)
-   FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=90 -DBEEPER -DVBAT
+   FC_FLAGS += -DSENSOR=6000 -DSENSOR_ORIENTATION=90
 else ifeq ($(BOARD),magnum)
-   FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=0 -DBEEPER -DVBAT
+   FC_FLAGS += -DSENSOR=6000 -DSENSOR_ORIENTATION=0
 else ifeq ($(BOARD),revolution)
-   FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=180 #-DRF
+   FC_FLAGS += -DSENSOR=6000 -DSENSOR_ORIENTATION=180
 else ifeq ($(BOARD),toothpick)
-   FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=90 -DVBAT
+   FC_FLAGS += -DSENSOR=6000 -DSENSOR_ORIENTATION=90
 else
-   FC_FLAGS = -DSENSOR=6000 -DESC=$(ESC) -DSENSOR_ORIENTATION=0
+   FC_FLAGS += -DSENSOR=6000 -DSENSOR_ORIENTATION=0
 endif
 
-CURRENT_BOARD = $(shell cat CURRENT_BOARD)
-
-ifneq ($(CURRENT_BOARD),$(BOARD))
+# Check current drone. If different, clean before compile
+CURRENT_DRONE = $(shell cat CURRENT_DRONE)
+ifneq ($(CURRENT_DRONE),$(DRONE))
 all:
-	echo $(BOARD) >CURRENT_BOARD
-	make clean $(BOARD).elf
+	echo $(DRONE) >CURRENT_DRONE
+	make clean $(DRONE).elf
 else
-all: $(BOARD).elf
+all: $(DRONE).elf
 endif
 
 flash:
-	$(OBJCOPY) $(CURRENT_BOARD).elf fc.hex -O ihex
+	$(OBJCOPY) $(CURRENT_DRONE).elf fc.hex -O ihex
 	$(STLINK) -P fc.hex -Rst
 
 dfu:
-	$(OBJCOPY) $(CURRENT_BOARD).elf fc.bin -O binary
+	$(OBJCOPY) $(CURRENT_DRONE).elf fc.bin -O binary
 	$(DFU) -a 0 -s 0x08000000$(DFU_OPT) -D fc.bin
 
-$(BOARD).elf: $(FC_OBJ)
-	$(CC) -o $(BOARD).elf -T $(LD_SCRIPT) $(LDFLAGS)
-	$(SIZE) $(BOARD).elf
+$(DRONE).elf: $(FC_OBJ)
+	$(CC) -o $(DRONE).elf -T $(LD_SCRIPT) $(LDFLAGS)
+	$(SIZE) $(DRONE).elf
 
 %.o: c/src/%.c c/inc/*.h
 	$(CC) $< -Ic/inc -Ic/usb_vcp/inc $(CFLAGS) $(STM32_FLAGS) $(FC_FLAGS)

@@ -81,9 +81,6 @@
 #define REG_MOTOR__RANGE (uint16_t)((reg[10] & 2146435072U) >> 20)
 #define REG_MOTOR__RANGE_Msk 2146435072U
 #define REG_MOTOR__RANGE_Pos 20U
-#define REG_MOTOR__REVERSED (uint16_t)((reg[10] & 2147483648U) >> 31)
-#define REG_MOTOR__REVERSED_Msk 2147483648U
-#define REG_MOTOR__REVERSED_Pos 31U
 #define REG_MOTOR_Addr 10
 #define REG_RATE reg[11]
 #define REG_RATE__PITCH_ROLL (uint16_t)((reg[11] & 4095U) >> 0)

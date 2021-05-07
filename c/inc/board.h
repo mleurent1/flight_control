@@ -23,8 +23,9 @@ void rf_read(uint8_t addr, uint8_t size);
 void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry);
 void toggle_led(void);
 void toggle_beeper(_Bool en);
-int32_t get_timer_process(void);
+int32_t get_t_us(void);
 void radio_sync(void);
+void trig_vbat_meas(void);
 void osd_send(uint8_t * data, uint8_t size);
 void runcam_send(uint8_t * data, uint8_t size);
 

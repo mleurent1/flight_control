@@ -298,16 +298,6 @@ classdef fc_reg
 				obj.write(10, uint32(w));
 			end
 		end
-		function y = MOTOR__REVERSED(obj,x)
-			r = double(obj.read(10));
-			if nargin < 2
-				z = typecast(uint32(bitshift(bitand(r, 2147483648), -31)),'uint16');
-				y = z(1);
-			else
-				w = bitand(bitshift(double(x), 31), 2147483648) + bitand(r, 2147483647);
-				obj.write(10, uint32(w));
-			end
-		end
 		function y = RATE(obj,x)
 			if nargin < 2
 				y = obj.read(11);
@@ -737,7 +727,6 @@ classdef fc_reg
 			'MOTOR__START', [10,1,0,2],...
 			'MOTOR__ARMED', [10,1,0,2],...
 			'MOTOR__RANGE', [10,1,0,2],...
-			'MOTOR__REVERSED', [10,1,0,2],...
 			'RATE', [11,1,0,1],...
 			'RATE__PITCH_ROLL', [11,1,0,2],...
 			'RATE__YAW', [11,1,0,2],...

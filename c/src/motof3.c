@@ -9,7 +9,8 @@
 
 /* Private defines ------------------------------------*/
 
-#define ADC_SCALE 0.0089f
+#define VBAT_SCALE 0.0089f
+#define IBAT_SCALE 0.04f
 
 /* Private macros ------------------------------------------*/
 
@@ -29,7 +30,7 @@ volatile int32_t time_sensor_start;
 volatile uint8_t uart2_tx_buffer[4];
 volatile uint8_t uart3_tx_buffer[3];
 
-/* Functions ------------------------------------------------*/
+/* Private functions ------------------------------------------------*/
 
 inline __attribute__((always_inline)) void radio_uart_dma_enable(uint8_t size)
 {
@@ -44,6 +45,8 @@ inline __attribute__((always_inline)) void radio_uart_dma_disable(void)
 	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
 	USART2->CR1 &= ~USART_CR1_RE;
 }
+
+/* Public functions ---------------------------------------*/
 
 void sensor_write(uint8_t addr, uint8_t data)
 {
@@ -135,9 +138,14 @@ void host_send(uint8_t * data, uint8_t size)
 	USBD_CDC_TransmitPacket(&USBD_device_handler);
 }
 
-int32_t get_timer_process(void)
+int32_t get_t_us(void)
 {
-	return (int32_t)TIM7->CNT;
+	return (int32_t)TIM6->CNT;
+}
+
+void trig_vbat_meas(void)
+{
+	ADC2->CR |= ADC_CR_JADSTART;
 }
 
 void osd_send(uint8_t * data, uint8_t size)
@@ -167,6 +175,12 @@ void runcam_send(uint8_t * data, uint8_t size)
  Interrupt routines
 --------------------------------------------------------------------------------- */
 
+void SysTick_Handler()
+{
+	t_ms++;
+	flag_time = 1;
+}
+
 /* Sensor ready IRQ ---------------------------*/
 
 void EXTI15_10_IRQHandler()
@@ -174,7 +188,6 @@ void EXTI15_10_IRQHandler()
 	EXTI->PR = EXTI_PR_PIF15; // Clear pending request
 	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && (!sensor_busy)) {
 		sensor_read(59,14);
-		time_sensor_start = (int32_t)TIM7->CNT; // record sensor transaction start time
 	}
 }
 
@@ -231,7 +244,6 @@ void DMA1_Channel5_IRQHandler()
 		host_send((uint8_t*)&sensor_raw.bytes[1], 1);
 	else {
 		flag_sensor = 1; // Raise flag for sample ready
-		time_sensor = (int32_t)TIM7->CNT - time_sensor_start; // Record sensor transaction time
 	}
 }
 
@@ -260,24 +272,14 @@ void DMA1_Channel6_IRQHandler()
 	flag_radio = 1; // Raise flag for radio commands ready
 }
 
-/* Status period --------------------------------------*/
+/* VBAT ADC conversion IRQ -----------------------------*/
 
-void TIM6_DAC_IRQHandler()
+void ADC1_2_IRQHandler()
 {
-	TIM6->SR &= ~TIM_SR_UIF;
-	flag_status = 1;
-}
+	ADC2->ISR = ADC_ISR_JEOS; // Clear IRQ
 
-/* VBAT sampling time -----------------------------*/
-
-void TIM1_BRK_TIM15_IRQHandler()
-{
-	TIM15->SR &= ~TIM_SR_UIF;
-
-	if (ADC2->ISR & ADC_ISR_EOC)
-		vbat = (float)ADC2->DR * ADC_SCALE;
-	ADC2->CR |= ADC_CR_ADSTART;
-
+	vbat = (float)ADC2->JDR1 * VBAT_SCALE;
+	ibat = (float)ADC2->JDR2 * IBAT_SCALE;
 	flag_vbat = 1;
 }
 
@@ -307,7 +309,7 @@ void USART3_IRQHandler()
 }
 
 /* ---------------------------------------------------------------------
- board init
+board init
 --------------------------------------------------------------------- */
 
 void board_init()
@@ -365,12 +367,10 @@ void board_init()
 	// A1 : Motor 5, to TIM2_CH2, AF1, NOT USED
 	// A2 : Motor 6, to TIM2_CH3, AF1, USED for Runcam
 	// A3 : Motor 7, NOT USED
-	// A7 : PPM
 	// A8 : Motor 8, NOT USED
 	// A13: SWDIO, AF0
 	// A14: SWCLK, AF0
 
-	// B2 : RSSI
 	// B3 : UART2 Tx, AF7, NOT USED
 	// B6 : UART1 Tx, NOT USED
 	// B7 : UART1 Rx, NOT USED
@@ -471,7 +471,11 @@ void board_init()
 
 #if (ESC == DSHOT)
 	// DMA driven timer for DShot600, 48Mhz: 0:30, 1:60, T:80
-	TIM3->PSC = 0; // 0:DShot600, 1:DShot300
+	#if (DSHOT_RATE == 300)
+		TIM3->PSC = 1;
+	#else // DSHOT_RATE == 600
+		TIM3->PSC = 0;
+	#endif
 	TIM3->ARR = 80;
 	//TIM3->DIER = TIM_DIER_UDE; // Managed in motor function
 	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
@@ -506,33 +510,30 @@ void board_init()
 	GPIOB->OTYPER |= GPIO_OTYPER_OT_5;
 	GPIOB->BSRR = GPIO_BSRR_BS_5;
 
-	/* Status and processing time timers --------------------------------------------------------------------------*/
+	/* Time in us ----------------------------------------------------------*/
 
-	// status timer
 	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
-	TIM6->PSC = 48000-1; // 1ms
-	TIM6->ARR = STATUS_PERIOD;
-	TIM6->DIER = TIM_DIER_UIE;
+	TIM6->PSC = 48-1; // 1us
+	TIM6->ARR = 65535;
 	TIM6->CR1 = TIM_CR1_CEN;
-	NVIC_EnableIRQ(TIM6_DAC_IRQn);
-	NVIC_SetPriority(TIM6_DAC_IRQn,0);
-
-	// timer to record processing time
-	RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
-	TIM7->PSC = 48-1; // 1us
-	TIM7->ARR = 65535;
-	TIM7->CR1 = TIM_CR1_CEN;
-
+	
 	/* VBAT ADC -----------------------------------------------------*/
 
 #ifdef VBAT
 
-	// Clock enable
-	RCC->AHBENR |= RCC_AHBENR_ADC12EN;
+	#ifdef VBAT_USE_RSSI
+		// B2 : RSSI, used for VBAT/10
+		GPIOB->MODER |= GPIO_MODER_MODER2;
+	#else
+		// A5 : VBAT/10
+		GPIOA->MODER |= GPIO_MODER_MODER5;
+	#endif
+	// A7 : PPM, used for IBAT
+	GPIOA->MODER |= GPIO_MODER_MODER7;
 
-	// A5 : VBAT/10
-	GPIOA->MODER |= GPIO_MODER_MODER5;
-
+	// ADC Clock enable
+	RCC->AHBENR |= RCC_AHBENR_ADC12EN; 
+	
 	// Select AHB clock as ADC clock
 	ADC12_COMMON->CCR = ADC12_CCR_CKMODE_0;
 
@@ -544,27 +545,30 @@ void board_init()
 	// Calibration
 	ADC2->CR |= ADC_CR_ADCAL;
 	while (ADC2->CR & ADC_CR_ADCAL) {}
+	wait_ms(1);
 
 	// Enable
 	ADC2->CR |= ADC_CR_ADEN;
 	while ((ADC2->ISR & ADC_ISR_ADRDY) == 0) {}
 
-	ADC2->SMPR1 = 4 << ADC_SMPR1_SMP2_Pos;
-	ADC2->SQR1 = 2 << ADC_SQR1_SQ1_Pos;
+	// ADC config, must be done when ADC is enabled
+	ADC2->IER = ADC_IER_JEOSIE;
+	ADC2->SMPR1 = (4 << ADC_SMPR1_SMP2_Pos) | (4 << ADC_SMPR1_SMP4_Pos);
+	ADC2->SMPR2 = (4 << ADC_SMPR2_SMP12_Pos);
+	#ifdef VBAT_USE_RSSI
+		ADC2->JSQR = (1 << ADC_JSQR_JL_Pos) | (12 << ADC_JSQR_JSQ1_Pos) | (4 << ADC_JSQR_JSQ2_Pos);
+	#else
+		ADC2->JSQR = (1 << ADC_JSQR_JL_Pos) | (2 << ADC_JSQR_JSQ1_Pos) | (4 << ADC_JSQR_JSQ2_Pos);
+	#endif
+	
+	NVIC_EnableIRQ(ADC1_2_IRQn);
+	NVIC_SetPriority(ADC1_2_IRQn,0);
 
 	// Get first vbat value
-	ADC2->CR |= ADC_CR_ADSTART;
-	while ((ADC2->ISR & ADC_ISR_EOC) == 0) {}
-	vbat_smoothed = (float)ADC2->DR * ADC_SCALE;
-
-	// Timer
-	RCC->APB2ENR |= RCC_APB2ENR_TIM15EN;
-	TIM15->PSC = 48000-1; // 1ms
-	TIM15->ARR = VBAT_PERIOD;
-	TIM15->DIER = TIM_DIER_UIE;
-	TIM15->CR1 = TIM_CR1_CEN;
-	NVIC_EnableIRQ(TIM1_BRK_TIM15_IRQn);
-	NVIC_SetPriority(TIM1_BRK_TIM15_IRQn,0);
+	trig_vbat_meas();
+	while (!flag_vbat)
+		__WFI();
+	flag_vbat = 0;
 
 #endif
 
@@ -578,9 +582,9 @@ void board_init()
 
 #endif
 
-#ifdef OSD
-
 	/* OSD ----------------------------------------*/
+
+#ifdef OSD
 
 	// B10: UART3 Tx, AF7, pull-up for IDLE
 	// B11: UART3 Rx, AF7, pull-up for IDLE

@@ -4,11 +4,14 @@ classdef max7456_reg
 			global ser
          if obj.method
             fwrite(ser,[2,128+addr,0]);
+            r = fread(ser,2);
+            data = r(2);
          else
             fwrite(ser,[9,128+addr]);
+            r = fread(ser,2);
+            data = r(1);
          end
-         r = fread(ser,2);
-         data = r(1);
+         
 		end
 		function write(obj,addr,data)
 			global ser

@@ -4,19 +4,12 @@
 #else
 	#include "stm32f3xx.h" // __WFI()
 #endif
-
-volatile uint32_t tick;
-
-/*--- System timer ---*/
-void SysTick_Handler()
-{
-	tick++;
-}
+#include "fc.h" // t_ms
 
 void wait_ms(uint32_t t)
 {
-	uint32_t next_tick = tick + t;
-	while (tick != next_tick)
+	uint32_t next_t_ms = t_ms + t;
+	while (t_ms != next_t_ms)
 		__WFI();
 }
 
@@ -126,4 +119,28 @@ uint8_t crc8(uint8_t * data, uint8_t size)
 		}
 	}
 	return crc;
+}
+
+void float_to_dec(float x, uint8_t * dec_int, uint8_t * dec_frac, uint8_t int_size, uint8_t frac_size)
+{
+	float b10_mult[4] = {1000.0,100.0,10.0,1.0};
+	float b10_div[4] = {0.001,0.01,0.1,1.0};
+	float q;
+	int i;
+
+	for (i=0; i<int_size; i++) {
+		q = floor(x * b10_div[i+4-int_size]);
+		if (q > 9.0f)
+			q = 9.0;
+		dec_int[int_size-i-1] = (uint8_t)q;
+		x = x - q * b10_mult[i+4-int_size];
+	}
+
+	for (i=0; i<frac_size; i++) {
+		q = floor(x * b10_mult[2-i]);
+		if (q > 9.0f)
+			q = 9.0;
+		dec_frac[i] = (uint8_t)q;
+		x = x - q * b10_div[2-i];
+	}
 }

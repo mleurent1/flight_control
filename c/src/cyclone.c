@@ -3,11 +3,14 @@
 #include "fc.h" // flags
 #include "sensor.h" // mpu_spi_init()
 #include "utils.h" // wait_ms()
-#include "usb.h" // usb_init();
+#include "usb.h" // usb_init()
+#include "osd.h" // osd_init()
+#include <string.h> // memcpy()
 
 /* Private defines ------------------------------------*/
 
-#define ADC_SCALE 0.0089f
+#define VBAT_SCALE 0.0089f
+#define IBAT_SCALE 0.04f
 
 /* Private macros ------------------------------------------*/
 
@@ -22,7 +25,7 @@ volatile uint8_t spi2_tx_buffer[15];
 volatile _Bool sensor_busy;
 volatile int32_t time_sensor_start;
 
-/* Functions ------------------------------------------------*/
+/* Private functions ------------------------------------------------*/
 
 inline __attribute__((always_inline)) void sensor_spi_dma_enable(uint8_t size)
 {
@@ -48,12 +51,14 @@ inline __attribute__((always_inline)) void radio_uart_dma_enable(uint8_t size)
 	USART2->CR1 |= USART_CR1_RE;
 }
 
-inline __attribute__((always_inline)) void radio_uart_dma_disable()
+inline __attribute__((always_inline)) void radio_uart_dma_disable(void)
 {
 	DMA1->IFCR = DMA_IFCR_CGIF6; // Clear all DMA flags
 	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
 	USART2->CR1 &= ~USART_CR1_RE;
 }
+
+/* Public functions ---------------------------------------*/
 
 void sensor_write(uint8_t addr, uint8_t data)
 {
@@ -139,14 +144,25 @@ void host_send(uint8_t * data, uint8_t size)
 	USBD_CDC_TransmitPacket(&USBD_device_handler);
 }
 
-int32_t get_timer_process(void)
+int32_t get_t_us(void)
 {
-	return (int32_t)TIM7->CNT;
+	return (int32_t)TIM6->CNT;
+}
+
+void trig_vbat_meas(void)
+{
+	ADC2->CR |= ADC_CR_JADSTART;
 }
 
 /* --------------------------------------------------------------------------------
  Interrupt routines
 --------------------------------------------------------------------------------- */
+
+void SysTick_Handler()
+{
+	t_ms++;
+	flag_time = 1;
+}
 
 /* Sensor ready IRQ ---------------------------*/
 
@@ -155,7 +171,6 @@ void EXTI15_10_IRQHandler()
 	EXTI->PR = EXTI_PR_PIF15; // Clear pending request
 	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && (!sensor_busy)) {
 		sensor_read(59,14);
-		time_sensor_start = (int32_t)TIM7->CNT; // record sensor transaction start time
 	}
 }
 
@@ -181,7 +196,6 @@ void DMA1_Channel4_IRQHandler()
 		host_send((uint8_t*)&sensor_raw.bytes[1], 1);
 	else {
 		flag_sensor = 1; // Raise flag for sample ready
-		time_sensor = (int32_t)TIM7->CNT - time_sensor_start; // Record sensor transaction time
 	}
 }
 
@@ -210,24 +224,14 @@ void DMA1_Channel6_IRQHandler()
 	flag_radio = 1; // Raise flag for radio commands ready
 }
 
-/* Status period --------------------------------------*/
+/* VBAT ADC conversion IRQ -----------------------------*/
 
-void TIM6_DAC_IRQHandler()
+void ADC1_2_IRQHandler()
 {
-	TIM6->SR &= ~TIM_SR_UIF;
-	flag_status = 1;
-}
+	ADC2->ISR = ADC_ISR_JEOS; // Clear IRQ
 
-/* VBAT sampling time -----------------------------*/
-
-void TIM1_BRK_TIM15_IRQHandler()
-{
-	TIM15->SR &= ~TIM_SR_UIF;
-
-	if (ADC2->ISR & ADC_ISR_EOC)
-		vbat = (float)ADC2->DR * ADC_SCALE;
-	ADC2->CR |= ADC_CR_ADSTART;
-
+	vbat = (float)ADC2->JDR1 * VBAT_SCALE;
+	ibat = (float)ADC2->JDR2 * IBAT_SCALE;
 	flag_vbat = 1;
 }
 
@@ -239,7 +243,7 @@ void USB_LP_CAN_RX0_IRQHandler()
 }
 
 /* ---------------------------------------------------------------------
- board init
+board init
 --------------------------------------------------------------------- */
 
 void board_init()
@@ -408,7 +412,11 @@ void board_init()
 
 #if (ESC == DSHOT)
 	// DMA driven timer for DShot600, 48Mhz: 0:30, 1:60, T:80
-	TIM3->PSC = 0; // 0:DShot600, 1:DShot300
+	#if (DSHOT_RATE == 300)
+		TIM3->PSC = 1;
+	#else // DSHOT_RATE == 600
+		TIM3->PSC = 0;
+	#endif
 	TIM3->ARR = 80;
 	//TIM3->DIER = TIM_DIER_UDE; // Managed in motor function
 	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E;
@@ -443,33 +451,25 @@ void board_init()
 	GPIOB->OTYPER |= GPIO_OTYPER_OT_5;
 	GPIOB->BSRR = GPIO_BSRR_BS_5;
 
-	/* Status and processing time timers --------------------------------------------------------------------------*/
+	/* Time in us ----------------------------------------------------------*/
 
-	// status timer
 	RCC->APB1ENR |= RCC_APB1ENR_TIM6EN;
-	TIM6->PSC = 48000-1; // 1ms
-	TIM6->ARR = STATUS_PERIOD;
-	TIM6->DIER = TIM_DIER_UIE;
+	TIM6->PSC = 48-1; // 1us
+	TIM6->ARR = 65535;
 	TIM6->CR1 = TIM_CR1_CEN;
-	NVIC_EnableIRQ(TIM6_DAC_IRQn);
-	NVIC_SetPriority(TIM6_DAC_IRQn,0);
-
-	// timer to record processing time
-	RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
-	TIM7->PSC = 48-1; // 1us
-	TIM7->ARR = 65535;
-	TIM7->CR1 = TIM_CR1_CEN;
-
+	
 	/* VBAT ADC -----------------------------------------------------*/
 
 #ifdef VBAT
 
-	// Clock enable
-	RCC->AHBENR |= RCC_AHBENR_ADC12EN;
-
-	// A5 : VBAT/10
+	// A5 : VBAT/10, for MotoF3 board
 	GPIOA->MODER |= GPIO_MODER_MODER5;
+	// A7 : PPM, used for IBAT
+	GPIOA->MODER |= GPIO_MODER_MODER7;
 
+	// ADC Clock enable
+	RCC->AHBENR |= RCC_AHBENR_ADC12EN; 
+	
 	// Select AHB clock as ADC clock
 	ADC12_COMMON->CCR = ADC12_CCR_CKMODE_0;
 
@@ -481,27 +481,25 @@ void board_init()
 	// Calibration
 	ADC2->CR |= ADC_CR_ADCAL;
 	while (ADC2->CR & ADC_CR_ADCAL) {}
+	wait_ms(1);
 
 	// Enable
 	ADC2->CR |= ADC_CR_ADEN;
 	while ((ADC2->ISR & ADC_ISR_ADRDY) == 0) {}
 
-	ADC2->SMPR1 = 4 << ADC_SMPR1_SMP2_Pos;
-	ADC2->SQR1 = 2 << ADC_SQR1_SQ1_Pos;
+	// ADC config, must be done when ADC is enabled
+	ADC2->IER = ADC_IER_JEOSIE;
+	ADC2->SMPR1 = (4 << ADC_SMPR1_SMP2_Pos) | (4 << ADC_SMPR1_SMP4_Pos);
+	ADC2->SMPR2 = (4 << ADC_SMPR2_SMP12_Pos);
+	ADC2->JSQR = (1 << ADC_JSQR_JL_Pos) | (2 << ADC_JSQR_JSQ1_Pos) | (4 << ADC_JSQR_JSQ2_Pos); // for MotoF3 board
+	NVIC_EnableIRQ(ADC1_2_IRQn);
+	NVIC_SetPriority(ADC1_2_IRQn,0);
 
 	// Get first vbat value
-	ADC2->CR |= ADC_CR_ADSTART;
-	while ((ADC2->ISR & ADC_ISR_EOC) == 0) {}
-	vbat_smoothed = (float)ADC2->DR * ADC_SCALE;
-
-	// Timer
-	RCC->APB2ENR |= RCC_APB2ENR_TIM15EN;
-	TIM15->PSC = 48000-1; // 1ms
-	TIM15->ARR = VBAT_PERIOD;
-	TIM15->DIER = TIM_DIER_UIE;
-	TIM15->CR1 = TIM_CR1_CEN;
-	NVIC_EnableIRQ(TIM1_BRK_TIM15_IRQn);
-	NVIC_SetPriority(TIM1_BRK_TIM15_IRQn,0);
+	trig_vbat_meas();
+	while (!flag_vbat)
+		__WFI();
+	flag_vbat = 0;
 
 #endif
 

@@ -18,6 +18,7 @@
 #define I_MAX 300.0f
 #define PID_MAX 600.0f
 #define TIME_FILTER_ALPHA 0.1f
+#define STATUS_PERIOD 100 // ms
 
 /* Private macros ------------------------------------------*/
 
@@ -28,26 +29,25 @@
 sensor_raw_t sensor_raw;
 radio_frame_t radio_frame;
 volatile float vbat, ibat;
-volatile float vbat_smoothed = 0;
 
 volatile uint8_t sensor_error_count = 0;
 volatile uint8_t radio_error_count = 0;
-volatile uint8_t rf_error_count = 0;;
+volatile uint8_t rf_error_count = 0;
 
 volatile _Bool flag_sensor = 0;
 volatile _Bool flag_radio = 0;
 volatile _Bool flag_vbat = 0;
 volatile _Bool flag_rf = 0;
 volatile _Bool flag_host = 0;
-volatile _Bool flag_status = 0;
+volatile _Bool flag_time = 0;
 volatile _Bool flag_rf_host_read = 0;
-volatile _Bool flag_rf_rxtx_done = 0;;
+volatile _Bool flag_rf_rxtx_done = 0;
 
 host_buffer_rx_t host_buffer_rx;
 
-volatile int32_t time_sensor;
+volatile uint32_t t_ms;
 
-/* Functions ------------------------------------------------*/
+/* Private functions ------------------------------------------------*/
 
 /* MAIN ----------------------------------------------------------------
 -----------------------------------------------------------------------*/
@@ -64,7 +64,9 @@ int main(void)
 	_Bool flag_beep_radio = 0;
 	_Bool flag_sensor_timeout = 0;
 	_Bool flag_radio_timeout = 0;
+	_Bool flag_proc = 0;
 
+	radio_frame_t radio_frame1;
 	struct radio_raw_s radio_raw;
 	struct radio_s radio;
 
@@ -97,7 +99,7 @@ int main(void)
 	float roll_i_term = 0;
 	float roll_d_term;
 	float yaw_p_term;
-	float yaw_i_term =0;
+	float yaw_i_term = 0;
 	float yaw_d_term;
 
 	float i_transfer;
@@ -111,23 +113,28 @@ int main(void)
 	uint16_t motor_raw[4];
 	_Bool motor_telemetry[4];
 
+	float vbat_smoothed;
+	float nb_cells;
+	float vbat_cell;
+	float imah = 0;
+
+	uint16_t cnt_ms = 0;
+	uint8_t t_s = 0;
+	uint8_t t_min = 0;
+	uint32_t t_status_prev = 0;
 	uint8_t status_cnt = 0;
-	float time_sensor_mean = 0;
-	uint16_t time_sensor_max = 0;
-	uint16_t time_sensor_min = 0xFFFF;
-	int32_t time_process;
-	float time_process_mean = 0;
-	uint16_t time_process_max = 0;
-	uint16_t time_process_min = 0xFFFF;
+
 	host_buffer_tx_t host_buffer_tx;
 
-	radio_frame_t radio_frame1;
+	int32_t t_proc = 0;
+	float t_proc_mean = 0;
+	uint16_t t_proc_max = 0;
+	uint16_t t_proc_min = 0xFFFF;
 
-	/* Register init --------------------------------------------------*/
+	/* Init -----------------------------------------------------*/
 
 	reg_init();
-
-	/* Variable initialisation -----------------------------------------------------*/
+	board_init();
 
 	radio.throttle = 0;
 	radio.pitch = 0;
@@ -148,20 +155,22 @@ int main(void)
 	i_roll  = REG_I_ROLL;
 	d_roll  = REG_D_ROLL;
 
-	/* Init -----------------------------------------------------*/
-
-	board_init();
-
-	// Disable Systick interrupt, not needed anymore
-	SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
+	vbat_smoothed = vbat;
+	nb_cells = floor(vbat / 3.3f);
+	vbat_cell = vbat / nb_cells;
 
 	/* Loop ----------------------------------------------------------------------------
 	-----------------------------------------------------------------------------------*/
 
 	while (1)
 	{
-		// record processing time
-		time_process = -get_timer_process();
+		/* Processing time measurement ------------------------------------------------*/
+
+		if (flag_proc)
+		{
+			flag_proc = 0; // reset flag
+			t_proc = -get_t_us();
+		}
 
 		/* Process radio commands -----------------------------------------------------*/
 
@@ -191,11 +200,11 @@ int main(void)
 				else
 					flag_acro = 0;
 
-			#ifdef OSD
-				// OSD menu navigation from stick moves
-				if (!flag_armed)
-					osd_menu(&radio);
-			#endif
+				#ifdef OSD
+					// OSD menu navigation from stick moves
+					if (!flag_armed)
+						osd_menu(&radio);
+				#endif
 				
 				// Exponential
 				radio_expo(&radio, flag_acro);
@@ -214,15 +223,6 @@ int main(void)
 		{
 			flag_sensor = 0; // reset flag
 			flag_sensor_timeout = 0; // reset timeout flag
-
-			// Record sensor transaction time
-			if (time_sensor < 0)
-				time_sensor += 0x0000FFFF;
-			time_sensor_mean += TIME_FILTER_ALPHA * (float)time_sensor - TIME_FILTER_ALPHA * time_sensor_mean;
-			if ((uint16_t)time_sensor > time_sensor_max)
-				time_sensor_max = (uint16_t)time_sensor;
-			if ((uint16_t)time_sensor < time_sensor_min)
-				time_sensor_min = (uint16_t)time_sensor;
 
 			// Process sensor data
 			mpu_process_samples(&sensor_raw, &sensor);
@@ -347,15 +347,18 @@ int main(void)
 
 			/*------ Motor command ------*/
 
-			// adapt yaw control if motor direction is reversed
-			if (REG_MOTOR__REVERSED)
-				yaw = -yaw;
-
 			// Motor matrix
-			motor[0] = radio.throttle * (float)REG_MOTOR__RANGE + roll + pitch - yaw;
-			motor[1] = radio.throttle * (float)REG_MOTOR__RANGE + roll - pitch + yaw;
-			motor[2] = radio.throttle * (float)REG_MOTOR__RANGE - roll - pitch - yaw;
-			motor[3] = radio.throttle * (float)REG_MOTOR__RANGE - roll + pitch + yaw;
+			#ifdef M1_CCW
+				motor[0] = radio.throttle * (float)REG_MOTOR__RANGE + roll + pitch - yaw;
+				motor[1] = radio.throttle * (float)REG_MOTOR__RANGE + roll - pitch + yaw;
+				motor[2] = radio.throttle * (float)REG_MOTOR__RANGE - roll - pitch - yaw;
+				motor[3] = radio.throttle * (float)REG_MOTOR__RANGE - roll + pitch + yaw;
+			#else
+				motor[0] = radio.throttle * (float)REG_MOTOR__RANGE + roll + pitch + yaw;
+				motor[1] = radio.throttle * (float)REG_MOTOR__RANGE + roll - pitch - yaw;
+				motor[2] = radio.throttle * (float)REG_MOTOR__RANGE - roll - pitch + yaw;
+				motor[3] = radio.throttle * (float)REG_MOTOR__RANGE - roll + pitch - yaw;
+			#endif
 
 			// Offset and clip motor value
 			for (i=0; i<4; i++) {
@@ -391,118 +394,139 @@ int main(void)
 		{
 			flag_vbat = 0; // reset flag
 
-			// low-pass filter
-			vbat_smoothed += filter_alpha_vbat * vbat - filter_alpha_vbat * vbat_smoothed;
+			vbat_smoothed += filter_alpha_vbat * vbat - filter_alpha_vbat * vbat_smoothed; // low-pass filter
+			vbat_cell = vbat_smoothed / nb_cells;
+			imah += ibat / 3.6f;
 		}
 
 		/* Flight controller status: LED, beeper, timeout and debug output -----------------------------------------------*/
 
-		if (flag_status)
+		if (flag_time)
 		{
-			flag_status = 0; // reset flag
-			status_cnt++;
+			flag_time = 0; // reset flag
 
-			// disarm when timeout on radio samples
-			if (flag_radio_timeout)
-				flag_armed = 0;
-
-			// shut down motors when timeout on sensor samples
-			if (flag_sensor_timeout) {
-				for (i=0; i<4; i++) {
-					motor_raw[i] = 0;
-					motor_telemetry[i] = 0;
+			// Flight time
+			if (flag_armed) {
+				cnt_ms++;
+				if (cnt_ms == 1000) {
+					cnt_ms = 0;
+					t_s++;
+					if (t_s == 60) {
+						t_s = 0;
+						t_min++;
+					}
 				}
-				set_motors(motor_raw, motor_telemetry);
 			}
+			
+			#ifdef VBAT
+				// Measure Vbat every ms
+				trig_vbat_meas();
+			#endif
 
-			// Update status reg
-			REG_STATUS = 0;
-			if (flag_sensor_timeout)
-				REG_STATUS |= 0x01;
-			if (flag_radio_timeout)
-				REG_STATUS |= 0x02;
-			if ((vbat_smoothed < REG_VBAT_MIN) && (vbat_smoothed > 3.0f))
-				REG_STATUS |= 0x04;
 
-			// LED double blinks when timeout on sensor or radio samples, or vbat too low
-			if (flag_sensor_timeout || flag_radio_timeout || ((vbat_smoothed < REG_VBAT_MIN) && (vbat_smoothed > 3.0f))) {
-				if ((status_cnt & 0x01) == 0)
-					toggle_led();
-			}
-			else {
-				if ((status_cnt & 0x07) == 0)
-					toggle_led();
-			}
+			if ((t_ms - t_status_prev) >= STATUS_PERIOD) {
 
-			// beep when requested by user or, timeout on sensor or radio samples, or vbat too low
-			if (flag_beep_radio || flag_sensor_timeout || flag_radio_timeout || ((vbat_smoothed < REG_VBAT_MIN) && (vbat_smoothed > 3.0f)) || (REG_CTRL__BEEP_TEST == 1)) {
-				if ((status_cnt & 0x03) == 0)
-					toggle_beeper(1);
-			}
-			else
-				toggle_beeper(0);
+				t_status_prev = t_ms;
 
-			// Set flags, to be cleared when new samples are ready
-			flag_sensor_timeout = 1;
-			if (flag_radio_connected && ((status_cnt & 0x03) == 0))
-				flag_radio_timeout = 1;
+				status_cnt++;
 
-			// OSD telemetry
-		#ifdef OSD
-			osd_telemetry(vbat_smoothed, 0, 0);
-		#endif
+				// disarm when timeout on radio samples
+				if (flag_radio_timeout)
+					flag_armed = 0;
 
-			// Send data to host
-			if (REG_CTRL__DEBUG) {
-				host_buffer_tx.f[0] = sensor.gyro_x;
-				host_buffer_tx.f[1] = sensor.gyro_y;
-				host_buffer_tx.f[2] = sensor.gyro_z;
-				host_buffer_tx.f[3] = sensor.accel_x;
-				host_buffer_tx.f[4] = sensor.accel_y;
-				host_buffer_tx.f[5] = sensor.accel_z;
-				host_buffer_tx.f[6] = angle.pitch;
-				host_buffer_tx.f[7] = angle.roll;
-				host_buffer_tx.f[8] = radio.throttle;
-				if (!flag_acro) {
-					host_buffer_tx.f[9] = radio_pitch_smooth;
-					host_buffer_tx.f[10] = radio_roll_smooth;
+				// shut down motors when timeout on sensor samples
+				if (flag_sensor_timeout) {
+					for (i=0; i<4; i++) {
+						motor_raw[i] = 0;
+						motor_telemetry[i] = 0;
+					}
+					set_motors(motor_raw, motor_telemetry);
+				}
+
+				// Update status reg
+				REG_STATUS = 0;
+				if (flag_sensor_timeout)
+					REG_STATUS |= 0x01;
+				if (flag_radio_timeout)
+					REG_STATUS |= 0x02;
+				if ((vbat_cell < REG_VBAT_MIN) && (nb_cells > 0))
+					REG_STATUS |= 0x04;
+
+				// LED double blinks when timeout on sensor or radio samples, or vbat too low
+				if (flag_sensor_timeout || flag_radio_timeout || ((vbat_cell < REG_VBAT_MIN) && (nb_cells > 0))) {
+					if ((status_cnt & 0x01) == 0)
+						toggle_led();
 				}
 				else {
-					host_buffer_tx.f[9] = radio.pitch;
-					host_buffer_tx.f[10] = radio.roll;
+					if ((status_cnt & 0x07) == 0)
+						toggle_led();
 				}
-				host_buffer_tx.f[11] = radio.yaw;
-				host_buffer_tx.f[12] = radio.aux[0];
-				host_buffer_tx.f[13] = radio.aux[1];
-				host_buffer_tx.f[14] = radio.aux[2];
-				host_buffer_tx.f[15] = radio.aux[3];
-				host_buffer_tx.f[16] = vbat_smoothed;
-				host_buffer_tx.f[17] = ibat;
-				host_buffer_tx.f[18] = pitch;
-				host_buffer_tx.f[19] = roll;
-				host_buffer_tx.f[20] = yaw;
-				host_buffer_tx.u16[21*2]   = motor_raw[0];
-				host_buffer_tx.u16[21*2+1] = motor_raw[1];
-				host_buffer_tx.u16[22*2]   = motor_raw[2];
-				host_buffer_tx.u16[22*2+1] = motor_raw[3];
-				host_buffer_tx.f[23] = time_sensor_mean;
-				host_buffer_tx.u16[24*2]   = time_sensor_max;
-				host_buffer_tx.u16[24*2+1] = time_sensor_min;
-				host_buffer_tx.f[25] = time_process_mean;
-				host_buffer_tx.u16[26*2]   = time_process_max;
-				host_buffer_tx.u16[26*2+1] = time_process_min;
-				host_send(host_buffer_tx.u8, 27*4);
-			}
-			else if (REG_CTRL__DEBUG_RADIO) {
-				memcpy(host_buffer_tx.u8, radio_frame1.bytes, sizeof(radio_frame1));
-				host_send(host_buffer_tx.u8, sizeof(radio_frame1));
-			}
 
-			// Reset min/max time
-			time_sensor_max = 0;
-			time_sensor_min = 0xFFFF;
-			time_process_max = 0;
-			time_process_min = 0xFFFF;
+				// beep when requested by user or, timeout on sensor or radio samples, or vbat too low
+				if (flag_beep_radio || flag_sensor_timeout || flag_radio_timeout || ((vbat_smoothed < REG_VBAT_MIN) && (vbat_smoothed > 3.0f)) || (REG_CTRL__BEEP_TEST == 1)) {
+					if ((status_cnt & 0x03) == 0)
+						toggle_beeper(1);
+				}
+				else
+					toggle_beeper(0);
+
+				// Set flags, to be cleared when new samples are ready
+				flag_sensor_timeout = 1;
+				if (flag_radio_connected && ((status_cnt & 0x03) == 0))
+					flag_radio_timeout = 1;
+
+				#ifdef OSD
+					// OSD telemetry
+					osd_telemetry(vbat_cell, ibat, imah, t_s, t_min);
+				#endif
+
+				// Send data to host
+				if (REG_CTRL__DEBUG) {
+					host_buffer_tx.f[0] = sensor.gyro_x;
+					host_buffer_tx.f[1] = sensor.gyro_y;
+					host_buffer_tx.f[2] = sensor.gyro_z;
+					host_buffer_tx.f[3] = sensor.accel_x;
+					host_buffer_tx.f[4] = sensor.accel_y;
+					host_buffer_tx.f[5] = sensor.accel_z;
+					host_buffer_tx.f[6] = angle.pitch;
+					host_buffer_tx.f[7] = angle.roll;
+					host_buffer_tx.f[8] = radio.throttle;
+					if (!flag_acro) {
+						host_buffer_tx.f[9] = radio_pitch_smooth;
+						host_buffer_tx.f[10] = radio_roll_smooth;
+					}
+					else {
+						host_buffer_tx.f[9] = radio.pitch;
+						host_buffer_tx.f[10] = radio.roll;
+					}
+					host_buffer_tx.f[11] = radio.yaw;
+					host_buffer_tx.f[12] = radio.aux[0];
+					host_buffer_tx.f[13] = radio.aux[1];
+					host_buffer_tx.f[14] = radio.aux[2];
+					host_buffer_tx.f[15] = radio.aux[3];
+					host_buffer_tx.f[16] = vbat_smoothed;
+					host_buffer_tx.f[17] = ibat;
+					host_buffer_tx.f[18] = pitch;
+					host_buffer_tx.f[19] = roll;
+					host_buffer_tx.f[20] = yaw;
+					host_buffer_tx.u16[21*2]   = motor_raw[0];
+					host_buffer_tx.u16[21*2+1] = motor_raw[1];
+					host_buffer_tx.u16[22*2]   = motor_raw[2];
+					host_buffer_tx.u16[22*2+1] = motor_raw[3];
+					host_buffer_tx.f[23] = t_proc_mean;
+					host_buffer_tx.u16[24*2]   = t_proc_max;
+					host_buffer_tx.u16[24*2+1] = t_proc_min;
+					host_send(host_buffer_tx.u8, 25*4);
+				}
+				else if (REG_CTRL__DEBUG_RADIO) {
+					memcpy(host_buffer_tx.u8, radio_frame1.bytes, sizeof(radio_frame1));
+					host_send(host_buffer_tx.u8, sizeof(radio_frame1));
+				}
+
+				// Reset min/max processing time
+				t_proc_max = 0;
+				t_proc_min = 0xFFFF;
+			}
 		}
 
 		/* Host request ------------------------------------------------------------------*/
@@ -516,17 +540,20 @@ int main(void)
 
 		/* Wait for interrupts if all flags are processed ------------------------------------------------*/
 
-		if (!flag_radio && !flag_sensor && !flag_vbat && !flag_status && !flag_host)
+		if (!flag_radio && !flag_sensor && !flag_vbat && !flag_time && !flag_host)
 		{
 			// Record processing time
-			time_process += (int32_t)get_timer_process();
-			if (time_process < 0)
-				time_process += 0x0000FFFF;
-			time_process_mean += TIME_FILTER_ALPHA * (float)time_process - TIME_FILTER_ALPHA * time_process_mean;
-			if ((uint16_t)time_process > time_process_max)
-				time_process_max = (uint16_t)time_process;
-			if ((uint16_t)time_process < time_process_min)
-				time_process_min = (uint16_t)time_process;
+			t_proc += (int32_t)get_t_us();
+			if (t_proc < 0)
+				t_proc += 0x0000FFFF;
+			t_proc_mean += TIME_FILTER_ALPHA * (float)t_proc - TIME_FILTER_ALPHA * t_proc_mean;
+			if ((uint16_t)t_proc > t_proc_max)
+				t_proc_max = (uint16_t)t_proc;
+			if ((uint16_t)t_proc < t_proc_min)
+				t_proc_min = (uint16_t)t_proc;
+
+			// Reset processing time measurement
+			flag_proc = 1;
 
 			__WFI();
 		}

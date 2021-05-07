@@ -47,7 +47,7 @@ n = n + 1;
 reg(n).name = 'VBAT_MIN';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VBAT_MIN',31,0,'single',7.2};
+reg(n).subf{1} = {'VBAT_MIN',31,0,'single',3.7};
 
 n = n + 1;
 reg(n).name = 'TIME_CONSTANT';
@@ -81,7 +81,6 @@ reg(n).flash = 1;
 reg(n).subf{1} = {'START',9,0,'uint16',50};
 reg(n).subf{2} = {'ARMED',19,10,'uint16',200};
 reg(n).subf{3} = {'RANGE',30,20,'uint16',1700};
-reg(n).subf{4} = {'REVERSED',31,31,'uint16',0};
 
 n = n + 1;
 reg(n).name = 'RATE';

@@ -17,9 +17,7 @@
 
 /* Public types -----------------*/
 
-/* Public variables -----------------*/
-
-extern volatile uint32_t tick;
+/* Exported variables -----------------*/
 
 /* Public functions -----------------*/
 
@@ -33,5 +31,6 @@ float expo(float lin);
 float arcsin(float sin_val);
 float sinus(float angle);
 uint8_t crc8(uint8_t * data, uint8_t size);
+void float_to_dec(float x, uint8_t * dec_int, uint8_t * dec_frac, uint8_t int_size, uint8_t frac_size);
 
 #endif

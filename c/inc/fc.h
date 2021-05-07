@@ -8,9 +8,6 @@
 
 /* Public defines -----------------*/
 
-#define VBAT_PERIOD 10 // ms
-#define STATUS_PERIOD 100 // ms
-
 /* Public types -----------------*/
 
 /* Exported variables -----------------*/
@@ -29,13 +26,13 @@ extern volatile _Bool flag_radio;
 extern volatile _Bool flag_vbat;
 extern volatile _Bool flag_rf;
 extern volatile _Bool flag_host;
-extern volatile _Bool flag_status;
+extern volatile _Bool flag_time;
 extern volatile _Bool flag_rf_host_read;
 extern volatile _Bool flag_rf_rxtx_done;
 
 extern host_buffer_rx_t host_buffer_rx;
 
-extern volatile int32_t time_sensor;
+extern volatile uint32_t t_ms;
 
 /* Public functions -----------------*/
 
