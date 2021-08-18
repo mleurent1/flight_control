@@ -8,6 +8,7 @@
 #else
 	#include "stm32f3xx.h" // FLASH->
 #endif
+#include "smart_audio.h" // sma_nbytes_to_receive
 
 uint32_t reg[NB_REG];
 float regf[NB_REG];
@@ -245,18 +246,15 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			flash_erase();
 			break;
 		}
-	#ifdef RF
 		case 7: { // SPI read to RF
 			flag_rf_host_read = 1;
 			rf_read(addr,1);
 			break;
 		}
 		case 8: { // SPI write to RF
-			rf_write(addr, host_buffer_rx->data.u8[3], 1);
+			rf_write(addr, &host_buffer_rx->data.u8[3], 1);
 			break;
 		}
-	#endif
-	#ifdef OSD
 		case 9: { // UART send to OSD
 			uint8_t buf[2];
 			buf[0] = host_buffer_rx->addr;
@@ -264,7 +262,11 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			osd_send(buf, 2);
 			break;
 		}
-	#endif
+		case 10: { // UART send to Smart Audio
+			sma_nbytes_to_receive = host_buffer_rx->data.u8[0];
+			sma_send(&host_buffer_rx->data.u8[1], host_buffer_rx->addr);
+			break;
+		}
 	}
 }
 

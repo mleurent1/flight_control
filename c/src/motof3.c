@@ -5,6 +5,7 @@
 #include "utils.h" // wait_ms()
 #include "usb.h" // usb_init()
 #include "osd.h" // osd_init()
+#include "smart_audio.h" // sma_data_received()
 #include <string.h> // memcpy()
 
 /* Private defines ------------------------------------*/
@@ -27,8 +28,10 @@ volatile uint8_t i2c2_tx_bytes_written;
 #endif
 volatile _Bool sensor_busy;
 volatile int32_t time_sensor_start;
+volatile uint8_t uart1_tx_buffer[16];
 volatile uint8_t uart2_tx_buffer[4];
 volatile uint8_t uart3_tx_buffer[3];
+volatile uint8_t uart1_rx_nbytes;
 
 /* Private functions ------------------------------------------------*/
 
@@ -171,6 +174,14 @@ void runcam_send(uint8_t * data, uint8_t size)
 	USART2->CR1 |= USART_CR1_TE;
 }
 
+void sma_send(uint8_t * data, uint8_t size)
+{
+	memcpy((uint8_t*)uart1_tx_buffer, data, size);
+	DMA1_Channel4->CNDTR = size;
+	DMA1_Channel4->CCR |= DMA_CCR_EN;
+	USART1->CR1 |= USART_CR1_TE;
+}
+
 /* --------------------------------------------------------------------------------
  Interrupt routines
 --------------------------------------------------------------------------------- */
@@ -308,6 +319,36 @@ void USART3_IRQHandler()
 	}
 }
 
+/* Smart Audio UART IRQ -----------------------------------*/
+
+void USART1_IRQHandler()
+{
+	if (USART1->ISR & USART_ISR_TC) { // transfer complete
+
+		USART1->ICR = USART_ICR_TCCF; // Clear transfer complete flag
+		DMA1->IFCR = DMA_IFCR_CGIF4; // Clear all DMA flags
+		DMA1_Channel4->CCR &= ~DMA_CCR_EN;
+		USART1->CR1 &= ~USART_CR1_TE;
+		//GPIOB->MODER &= ~GPIO_MODER_MODER6_1; // Disable Tx output pin since Smart audio is bidir
+
+		if (sma_nbytes_to_receive > 0) {
+			uart1_rx_nbytes = 0;
+			USART1->CR1 |= USART_CR1_RE; // Enable Rx
+		}
+
+	} else if (USART1->ISR & USART_ISR_RXNE) { // Rx not empty
+
+		sma_data_received[uart1_rx_nbytes++] = USART1->RDR;
+		sma_nbytes_to_receive--;
+
+		if (sma_nbytes_to_receive == 0) {
+			USART1->CR1 &= ~USART_CR1_RE;
+			if (REG_CTRL__SMA_HOST_CTRL == 1)
+				host_send((uint8_t*)sma_data_received, uart1_rx_nbytes);
+		}
+	}
+}
+
 /* ---------------------------------------------------------------------
 board init
 --------------------------------------------------------------------- */
@@ -370,10 +411,8 @@ void board_init()
 	// A8 : Motor 8, NOT USED
 	// A13: SWDIO, AF0
 	// A14: SWCLK, AF0
-
 	// B3 : UART2 Tx, AF7, NOT USED
-	// B6 : UART1 Tx, NOT USED
-	// B7 : UART1 Rx, NOT USED
+	// B7 : UART1 Rx, AF7, NOT USED
 
 	/* USB ----------------------------------------*/
 
@@ -610,7 +649,7 @@ void board_init()
 
 #endif
 
-/* Runcam OSD ---------------------------------------*/
+	/* Runcam OSD ---------------------------------------*/
 
 #ifdef RUNCAM
 
@@ -626,6 +665,34 @@ void board_init()
 	DMA1_Channel7->CCR = DMA_CCR_MINC | DMA_CCR_DIR;
 	DMA1_Channel7->CMAR = (uint32_t)uart2_tx_buffer;
 	DMA1_Channel7->CPAR = (uint32_t)&(USART2->TDR);
+
+#endif
+
+	/* Smart Audio ---------------------------------------*/
+
+#ifdef SMART_AUDIO
+
+	// B6: UART1 Tx, AF7, pull-down to set audio line to GND
+	GPIOB->MODER |= GPIO_MODER_MODER6_1;
+	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR6_1;
+	GPIOB->AFR[0] |= (7 << GPIO_AFRL_AFRL6_Pos);
+
+	// UART config
+	RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
+	USART1->BRR = 9800; // 48MHz/4800bps = 10000 => 48MHz/49000bps = 9800 in order to match TBS unify board Xtal
+	USART1->CR2 = 2 << USART_CR2_STOP_Pos; // 2 stop bits
+	USART1->CR3 = USART_CR3_DMAT | USART_CR3_HDSEL; // HDSEL: single-wire half-duplex
+	USART1->CR1 = USART_CR1_UE | USART_CR1_TCIE | USART_CR1_RXNEIE;
+	NVIC_EnableIRQ(USART1_IRQn);
+	NVIC_SetPriority(USART1_IRQn,0);
+
+	// DMA UART1 Tx
+	DMA1_Channel4->CCR = DMA_CCR_MINC | DMA_CCR_DIR;
+	DMA1_Channel4->CMAR = (uint32_t)uart1_tx_buffer;
+	DMA1_Channel4->CPAR = (uint32_t)&(USART1->TDR);
+
+	sma_send_cmd(SMA_GET_SETTINGS, 0);
+	sma_process_resp();
 
 #endif
 

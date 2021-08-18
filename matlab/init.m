@@ -1,7 +1,7 @@
 restoredefaultpath
 addpath reg
 addpath utils
-addpath ftdi
+% addpath ftdi
 
 clear all
 
@@ -16,8 +16,10 @@ mpu = mpu_reg;
 rf = sx1276_reg;
 osd = max7456_reg;
 
+system('sudo chmod 777 /dev/ttyACM0');
+
 delete(instrfindall);
-ser = serial('COM21');
+ser = serial('/dev/ttyACM0');
 ser.BaudRate = 115200;
 ser.Timeout = 1;
 ser.InputBufferSize = 8192;

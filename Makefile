@@ -1,9 +1,9 @@
 # Compiler and tools
-CC = /mnt/c/wsl/gcc-arm-none-eabi-9-2020-q2-update/bin/arm-none-eabi-gcc
-OBJCOPY = /mnt/c/wsl/gcc-arm-none-eabi-9-2020-q2-update/bin/arm-none-eabi-objcopy
-SIZE = /mnt/c/wsl/gcc-arm-none-eabi-9-2020-q2-update/bin/arm-none-eabi-size
+CC = ~/programs/gcc-arm-none-eabi-10-2020-q4-major/bin/arm-none-eabi-gcc
+OBJCOPY = ~/programs/gcc-arm-none-eabi-10-2020-q4-major//bin/arm-none-eabi-objcopy
+SIZE = ~/programs/gcc-arm-none-eabi-10-2020-q4-major//bin/arm-none-eabi-size
 STLINK = "/mnt/c/Program Files (x86)/STMicroelectronics/STM32 ST-LINK Utility/ST-LINK Utility/ST-LINK_CLI.exe"
-DFU = /mnt/c/programs/dfu-util-0.9/dfu-util.exe
+DFU = sudo dfu-util
 LDFLAGS = *.o -lm -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs --specs=nosys.specs
 #KEIL:-mthumb-interwork -nostartfiles
 CFLAGS = -c -Wall -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -Wdouble-promotion -O #--fsingle-precision-constant
@@ -20,12 +20,12 @@ else ifeq ($(DRONE),alien6)
    FC_FLAGS = -DM1_CCW -DESC=$(DSHOT) -DSHOT_RATE=600 -DBEEPER -DVBAT
 else ifeq ($(DRONE),practice)
    BOARD = motof3
-   FC_FLAGS = -DESC=$(DSHOT) -DSHOT_RATE=600 -DBEEPER -DVBAT -DVBAT_USE_RSSI -DOSD -DRUNCAM
+   FC_FLAGS = -DESC=$(DSHOT) -DSHOT_RATE=600 -DBEEPER -DVBAT -DVBAT_USE_RSSI -DOSD -DRUNCAM -DSMART_AUDIO
 endif
 
 # Source list
 USB_OBJ = usb.o usbd_cdc_if.o usbd_cdc.o usbd_conf.o usbd_core.o usbd_ctlreq.o usbd_desc.o usbd_ioreq.o
-FC_OBJ = fc.o $(BOARD).o sensor.o radio.o reg.o utils.o osd.o
+FC_OBJ = fc.o $(BOARD).o sensor.o radio.o reg.o utils.o osd.o smart_audio.o
 
 # STM32 sources, flags and link files
 ifeq ($(BOARD),nucleo)

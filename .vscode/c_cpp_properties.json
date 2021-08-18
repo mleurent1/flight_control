@@ -16,10 +16,14 @@
                 "DSHOT=1",
                 "ONESHOT=0",
                 "ESC=1",
+                "DHSOT_RATE=600",
                 "BEEPER",
-                "VBAT"
+                "VBAT",
+                "OSD",
+                "RUNCAM",
+                "SMART_AUDIO"
             ],
-            "compilerPath": "C:/Program Files (x86)/GNU Arm Embedded Toolchain/9 2020-q2-update/bin/arm-none-eabi-gcc.exe",
+            "compilerPath": "~/programs/gcc-arm-none-eabi-10-2020-q4-major/bin/arm-none-eabi-gcc",
             "cStandard": "c11",
             "cppStandard": "c++17",
             "intelliSenseMode": "gcc-arm"

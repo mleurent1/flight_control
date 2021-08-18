@@ -29,6 +29,9 @@
 #define REG_CTRL__OSD_HOST_CTRL (uint8_t)((reg[2] & 256U) >> 8)
 #define REG_CTRL__OSD_HOST_CTRL_Msk 256U
 #define REG_CTRL__OSD_HOST_CTRL_Pos 8U
+#define REG_CTRL__SMA_HOST_CTRL (uint8_t)((reg[2] & 512U) >> 9)
+#define REG_CTRL__SMA_HOST_CTRL_Msk 512U
+#define REG_CTRL__SMA_HOST_CTRL_Pos 9U
 #define REG_CTRL_Addr 2
 #define REG_MOTOR_TEST reg[3]
 #define REG_MOTOR_TEST__VALUE (uint16_t)((reg[3] & 65535U) >> 0)

@@ -25,6 +25,7 @@ reg(n).subf{5} = {'DEBUG',5,5,'uint8',0};
 reg(n).subf{6} = {'RF_HOST_CTRL',6,6,'uint8',0};
 reg(n).subf{7} = {'DEBUG_RADIO',7,7,'uint8',0};
 reg(n).subf{8} = {'OSD_HOST_CTRL',8,8,'uint8',0};
+reg(n).subf{9} = {'SMA_HOST_CTRL',9,9,'uint8',0};
 
 n = n + 1;
 reg(n).name = 'MOTOR_TEST';

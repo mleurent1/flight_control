@@ -10,7 +10,6 @@
 #include "radio.h" // struct radio_s
 #include <string.h> // memcpy()
 #include "reg.h" // reg_save()
-#include <math.h> // pow()
 #include "utils.h" // crc8()
 
 /* Private defines --------------------------------------*/
@@ -185,11 +184,10 @@ void osd_init(void)
 	r = osd_read(MAX7456_OSDBL);
 	osd_write(MAX7456_OSDBL, r & ~MAX7456_OSDBL__AUTO_OSDBL_DISABLE);
 	r = osd_read(MAX7456_STAT);
-	/*if (r & MAX7456_STAT__PAL_DETECTED)
+	if (r & MAX7456_STAT__PAL_DETECTED)
 		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN | MAX7456_VM0__PAL_NOT_NTSC);
 	else
-		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN);*/
-	osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN | MAX7456_VM0__PAL_NOT_NTSC);
+		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN);
 	//osd_write(MAX7456_HOS, 45); // 40
 	//osd_write(MAX7456_VOS, 28); // 22
 	osd_write(MAX7456_DMAH, MAX7456_DMAH__DMA_8);
