@@ -52,6 +52,7 @@ const reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 0, 65537000}, // AUX
 	{0, 1, 0, 1}, // MPU_CFG
 	{0, 1, 0, 1}, // FC_CFG
+	{0, 0, 0, 0}, // VTX
 	{0, 0, 0, 0}, // DEBUG_INT
 	{0, 0, 1, 0} // DEBUG_FLOAT
 };
@@ -213,6 +214,11 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 							filter_alpha_vbat  = 1.0f;
 						else
 							filter_alpha_vbat  = 1.0f / (float)REG_TIME_CONSTANT__VBAT;
+					}
+					else if (addr == REG_VTX_Addr) {
+						sma_send_cmd(SMA_SET_CHANNEL, REG_VTX__CHAN);
+						wait_sma();
+						sma_send_cmd(SMA_SET_POWER, REG_VTX__PWR);
 					}
 					else if (addr == REG_DEBUG_INT_Addr) {
 						/* Put your debug command here */

@@ -1,4 +1,4 @@
-#define NB_REG 40
+#define NB_REG 41
 
 #define REG_VERSION reg[0]
 #define REG_VERSION_Addr 0
@@ -196,7 +196,15 @@
 #define REG_MPU_CFG_Addr 36
 #define REG_I_TRANSFER reg[37]
 #define REG_FC_CFG_Addr 37
-#define REG_DEBUG_INT reg[38]
-#define REG_DEBUG_INT_Addr 38
-#define REG_DEBUG_FLOAT regf[39]
-#define REG_DEBUG_FLOAT_Addr 39
+#define REG_VTX reg[38]
+#define REG_VTX__CHAN (uint8_t)((reg[38] & 255U) >> 0)
+#define REG_VTX__CHAN_Msk 255U
+#define REG_VTX__CHAN_Pos 0U
+#define REG_VTX__PWR (uint8_t)((reg[38] & 65280U) >> 8)
+#define REG_VTX__PWR_Msk 65280U
+#define REG_VTX__PWR_Pos 8U
+#define REG_VTX_Addr 38
+#define REG_DEBUG_INT reg[39]
+#define REG_DEBUG_INT_Addr 39
+#define REG_DEBUG_FLOAT regf[40]
+#define REG_DEBUG_FLOAT_Addr 40

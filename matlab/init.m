@@ -16,9 +16,9 @@ mpu = mpu_reg;
 rf = sx1276_reg;
 osd = max7456_reg;
 
-system('sudo chmod 777 /dev/ttyACM0');
-
 delete(instrfindall);
+% ser = serial('COM16');
+system('sudo chmod 777 /dev/ttyACM0');
 ser = serial('/dev/ttyACM0');
 ser.BaudRate = 115200;
 ser.Timeout = 1;

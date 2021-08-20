@@ -687,18 +687,45 @@ classdef fc_reg
 				obj.write(37, uint32(x));
 			end
 		end
-		function y = DEBUG_INT(obj,x)
+		function y = VTX(obj,x)
 			if nargin < 2
 				y = obj.read(38);
 			else
 				obj.write(38, uint32(x));
 			end
 		end
+		function y = VTX__CHAN(obj,x)
+			r = double(obj.read(38));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 255), 0)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 0), 255) + bitand(r, 4294967040);
+				obj.write(38, uint32(w));
+			end
+		end
+		function y = VTX__PWR(obj,x)
+			r = double(obj.read(38));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 65280), -8)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 8), 65280) + bitand(r, 4294902015);
+				obj.write(38, uint32(w));
+			end
+		end
+		function y = DEBUG_INT(obj,x)
+			if nargin < 2
+				y = obj.read(39);
+			else
+				obj.write(39, uint32(x));
+			end
+		end
 		function y = DEBUG_FLOAT(obj,x)
 			if nargin < 2
-				y = typecast(obj.read(39), 'single');
+				y = typecast(obj.read(40), 'single');
 			else
-				obj.write(39, typecast(single(x), 'uint32'));
+				obj.write(40, typecast(single(x), 'uint32'));
 			end
 		end
 	end
@@ -784,7 +811,10 @@ classdef fc_reg
 			'MPU_CFG__FILT', [36,1,0,2],...
 			'MPU_CFG__RATE', [36,1,0,2],...
 			'FC_CFG', [37,1,0,0],...
-			'DEBUG_INT', [38,0,0,0],...
-			'DEBUG_FLOAT', [39,0,1,0] );
+			'VTX', [38,0,0,1],...
+			'VTX__CHAN', [38,0,0,2],...
+			'VTX__PWR', [38,0,0,2],...
+			'DEBUG_INT', [39,0,0,0],...
+			'DEBUG_FLOAT', [40,0,1,0] );
 	end
 end

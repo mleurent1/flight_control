@@ -16,7 +16,7 @@ volatile uint8_t sma_nbytes_to_receive = 0;
 volatile uint8_t vtx_current_chan = 0;
 volatile uint8_t vtx_current_pwr = 0;
 
-/* Private Functions -----------------------*/
+/* Public Functions -----------------------*/
 
 // Wait for end of Smart Audio transaction
 void wait_sma(void)
@@ -24,8 +24,6 @@ void wait_sma(void)
 	while (sma_nbytes_to_receive > 0)
 		__WFI();
 }
-
-/* Public Functions -----------------------*/
 
 void sma_send_cmd(enum sma_cmd_e sma_cmd, uint8_t data)
 {
@@ -70,8 +68,6 @@ void sma_send_cmd(enum sma_cmd_e sma_cmd, uint8_t data)
 void sma_process_resp(void)
 {
 	uint8_t cmd, len, crc_calc;
-
-	wait_sma();
 
 	cmd = sma_data_received[3];
 	len = sma_data_received[4] + 5;

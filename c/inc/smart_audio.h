@@ -16,6 +16,7 @@ extern volatile uint8_t vtx_current_pwr;
 
 /* Public functions -----------------*/
 
+void wait_sma(void);
 void sma_send_cmd(enum sma_cmd_e sma_cmd, uint8_t data);
 void sma_process_resp(void);
 

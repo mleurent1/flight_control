@@ -692,7 +692,9 @@ void board_init()
 	DMA1_Channel4->CPAR = (uint32_t)&(USART1->TDR);
 
 	sma_send_cmd(SMA_GET_SETTINGS, 0);
+	wait_sma();
 	sma_process_resp();
+	REG_VTX = (vtx_current_chan << REG_VTX__CHAN_Pos) | (vtx_current_pwr << REG_VTX__PWR_Pos);
 
 #endif
 

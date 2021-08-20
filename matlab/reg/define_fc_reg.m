@@ -256,6 +256,13 @@ reg(n).flash = 1;
 reg(n).subf{1} = {'I_TRANSFER',0,0,'uint8',1};
 
 n = n + 1;
+reg(n).name = 'VTX';
+reg(n).read_only = 0;
+reg(n).flash = 0;
+reg(n).subf{1} = {'CHAN',7,0,'uint8',0};
+reg(n).subf{2} = {'PWR',15,8,'uint8',0};
+
+n = n + 1;
 reg(n).name = 'DEBUG_INT';
 reg(n).read_only = 0;
 reg(n).flash = 0;

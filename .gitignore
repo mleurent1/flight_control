@@ -1,6 +1,7 @@
 *.bin
 *.hex
 *.o
-CURRENT_BOARD
+CURRENT_DRONE
 .vscode/ipch/*
 old
+matlab/*.asv
