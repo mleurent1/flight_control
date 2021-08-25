@@ -17,7 +17,6 @@
 #define MOTOR_MAX 2000
 #define I_MAX 300.0f
 #define PID_MAX 600.0f
-#define TIME_FILTER_ALPHA 0.1f
 #define STATUS_PERIOD 100 // ms
 
 /* Private macros ------------------------------------------*/
@@ -28,7 +27,8 @@
 
 sensor_raw_t sensor_raw;
 radio_frame_t radio_frame;
-volatile float vbat, ibat;
+volatile float vbat;
+volatile float ibat = 0;
 
 volatile uint8_t sensor_error_count = 0;
 volatile uint8_t radio_error_count = 0;
@@ -61,7 +61,6 @@ int main(void)
 	_Bool flag_armed = 0;
 	_Bool flag_acro = 0;
 	_Bool flag_acro_z = 0;
-	_Bool flag_beep_radio = 0;
 	_Bool flag_sensor_timeout = 0;
 	_Bool flag_radio_timeout = 0;
 	_Bool flag_proc = 0;
@@ -127,9 +126,10 @@ int main(void)
 	host_buffer_tx_t host_buffer_tx;
 
 	int32_t t_proc = 0;
-	float t_proc_mean = 0;
 	uint16_t t_proc_max = 0;
-	uint16_t t_proc_min = 0xFFFF;
+	uint16_t t_proc_max_hold = 0;
+
+	uint8_t grb[3];
 
 	/* Init -----------------------------------------------------*/
 
@@ -208,12 +208,6 @@ int main(void)
 				
 				// Exponential
 				radio_expo(&radio, flag_acro);
-
-				// Beep command
-				if (radio.aux[2] > 0.5f)
-					flag_beep_radio = 1;
-				else
-					flag_beep_radio = 0;
 			}
 		}
 
@@ -396,7 +390,9 @@ int main(void)
 
 			vbat_smoothed += filter_alpha_vbat * vbat - filter_alpha_vbat * vbat_smoothed; // low-pass filter
 			vbat_cell = vbat_smoothed / nb_cells;
-			imah += ibat / 3.6f;
+			#ifdef IBAT
+				imah += ibat / 3600.0f;
+			#endif
 		}
 
 		/* Flight controller status: LED, beeper, timeout and debug output -----------------------------------------------*/
@@ -463,7 +459,7 @@ int main(void)
 				}
 
 				// beep when requested by user or, timeout on sensor or radio samples, or vbat too low
-				if (flag_beep_radio || flag_sensor_timeout || flag_radio_timeout || ((vbat_smoothed < REG_VBAT_MIN) && (vbat_smoothed > 3.0f)) || (REG_CTRL__BEEP_TEST == 1)) {
+				if ((radio.aux[2] > 0.5f) || flag_sensor_timeout || flag_radio_timeout || ((vbat_cell < REG_VBAT_MIN) && (nb_cells > 0)) || (REG_CTRL__BEEP_TEST == 1)) {
 					if ((status_cnt & 0x03) == 0)
 						toggle_beeper(1);
 				}
@@ -478,6 +474,21 @@ int main(void)
 				#ifdef OSD
 					// OSD telemetry
 					osd_telemetry(vbat_cell, ibat, imah, t_s, t_min);
+				#endif
+
+				#ifdef LED
+					// Change LED color
+					if (radio.aux[3] < 0.5f) {
+						grb[0] = (uint8_t)((0.5f-radio.aux[3])*510.0f);
+						grb[1] = (uint8_t)(radio.aux[3]*510.0f);
+						grb[2] = 0;
+					}
+					else {
+						grb[0] = 0;
+						grb[1] = (uint8_t)((1.0f-radio.aux[3])*510.0f);
+						grb[2] = (uint8_t)((radio.aux[3]-0.5f)*510.0f);
+					}
+					set_leds(grb);
 				#endif
 
 				// Send data to host
@@ -513,19 +524,18 @@ int main(void)
 					host_buffer_tx.u16[21*2+1] = motor_raw[1];
 					host_buffer_tx.u16[22*2]   = motor_raw[2];
 					host_buffer_tx.u16[22*2+1] = motor_raw[3];
-					host_buffer_tx.f[23] = t_proc_mean;
-					host_buffer_tx.u16[24*2]   = t_proc_max;
-					host_buffer_tx.u16[24*2+1] = t_proc_min;
-					host_send(host_buffer_tx.u8, 25*4);
+					host_buffer_tx.u16[23*2]   = t_proc_max;
+					host_buffer_tx.u16[23*2+1] = t_proc_max_hold;
+					host_send(host_buffer_tx.u8, 24*4);
 				}
 				else if (REG_CTRL__DEBUG_RADIO) {
 					memcpy(host_buffer_tx.u8, radio_frame1.bytes, sizeof(radio_frame1));
 					host_send(host_buffer_tx.u8, sizeof(radio_frame1));
 				}
 
-				// Reset min/max processing time
+				// Reset max processing time
 				t_proc_max = 0;
-				t_proc_min = 0xFFFF;
+				t_proc_max_hold = 0;
 			}
 		}
 
@@ -546,11 +556,10 @@ int main(void)
 			t_proc += (int32_t)get_t_us();
 			if (t_proc < 0)
 				t_proc += 0x0000FFFF;
-			t_proc_mean += TIME_FILTER_ALPHA * (float)t_proc - TIME_FILTER_ALPHA * t_proc_mean;
 			if ((uint16_t)t_proc > t_proc_max)
 				t_proc_max = (uint16_t)t_proc;
-			if ((uint16_t)t_proc < t_proc_min)
-				t_proc_min = (uint16_t)t_proc;
+			if ((uint16_t)t_proc > t_proc_max_hold)
+				t_proc_max_hold = (uint16_t)t_proc;
 
 			// Reset processing time measurement
 			flag_proc = 1;

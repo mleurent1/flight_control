@@ -56,7 +56,7 @@ int32_t uint32_to_int32(uint32_t x)
 void dshot_encode(volatile uint16_t* val, volatile uint8_t buf[16], _Bool telemetry)
 {
 	int i;
-	uint8_t bit[11];
+	_Bool bit[11];
 	for (i=0; i<11; i++)
 	{
 		buf[i] = (*val & (1 << (10-i))) ? 60 : 30;

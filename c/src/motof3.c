@@ -11,7 +11,7 @@
 /* Private defines ------------------------------------*/
 
 #define VBAT_SCALE 0.0089f
-#define IBAT_SCALE 0.04f
+#define IBAT_SCALE 0.0293f
 
 /* Private macros ------------------------------------------*/
 
@@ -24,7 +24,7 @@ volatile uint8_t i2c2_tx_buffer[2];
 volatile uint8_t i2c2_rx_bytes_to_read;
 volatile uint8_t i2c2_tx_bytes_written;
 #if (ESC == DSHOT)
-	volatile uint32_t dshot[17*4];
+	volatile uint8_t dshot[17*4];
 #endif
 volatile _Bool sensor_busy;
 volatile int32_t time_sensor_start;
@@ -32,6 +32,9 @@ volatile uint8_t uart1_tx_buffer[16];
 volatile uint8_t uart2_tx_buffer[4];
 volatile uint8_t uart3_tx_buffer[3];
 volatile uint8_t uart1_rx_nbytes;
+#ifdef LED
+	volatile uint8_t led_buffer[24*LED+1];
+#endif
 
 /* Private functions ------------------------------------------------*/
 
@@ -102,10 +105,10 @@ void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
 		dshot_encode(&motor_raw[2], motor3_dshot, motor_telemetry[2]);
 		dshot_encode(&motor_raw[3], motor4_dshot, motor_telemetry[3]);
 		for (i=0; i<16; i++) {
-			dshot[i*4+0] = (uint32_t)motor1_dshot[i];
-			dshot[i*4+1] = (uint32_t)motor2_dshot[i];
-			dshot[i*4+2] = (uint32_t)motor3_dshot[i];
-			dshot[i*4+3] = (uint32_t)motor4_dshot[i];
+			dshot[i*4+0] = motor1_dshot[i];
+			dshot[i*4+1] = motor2_dshot[i];
+			dshot[i*4+2] = motor3_dshot[i];
+			dshot[i*4+3] = motor4_dshot[i];
 		}
 
 		DMA1_Channel3->CNDTR = 17*4;
@@ -181,6 +184,38 @@ void sma_send(uint8_t * data, uint8_t size)
 	DMA1_Channel4->CCR |= DMA_CCR_EN;
 	USART1->CR1 |= USART_CR1_TE;
 }
+
+#ifdef LED
+
+	void set_leds(uint8_t * grb)
+	{
+		int i;
+
+		if (DMA2_Channel5->CNDTR == 0) {
+			TIM8->DIER = 0;
+			TIM8->CR1 = 0;
+			TIM8->CNT = 40;
+			DMA2->IFCR = DMA_IFCR_CGIF5; // Clear all DMA flags
+			DMA2_Channel5->CCR &= ~DMA_CCR_EN; // Disable DMA
+
+			for (i=0; i<8; i++) {
+				led_buffer[ 0+i] = (grb[0] & (1 << (7-i))) ? 38 : 19;
+				led_buffer[ 8+i] = (grb[1] & (1 << (7-i))) ? 38 : 19;
+				led_buffer[16+i] = (grb[2] & (1 << (7-i))) ? 38 : 19;
+			}
+			for (i=1; i<LED; i++) {
+				memcpy((uint8_t*)&led_buffer[i*24], (uint8_t*)&led_buffer[(i-1)*24], 24);
+			}
+			led_buffer[24*LED] = 0;
+
+			DMA2_Channel5->CNDTR = 24*LED+1;
+			DMA2_Channel5->CCR |= DMA_CCR_EN;
+			TIM8->DIER = TIM_DIER_CC2DE;
+			TIM8->CR1 = TIM_CR1_CEN;
+		}
+	}
+
+#endif
 
 /* --------------------------------------------------------------------------------
  Interrupt routines
@@ -290,7 +325,9 @@ void ADC1_2_IRQHandler()
 	ADC2->ISR = ADC_ISR_JEOS; // Clear IRQ
 
 	vbat = (float)ADC2->JDR1 * VBAT_SCALE;
-	ibat = (float)ADC2->JDR2 * IBAT_SCALE;
+	#ifdef IBAT
+		ibat = (float)ADC2->JDR2 * IBAT_SCALE;
+	#endif
 	flag_vbat = 1;
 }
 
@@ -382,7 +419,7 @@ void board_init()
 	SysTick_Config(48000);
 
 	// DMA clock enable
-	RCC->AHBENR |= RCC_AHBENR_DMA1EN;
+	RCC->AHBENR |= RCC_AHBENR_DMA1EN | RCC_AHBENR_DMA2EN;
 
 	// System configuration controller clock enable (to manage external interrupt line connection to GPIOs)
 	RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
@@ -529,7 +566,7 @@ void board_init()
 	dshot[16*4+3] = 0;
 
 	// DMA TIM3_UP
-	DMA1_Channel3->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL | DMA_CCR_PSIZE_1 | DMA_CCR_MSIZE_1;
+	DMA1_Channel3->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PL | DMA_CCR_PSIZE_1;
 	DMA1_Channel3->CMAR = (uint32_t)dshot;
 	DMA1_Channel3->CPAR = (uint32_t)&(TIM3->DMAR);
 #elif (ESC == ONESHOT)
@@ -567,8 +604,10 @@ void board_init()
 		// A5 : VBAT/10
 		GPIOA->MODER |= GPIO_MODER_MODER5;
 	#endif
-	// A7 : PPM, used for IBAT
-	GPIOA->MODER |= GPIO_MODER_MODER7;
+	#ifdef IBAT
+		// A7 : PPM, used for IBAT
+		GPIOA->MODER |= GPIO_MODER_MODER7;
+	#endif
 
 	// ADC Clock enable
 	RCC->AHBENR |= RCC_AHBENR_ADC12EN; 
@@ -595,11 +634,13 @@ void board_init()
 	ADC2->SMPR1 = (4 << ADC_SMPR1_SMP2_Pos) | (4 << ADC_SMPR1_SMP4_Pos);
 	ADC2->SMPR2 = (4 << ADC_SMPR2_SMP12_Pos);
 	#ifdef VBAT_USE_RSSI
-		ADC2->JSQR = (1 << ADC_JSQR_JL_Pos) | (12 << ADC_JSQR_JSQ1_Pos) | (4 << ADC_JSQR_JSQ2_Pos);
+		ADC2->JSQR = 12 << ADC_JSQR_JSQ1_Pos;
 	#else
-		ADC2->JSQR = (1 << ADC_JSQR_JL_Pos) | (2 << ADC_JSQR_JSQ1_Pos) | (4 << ADC_JSQR_JSQ2_Pos);
+		ADC2->JSQR = 2 << ADC_JSQR_JSQ1_Pos;
 	#endif
-	
+	#ifdef IBAT
+		ADC2->JSQR |= (1 << ADC_JSQR_JL_Pos) | (4 << ADC_JSQR_JSQ2_Pos);
+	#endif
 	NVIC_EnableIRQ(ADC1_2_IRQn);
 	NVIC_SetPriority(ADC1_2_IRQn,0);
 
@@ -679,7 +720,7 @@ void board_init()
 
 	// UART config
 	RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
-	USART1->BRR = 9800; // 48MHz/4800bps = 10000 => 48MHz/49000bps = 9800 in order to match TBS unify board Xtal
+	USART1->BRR = 9800; // 48MHz/4800bps = 10000 => 48MHz/4900bps = 9800 in order to match TBS unify board Xtal
 	USART1->CR2 = 2 << USART_CR2_STOP_Pos; // 2 stop bits
 	USART1->CR3 = USART_CR3_DMAT | USART_CR3_HDSEL; // HDSEL: single-wire half-duplex
 	USART1->CR1 = USART_CR1_UE | USART_CR1_TCIE | USART_CR1_RXNEIE;
@@ -695,6 +736,33 @@ void board_init()
 	wait_sma();
 	sma_process_resp();
 	REG_VTX = (vtx_current_chan << REG_VTX__CHAN_Pos) | (vtx_current_pwr << REG_VTX__PWR_Pos);
+
+#endif
+
+	/* LED --------------------------------------------*/
+
+#ifdef LED
+
+	// B8 : LED, to TIM8_CH2, AF10
+	GPIOB->MODER |= GPIO_MODER_MODER8_1;
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR8;
+	GPIOB->AFR[1] |= (10 << GPIO_AFRH_AFRH0_Pos);
+
+	// TIM8 clock enable
+	RCC->APB2ENR |= RCC_APB2ENR_TIM8EN;
+
+	// DMA driven timer for WS2812B LED protocol, 48Mhz: 0:19, 1:38, T:60
+	TIM8->PSC = 0;
+	TIM8->ARR = 60;
+	//TIM8->DIER = TIM_DIER_CC2DE; // Managed in led function
+	TIM8->CCER = TIM_CCER_CC2E;
+	TIM8->CCMR1 = (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
+	TIM8->BDTR = TIM_BDTR_MOE; // output enable
+
+	// DMA TIM8_CH2
+	DMA2_Channel5->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PSIZE_0;
+	DMA2_Channel5->CMAR = (uint32_t)led_buffer;
+	DMA2_Channel5->CPAR = (uint32_t)&(TIM8->CCR2);
 
 #endif
 

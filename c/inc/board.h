@@ -29,5 +29,6 @@ void trig_vbat_meas(void);
 void osd_send(uint8_t * data, uint8_t size);
 void runcam_send(uint8_t * data, uint8_t size);
 void sma_send(uint8_t * data, uint8_t size);
+void set_leds(uint8_t * grb);
 
 #endif

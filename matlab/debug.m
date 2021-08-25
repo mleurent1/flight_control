@@ -6,7 +6,7 @@ global KEY_IS_PRESSED
 
 t_max = 10;
 status_period = 0.1;
-buf_len = 27*4;
+buf_len = 24*4;
 
 KEY_IS_PRESSED = 0;
 
@@ -41,33 +41,30 @@ l{3,2} = line(t,nan(1,len),'Parent',a{3},'Color','r','DisplayName','roll');
 l{4,1} = bar(1:8,zeros(1,8),'Parent',a{4});
 set(a{4},'XTickLabel',{'throttle','pitch','roll','yaw','arm','mode','beep','knob'},'YLim',[-1.05,1.05]);
 
-set(a{5},'XLim',[t(1),t(end)],'YLabel',text('String','vbat (V) ibat (A)'));
+set(a{5},'XLim',[t(1),t(end)],'YLabel',text('String','Vbat (V)'));
 l{5,1} = line(t,nan(1,len),'Parent',a{5},'Color','b');
-l{5,2} = line(t,nan(1,len),'Parent',a{5},'Color','r');
 
-set(a{6},'XLim',[t(1),t(end)],'YLabel',text('String','correction'),'YLim',[-605,605]);
-l{6,1} = line(t,nan(1,len),'Parent',a{6},'Color','b','DisplayName','pitch');
-l{6,2} = line(t,nan(1,len),'Parent',a{6},'Color','r','DisplayName','roll');
-l{6,3} = line(t,nan(1,len),'Parent',a{6},'Color','g','DisplayName','yaw');
+set(a{6},'XLim',[t(1),t(end)],'YLabel',text('String','Ibat (A)'));
+l{6,1} = line(t,nan(1,len),'Parent',a{6},'Color','b');
 
-l{7,1} = bar(1:4,zeros(1,4),'Parent',a{7});
-set(a{7},'XLabel',text('String','motor'),'YLim',[0,2010]);
+set(a{7},'XLim',[t(1),t(end)],'YLabel',text('String','correction'),'YLim',[-605,605]);
+l{7,1} = line(t,nan(1,len),'Parent',a{7},'Color','b','DisplayName','pitch');
+l{7,2} = line(t,nan(1,len),'Parent',a{7},'Color','r','DisplayName','roll');
+l{7,3} = line(t,nan(1,len),'Parent',a{7},'Color','g','DisplayName','yaw');
 
-set(a{8},'XLim',[t(1),t(end)],'YLabel',text('String','time sensor (us)'));%,'YLim',[-10,1010]);
-l{8,1} = line(t,nan(1,len),'Parent',a{8},'Color','b','DisplayName','mean');
-l{8,2} = line(t,nan(1,len),'Parent',a{8},'Color','r','DisplayName','max','LineStyle','--');
-l{8,3} = line(t,nan(1,len),'Parent',a{8},'Color','r','DisplayName','min','LineStyle','--');
+l{8,1} = bar(1:4,zeros(1,4),'Parent',a{8});
+set(a{8},'XLabel',text('String','motor'),'YLim',[0,2010]);
 
 set(a{9},'XLim',[t(1),t(end)],'YLabel',text('String','time process (us)'));%,'YLim',[-10,1010]);
-l{9,1} = line(t,nan(1,len),'Parent',a{9},'Color','b','DisplayName','mean');
-l{9,2} = line(t,nan(1,len),'Parent',a{9},'Color','r','DisplayName','max','LineStyle','--');
-l{9,3} = line(t,nan(1,len),'Parent',a{9},'Color','r','DisplayName','min','LineStyle','--');
+l{9,1} = line(t,nan(1,len),'Parent',a{9},'Color','b','DisplayName','max');
+l{9,2} = line(t,nan(1,len),'Parent',a{9},'Color','r','DisplayName','max hold','LineStyle','--');
 
-for n = [1,2,3,6,8,9]
+for n = [1,2,3,7,9]
 	set(a{n},'XLabel',text('String','time (s)'));
 	%legend(a{n},'show','Location','NorthWest')
 end
 set(a{5},'XLabel',text('String','time (s)'));
+set(a{6},'XLabel',text('String','time (s)'));
 
 sensor.gyro_x = nan(1,len);
 sensor.gyro_y = nan(1,len);
@@ -95,8 +92,7 @@ yaw = nan(1,len);
 
 motor = zeros(4,1);
 
-t_sensor = nan(3,len);
-t_processing = nan(3,len);
+t_processing = nan(2,len);
 
 while ser.BytesAvailable > 0
 	fread(ser,ser.BytesAvailable);
@@ -130,8 +126,7 @@ while ~KEY_IS_PRESSED
 		roll(1:len-d) = roll(d+1:len);
 		yaw(1:len-d) = yaw(d+1:len);
 		
-		for m = 1:3
-			t_sensor(m,1:len-d) = t_sensor(m,d+1:len);
+		for m = 1:2
 			t_processing(m,1:len-d) = t_processing(m,d+1:len);
 		end
 
@@ -186,15 +181,7 @@ while ~KEY_IS_PRESSED
 			n = n + 2;
 		end
 
-		t_sensor(1,len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
-		n = n + 4;
-		for m = 2:3
-			t_sensor(m,len1:len) = 2^8*r(n+2,:) + r(n+1,:);
-			n = n + 2;
-		end
-		t_processing(1,len1:len) = typecast(uint32(2^24*r(n+4,:) + 2^16*r(n+3,:) + 2^8*r(n+2,:) + r(n+1,:)), 'single');
-		n = n + 4;
-		for m = 2:3
+		for m = 1:2
 			t_processing(m,len1:len) = 2^8*r(n+2,:) + r(n+1,:);
 			n = n + 2;
 		end
@@ -213,16 +200,16 @@ while ~KEY_IS_PRESSED
 		set(l{4,1},'YData',[radio.throttle, radio.pitch, radio.roll, radio.yaw, radio.aux(1), radio.aux(2), radio.aux(3), radio.aux(4)]);
 
 		set(l{5,1},'YData',vbat);
-      set(l{5,2},'YData',ibat);
+      
+      set(l{6,1},'YData',ibat);
 		
-		set(l{6,1},'YData',pitch);
-		set(l{6,2},'YData',roll);
-		set(l{6,3},'YData',yaw);
+		set(l{7,1},'YData',pitch);
+		set(l{7,2},'YData',roll);
+		set(l{7,3},'YData',yaw);
 		
-		set(l{7,1},'YData',motor);
+		set(l{8,1},'YData',motor);
 		
-		for m = 1:3
-			set(l{8,m},'YData',t_sensor(m,:));
+		for m = 1:2
 			set(l{9,m},'YData',t_processing(m,:));
 		end
 		

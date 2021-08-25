@@ -46,13 +46,14 @@ vtx_freq = [
    5621 5584 5547 5510 5473 5436 5399 5362];
 
 vtx = sprintf('%s %d %4d', vtx_band(1,:), 0, vtx_freq(1,1));
-str = [vtx - 'A' + 11, 255];
 
-fprintf('const uint8_t vtx_str[%d][%d] = {\n\t{', numel(vtx_freq),length(str));
+fprintf('const uint8_t vtx_str[%d][%d] = {\n\t{', numel(vtx_freq),length(vtx)+1);
 for n = 1:6
    for m = 1:8
       vtx = sprintf('%s %d %4d', vtx_band(n,:), m, vtx_freq(n,m));
       str = [vtx - 'A' + 11, 255];
+      str(str==-6) = 10;
+      str((str>=-5) & (str<=3)) = str((str>=-5) & (str<=3)) + 6;
       str(str<0) = 0;
       fprintf('0x%02X, ',fliplr(str))
       if (m == 8) && (n == 6)
