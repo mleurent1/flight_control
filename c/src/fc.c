@@ -130,6 +130,7 @@ int main(void)
 	uint16_t t_proc_max_hold = 0;
 
 	uint8_t grb[3];
+	_Bool led_en = 1;
 
 	/* Init -----------------------------------------------------*/
 
@@ -156,7 +157,7 @@ int main(void)
 	d_roll  = REG_D_ROLL;
 
 	vbat_smoothed = vbat;
-	nb_cells = floor(vbat / 3.3f);
+	nb_cells = floor(vbat / 3.6f);
 	vbat_cell = vbat / nb_cells;
 
 	/* Loop ----------------------------------------------------------------------------
@@ -460,11 +461,15 @@ int main(void)
 
 				// beep when requested by user or, timeout on sensor or radio samples, or vbat too low
 				if ((radio.aux[2] > 0.5f) || flag_sensor_timeout || flag_radio_timeout || ((vbat_cell < REG_VBAT_MIN) && (nb_cells > 0)) || (REG_CTRL__BEEP_TEST == 1)) {
-					if ((status_cnt & 0x03) == 0)
+					if ((status_cnt & 0x03) == 0) {
 						toggle_beeper(1);
+						led_en ^= 1;
+					}
 				}
-				else
+				else {
 					toggle_beeper(0);
+					led_en = 1;
+				}
 
 				// Set flags, to be cleared when new samples are ready
 				flag_sensor_timeout = 1;
@@ -479,14 +484,14 @@ int main(void)
 				#ifdef LED
 					// Change LED color
 					if (radio.aux[3] < 0.5f) {
-						grb[0] = (uint8_t)((0.5f-radio.aux[3])*510.0f);
-						grb[1] = (uint8_t)(radio.aux[3]*510.0f);
+						grb[0] = (uint8_t)((0.5f-radio.aux[3])*510.0f) * led_en;
+						grb[1] = (uint8_t)(radio.aux[3]*510.0f) * led_en;
 						grb[2] = 0;
 					}
 					else {
 						grb[0] = 0;
-						grb[1] = (uint8_t)((1.0f-radio.aux[3])*510.0f);
-						grb[2] = (uint8_t)((radio.aux[3]-0.5f)*510.0f);
+						grb[1] = (uint8_t)((1.0f-radio.aux[3])*510.0f) * led_en;
+						grb[2] = (uint8_t)((radio.aux[3]-0.5f)*510.0f) * led_en;
 					}
 					set_leds(grb);
 				#endif
