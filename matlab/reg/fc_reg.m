@@ -230,7 +230,7 @@ classdef fc_reg
 				obj.write(6, uint32(x));
 			end
 		end
-		function y = TIME_CONSTANT__ACCEL(obj,x)
+		function y = TIME_CONSTANT__VBAT(obj,x)
 			r = double(obj.read(6));
 			if nargin < 2
 				z = typecast(uint32(bitshift(bitand(r, 65535), 0)),'uint16');
@@ -240,7 +240,7 @@ classdef fc_reg
 				obj.write(6, uint32(w));
 			end
 		end
-		function y = TIME_CONSTANT__VBAT(obj,x)
+		function y = TIME_CONSTANT__IBAT(obj,x)
 			r = double(obj.read(6));
 			if nargin < 2
 				z = typecast(uint32(bitshift(bitand(r, 4294901760), -16)),'uint16');
@@ -250,11 +250,31 @@ classdef fc_reg
 				obj.write(6, uint32(w));
 			end
 		end
-		function y = TIME_CONSTANT_RADIO(obj,x)
+		function y = TIME_CONSTANT_2(obj,x)
 			if nargin < 2
 				y = obj.read(7);
 			else
 				obj.write(7, uint32(x));
+			end
+		end
+		function y = TIME_CONSTANT_2__ACCEL(obj,x)
+			r = double(obj.read(7));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 65535), 0)),'uint16');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 0), 65535) + bitand(r, 4294901760);
+				obj.write(7, uint32(w));
+			end
+		end
+		function y = TIME_CONSTANT_2__RADIO(obj,x)
+			r = double(obj.read(7));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 4294901760), -16)),'uint16');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 16), 4294901760) + bitand(r, 65535);
+				obj.write(7, uint32(w));
 			end
 		end
 		function y = EXPO_PITCH_ROLL(obj,x)
@@ -714,18 +734,32 @@ classdef fc_reg
 				obj.write(38, uint32(w));
 			end
 		end
-		function y = DEBUG_INT(obj,x)
+		function y = VBAT_SCALE(obj,x)
 			if nargin < 2
-				y = obj.read(39);
+				y = typecast(obj.read(39), 'single');
 			else
-				obj.write(39, uint32(x));
+				obj.write(39, typecast(single(x), 'uint32'));
 			end
 		end
-		function y = DEBUG_FLOAT(obj,x)
+		function y = IBAT_SCALE(obj,x)
 			if nargin < 2
 				y = typecast(obj.read(40), 'single');
 			else
 				obj.write(40, typecast(single(x), 'uint32'));
+			end
+		end
+		function y = DEBUG_INT(obj,x)
+			if nargin < 2
+				y = obj.read(41);
+			else
+				obj.write(41, uint32(x));
+			end
+		end
+		function y = DEBUG_FLOAT(obj,x)
+			if nargin < 2
+				y = typecast(obj.read(42), 'single');
+			else
+				obj.write(42, typecast(single(x), 'uint32'));
 			end
 		end
 	end
@@ -756,9 +790,11 @@ classdef fc_reg
 			'ERROR__CRC', [4,0,0,2],...
 			'VBAT_MIN', [5,1,1,0],...
 			'TIME_CONSTANT', [6,1,0,1],...
-			'TIME_CONSTANT__ACCEL', [6,1,0,2],...
 			'TIME_CONSTANT__VBAT', [6,1,0,2],...
-			'TIME_CONSTANT_RADIO', [7,1,0,0],...
+			'TIME_CONSTANT__IBAT', [6,1,0,2],...
+			'TIME_CONSTANT_2', [7,1,0,1],...
+			'TIME_CONSTANT_2__ACCEL', [7,1,0,2],...
+			'TIME_CONSTANT_2__RADIO', [7,1,0,2],...
 			'EXPO_PITCH_ROLL', [8,1,1,0],...
 			'EXPO_YAW', [9,1,1,0],...
 			'MOTOR', [10,1,0,1],...
@@ -814,7 +850,9 @@ classdef fc_reg
 			'VTX', [38,0,0,1],...
 			'VTX__CHAN', [38,0,0,2],...
 			'VTX__PWR', [38,0,0,2],...
-			'DEBUG_INT', [39,0,0,0],...
-			'DEBUG_FLOAT', [40,0,1,0] );
+			'VBAT_SCALE', [39,1,1,0],...
+			'IBAT_SCALE', [40,1,1,0],...
+			'DEBUG_INT', [41,0,0,0],...
+			'DEBUG_FLOAT', [42,0,1,0] );
 	end
 end

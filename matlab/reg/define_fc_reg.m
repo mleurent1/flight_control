@@ -5,7 +5,7 @@ n = n + 1;
 reg(n).name = 'VERSION';
 reg(n).read_only = 1;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VERSION',7,0,'uint8',0};
+reg(n).subf{1} = {'VERSION',7,0,'uint8',37};
 
 n = n + 1;
 reg(n).name = 'STATUS';
@@ -48,26 +48,27 @@ n = n + 1;
 reg(n).name = 'VBAT_MIN';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VBAT_MIN',31,0,'single',3.7};
+reg(n).subf{1} = {'VBAT_MIN',31,0,'single',3.6};
 
 n = n + 1;
 reg(n).name = 'TIME_CONSTANT';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'ACCEL',15,0,'uint16',2000};
-reg(n).subf{2} = {'VBAT',31,16,'uint16',5000};
+reg(n).subf{1} = {'VBAT',15,0,'uint16',5000};
+reg(n).subf{2} = {'IBAT',31,16,'uint16',100};
 
 n = n + 1;
-reg(n).name = 'TIME_CONSTANT_RADIO';
+reg(n).name = 'TIME_CONSTANT_2';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'TIME_CONSTANT_RADIO',15,0,'uint16',100};
+reg(n).subf{1} = {'ACCEL',15,0,'uint16',2000};
+reg(n).subf{2} = {'RADIO',31,16,'uint16',100};
 
 n = n + 1;
 reg(n).name = 'EXPO_PITCH_ROLL';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'EXPO_PITCH_ROLL',31,0,'single',3};
+reg(n).subf{1} = {'EXPO_PITCH_ROLL',31,0,'single',2};
 
 n = n + 1;
 reg(n).name = 'EXPO_YAW';
@@ -79,7 +80,7 @@ n = n + 1;
 reg(n).name = 'MOTOR';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'START',9,0,'uint16',50};
+reg(n).subf{1} = {'START',9,0,'uint16',48};
 reg(n).subf{2} = {'ARMED',19,10,'uint16',200};
 reg(n).subf{3} = {'RANGE',30,20,'uint16',1700};
 
@@ -87,7 +88,7 @@ n = n + 1;
 reg(n).name = 'RATE';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'PITCH_ROLL',11,0,'uint16',900};
+reg(n).subf{1} = {'PITCH_ROLL',11,0,'uint16',540};
 reg(n).subf{2} = {'YAW',23,12,'uint16',540};
 reg(n).subf{3} = {'ANGLE',31,24,'uint8',45};
 
@@ -261,6 +262,18 @@ reg(n).read_only = 0;
 reg(n).flash = 0;
 reg(n).subf{1} = {'CHAN',7,0,'uint8',0};
 reg(n).subf{2} = {'PWR',15,8,'uint8',0};
+
+n = n + 1;
+reg(n).name = 'VBAT_SCALE';
+reg(n).read_only = 0;
+reg(n).flash = 1;
+reg(n).subf{1} = {'VBAT_SCALE',31,0,'single',0.008057};
+
+n = n + 1;
+reg(n).name = 'IBAT_SCALE';
+reg(n).read_only = 0;
+reg(n).flash = 1;
+reg(n).subf{1} = {'IBAT_SCALE',31,0,'single',0.0293};
 
 n = n + 1;
 reg(n).name = 'DEBUG_INT';

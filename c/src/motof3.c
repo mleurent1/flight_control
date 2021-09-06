@@ -10,9 +10,6 @@
 
 /* Private defines ------------------------------------*/
 
-#define VBAT_SCALE 0.0089f
-#define IBAT_SCALE 0.0293f
-
 /* Private macros ------------------------------------------*/
 
 /* Private types --------------------------------------*/
@@ -324,9 +321,9 @@ void ADC1_2_IRQHandler()
 {
 	ADC2->ISR = ADC_ISR_JEOS; // Clear IRQ
 
-	vbat = (float)ADC2->JDR1 * VBAT_SCALE;
+	vbat = (float)ADC2->JDR1 * REG_VBAT_SCALE;
 	#ifdef IBAT
-		ibat = (float)ADC2->JDR2 * IBAT_SCALE;
+		ibat = (float)ADC2->JDR2 * REG_IBAT_SCALE;
 	#endif
 	flag_vbat = 1;
 }

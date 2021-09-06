@@ -14,18 +14,18 @@ uint32_t reg[NB_REG];
 float regf[NB_REG];
 const reg_properties_t reg_properties[NB_REG] =
 {
-	{1, 1, 0, 36}, // VERSION
+	{1, 1, 0, 37}, // VERSION
 	{1, 0, 0, 0}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
 	{1, 0, 0, 0}, // ERROR
-	{0, 1, 1, 1080872141}, // VBAT_MIN
-	{0, 1, 0, 327682000}, // TIME_CONSTANT
-	{0, 1, 0, 100}, // TIME_CONSTANT_RADIO
-	{0, 1, 1, 1077936128}, // EXPO_PITCH_ROLL
+	{0, 1, 1, 1080452710}, // VBAT_MIN
+	{0, 1, 0, 6558600}, // TIME_CONSTANT
+	{0, 1, 0, 6555600}, // TIME_CONSTANT_2
+	{0, 1, 1, 1073741824}, // EXPO_PITCH_ROLL
 	{0, 1, 1, 1073741824}, // EXPO_YAW
-	{0, 1, 0, 1782784050}, // MOTOR
-	{0, 1, 0, 757187460}, // RATE
+	{0, 1, 0, 1782784048}, // MOTOR
+	{0, 1, 0, 757187100}, // RATE
 	{0, 1, 1, 1073741824}, // P_PITCH
 	{0, 1, 1, 1000593162}, // I_PITCH
 	{0, 1, 1, 0}, // D_PITCH
@@ -53,6 +53,8 @@ const reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 0, 1}, // MPU_CFG
 	{0, 1, 0, 1}, // FC_CFG
 	{0, 0, 0, 0}, // VTX
+	{0, 1, 1, 1006895490}, // VBAT_SCALE
+	{0, 1, 1, 1022363278}, // IBAT_SCALE
 	{0, 0, 0, 0}, // DEBUG_INT
 	{0, 0, 1, 0} // DEBUG_FLOAT
 };
@@ -69,9 +71,10 @@ const reg_properties_t reg_properties[NB_REG] =
 #endif
 
 float sensor_rate;
-float filter_alpha_radio;
-float filter_alpha_accel;
 float filter_alpha_vbat;
+float filter_alpha_ibat;
+float filter_alpha_accel;
+float filter_alpha_radio;
 
 /* Private functions ---------------------------------------*/
 
@@ -139,18 +142,22 @@ void reg_init(void)
 	}
 
 	sensor_rate = 1000.0f / (float)(REG_MPU_CFG__RATE+1);
-	if (REG_TIME_CONSTANT_RADIO == 0)
-		filter_alpha_radio = 1.0f;
-	else
-		filter_alpha_radio = 1.0f / (float)REG_TIME_CONSTANT_RADIO;
-	if (REG_TIME_CONSTANT__ACCEL == 0)
-		filter_alpha_accel = 1.0f;
-	else
-		filter_alpha_accel = 1.0f / (float)REG_TIME_CONSTANT__ACCEL;
 	if (REG_TIME_CONSTANT__VBAT == 0)
 		filter_alpha_vbat  = 1.0f;
 	else
 		filter_alpha_vbat  = 1.0f / (float)REG_TIME_CONSTANT__VBAT;
+	if (REG_TIME_CONSTANT__IBAT == 0)
+		filter_alpha_ibat = 1.0f;
+	else
+		filter_alpha_ibat = 1.0f / (float)REG_TIME_CONSTANT__IBAT;
+	if (REG_TIME_CONSTANT_2__ACCEL == 0)
+		filter_alpha_accel = 1.0f;
+	else
+		filter_alpha_accel = 1.0f / (float)REG_TIME_CONSTANT_2__ACCEL;
+	if (REG_TIME_CONSTANT_2__RADIO <= 7)
+		filter_alpha_radio = 1.0f;
+	else
+		filter_alpha_radio = 7.0f / (float)REG_TIME_CONSTANT_2__RADIO;
 }
 
 void reg_access(host_buffer_rx_t * host_buffer_rx)
@@ -199,21 +206,25 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 							sensor_rate = 1000.0f / (float)(REG_MPU_CFG__RATE+1);
 						}
 					}
-					else if (addr == REG_TIME_CONSTANT_RADIO_Addr) {
-						if (REG_TIME_CONSTANT_RADIO == 0)
-							filter_alpha_radio = 1.0f;
-						else
-							filter_alpha_radio = 1.0f / (float)REG_TIME_CONSTANT_RADIO;
-					}
 					else if (addr == REG_TIME_CONSTANT_Addr) {
-						if (REG_TIME_CONSTANT__ACCEL == 0)
-							filter_alpha_accel = 1.0f;
-						else
-							filter_alpha_accel = 1.0f / (float)REG_TIME_CONSTANT__ACCEL;
 						if (REG_TIME_CONSTANT__VBAT == 0)
 							filter_alpha_vbat  = 1.0f;
 						else
 							filter_alpha_vbat  = 1.0f / (float)REG_TIME_CONSTANT__VBAT;
+						if (REG_TIME_CONSTANT__IBAT == 0)
+							filter_alpha_ibat = 1.0f;
+						else
+							filter_alpha_ibat = 1.0f / (float)REG_TIME_CONSTANT__IBAT;
+					}
+					else if (addr == REG_TIME_CONSTANT_2_Addr) {
+						if (REG_TIME_CONSTANT_2__ACCEL == 0)
+							filter_alpha_accel = 1.0f;
+						else
+							filter_alpha_accel = 1.0f / (float)REG_TIME_CONSTANT_2__ACCEL;
+						if (REG_TIME_CONSTANT_2__RADIO <= 7)
+							filter_alpha_radio = 1.0f;
+						else
+							filter_alpha_radio = 7.0f / (float)REG_TIME_CONSTANT_2__RADIO;
 					}
 					else if (addr == REG_VTX_Addr) {
 						sma_send_cmd(SMA_SET_CHANNEL, REG_VTX__CHAN);

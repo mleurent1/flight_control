@@ -1,17 +1,17 @@
 const reg_properties_t reg_properties[NB_REG] = 
 {
-	{1, 1, 0, 0}, // VERSION
+	{1, 1, 0, 37}, // VERSION
 	{1, 0, 0, 0}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
 	{1, 0, 0, 0}, // ERROR
-	{0, 1, 1, 1080872141}, // VBAT_MIN
-	{0, 1, 0, 327682000}, // TIME_CONSTANT
-	{0, 1, 0, 100}, // TIME_CONSTANT_RADIO
-	{0, 1, 1, 1077936128}, // EXPO_PITCH_ROLL
+	{0, 1, 1, 1080452710}, // VBAT_MIN
+	{0, 1, 0, 6558600}, // TIME_CONSTANT
+	{0, 1, 0, 6555600}, // TIME_CONSTANT_2
+	{0, 1, 1, 1073741824}, // EXPO_PITCH_ROLL
 	{0, 1, 1, 1073741824}, // EXPO_YAW
-	{0, 1, 0, 1782784050}, // MOTOR
-	{0, 1, 0, 757187460}, // RATE
+	{0, 1, 0, 1782784048}, // MOTOR
+	{0, 1, 0, 757187100}, // RATE
 	{0, 1, 1, 1073741824}, // P_PITCH
 	{0, 1, 1, 1000593162}, // I_PITCH
 	{0, 1, 1, 0}, // D_PITCH
@@ -39,6 +39,8 @@ const reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 0, 1}, // MPU_CFG
 	{0, 1, 0, 1}, // FC_CFG
 	{0, 0, 0, 0}, // VTX
+	{0, 1, 1, 1006895490}, // VBAT_SCALE
+	{0, 1, 1, 1022363278}, // IBAT_SCALE
 	{0, 0, 0, 0}, // DEBUG_INT
 	{0, 0, 1, 0} // DEBUG_FLOAT
 };

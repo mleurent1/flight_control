@@ -1,4 +1,4 @@
-#define NB_REG 41
+#define NB_REG 43
 
 #define REG_VERSION reg[0]
 #define REG_VERSION_Addr 0
@@ -61,15 +61,21 @@
 #define REG_VBAT_MIN regf[5]
 #define REG_VBAT_MIN_Addr 5
 #define REG_TIME_CONSTANT reg[6]
-#define REG_TIME_CONSTANT__ACCEL (uint16_t)((reg[6] & 65535U) >> 0)
-#define REG_TIME_CONSTANT__ACCEL_Msk 65535U
-#define REG_TIME_CONSTANT__ACCEL_Pos 0U
-#define REG_TIME_CONSTANT__VBAT (uint16_t)((reg[6] & 4294901760U) >> 16)
-#define REG_TIME_CONSTANT__VBAT_Msk 4294901760U
-#define REG_TIME_CONSTANT__VBAT_Pos 16U
+#define REG_TIME_CONSTANT__VBAT (uint16_t)((reg[6] & 65535U) >> 0)
+#define REG_TIME_CONSTANT__VBAT_Msk 65535U
+#define REG_TIME_CONSTANT__VBAT_Pos 0U
+#define REG_TIME_CONSTANT__IBAT (uint16_t)((reg[6] & 4294901760U) >> 16)
+#define REG_TIME_CONSTANT__IBAT_Msk 4294901760U
+#define REG_TIME_CONSTANT__IBAT_Pos 16U
 #define REG_TIME_CONSTANT_Addr 6
-#define REG_TIME_CONSTANT_RADIO reg[7]
-#define REG_TIME_CONSTANT_RADIO_Addr 7
+#define REG_TIME_CONSTANT_2 reg[7]
+#define REG_TIME_CONSTANT_2__ACCEL (uint16_t)((reg[7] & 65535U) >> 0)
+#define REG_TIME_CONSTANT_2__ACCEL_Msk 65535U
+#define REG_TIME_CONSTANT_2__ACCEL_Pos 0U
+#define REG_TIME_CONSTANT_2__RADIO (uint16_t)((reg[7] & 4294901760U) >> 16)
+#define REG_TIME_CONSTANT_2__RADIO_Msk 4294901760U
+#define REG_TIME_CONSTANT_2__RADIO_Pos 16U
+#define REG_TIME_CONSTANT_2_Addr 7
 #define REG_EXPO_PITCH_ROLL regf[8]
 #define REG_EXPO_PITCH_ROLL_Addr 8
 #define REG_EXPO_YAW regf[9]
@@ -204,7 +210,11 @@
 #define REG_VTX__PWR_Msk 65280U
 #define REG_VTX__PWR_Pos 8U
 #define REG_VTX_Addr 38
-#define REG_DEBUG_INT reg[39]
-#define REG_DEBUG_INT_Addr 39
-#define REG_DEBUG_FLOAT regf[40]
-#define REG_DEBUG_FLOAT_Addr 40
+#define REG_VBAT_SCALE regf[39]
+#define REG_VBAT_SCALE_Addr 39
+#define REG_IBAT_SCALE regf[40]
+#define REG_IBAT_SCALE_Addr 40
+#define REG_DEBUG_INT reg[41]
+#define REG_DEBUG_INT_Addr 41
+#define REG_DEBUG_FLOAT regf[42]
+#define REG_DEBUG_FLOAT_Addr 42

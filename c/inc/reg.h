@@ -42,9 +42,10 @@ typedef union {
 extern uint32_t reg[NB_REG];
 extern float regf[NB_REG];
 extern float sensor_rate;
-extern float filter_alpha_radio;
-extern float filter_alpha_accel;
 extern float filter_alpha_vbat;
+extern float filter_alpha_ibat;
+extern float filter_alpha_accel;
+extern float filter_alpha_radio;
 
 /* Public functions -----------------*/
 

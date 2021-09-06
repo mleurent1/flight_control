@@ -14,7 +14,11 @@
 
 /* Private defines ------------------------------------*/
 
-#define MOTOR_MAX 2000
+#if (ESC == DSHOT)
+	#define MOTOR_MAX 2047
+#else
+	#define MOTOR_MAX SERVO_MAX
+#endif
 #define I_MAX 300.0f
 #define PID_MAX 600.0f
 #define STATUS_PERIOD 100 // ms
@@ -115,6 +119,7 @@ int main(void)
 	float vbat_smoothed;
 	float nb_cells;
 	float vbat_cell;
+	float ibat_smoothed;
 	float imah = 0;
 
 	uint16_t cnt_ms = 0;
@@ -159,6 +164,7 @@ int main(void)
 	vbat_smoothed = vbat;
 	nb_cells = floor(vbat / 3.6f);
 	vbat_cell = vbat / nb_cells;
+	ibat_smoothed = ibat;
 
 	/* Loop ----------------------------------------------------------------------------
 	-----------------------------------------------------------------------------------*/
@@ -392,7 +398,8 @@ int main(void)
 			vbat_smoothed += filter_alpha_vbat * vbat - filter_alpha_vbat * vbat_smoothed; // low-pass filter
 			vbat_cell = vbat_smoothed / nb_cells;
 			#ifdef IBAT
-				imah += ibat / 3600.0f;
+				ibat_smoothed += filter_alpha_ibat * ibat - filter_alpha_ibat * ibat_smoothed; // low-pass filter
+				imah += ibat_smoothed / 3600.0f;
 			#endif
 		}
 
@@ -478,7 +485,7 @@ int main(void)
 
 				#ifdef OSD
 					// OSD telemetry
-					osd_telemetry(vbat_cell, ibat, imah, t_s, t_min);
+					osd_telemetry(vbat_cell, ibat_smoothed, imah, t_s, t_min);
 				#endif
 
 				#ifdef LED
@@ -521,7 +528,7 @@ int main(void)
 					host_buffer_tx.f[14] = radio.aux[2];
 					host_buffer_tx.f[15] = radio.aux[3];
 					host_buffer_tx.f[16] = vbat_smoothed;
-					host_buffer_tx.f[17] = ibat;
+					host_buffer_tx.f[17] = ibat_smoothed;
 					host_buffer_tx.f[18] = pitch;
 					host_buffer_tx.f[19] = roll;
 					host_buffer_tx.f[20] = yaw;

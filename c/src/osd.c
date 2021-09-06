@@ -251,13 +251,13 @@ void osd_init(void)
 void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_min)
 {
 	#ifdef IBAT
-		uint8_t str[27] = {0xFF, 0,0,68,0,0, 0, 44,11,49,0,0,0,0, 0, 11,0,65,0,0,0, 0, 32,0,65,0,0};
+		uint8_t str[28] = {0xFF, 0,0,68,0,0, 0, 44,11,49,0,0,0,0, 0, 11,0,65,0,0,0, 0, 32,0,0,65,0,0};
 	#else
-		uint8_t str[27] = {0xFF, 0,0,68,0,0, 0,  0, 0, 0,0,0,0,0, 0,  0,0, 0,0,0,0, 0, 32,0,65,0,0};
+		uint8_t str[28] = {0xFF, 0,0,68,0,0, 0,  0, 0, 0,0,0,0,0, 0,  0,0, 0,0,0,0, 0, 32,0,0,65,0,0};
 	#endif
 
 	if ((state == TELEMETRY) && (osd_nbytes_to_send == 0) && (osd_nbytes_to_receive == 0)) {
-		float_to_str(vbat, &str[25], &str[23], 2, 1);
+		float_to_str(vbat, &str[26], &str[23], 2, 2);
 		#ifdef IBAT
 			float_to_str(ibat, &str[18], &str[16], 3, 1);
 			float_to_str(imah, &str[10], &str[10], 4, 0);
