@@ -24,7 +24,6 @@ volatile uint8_t i2c2_tx_bytes_written;
 	volatile uint8_t dshot[17*4];
 #endif
 volatile _Bool sensor_busy;
-volatile int32_t time_sensor_start;
 volatile uint8_t uart1_tx_buffer[16];
 volatile uint8_t uart2_tx_buffer[4];
 volatile uint8_t uart3_tx_buffer[3];
@@ -42,7 +41,7 @@ inline __attribute__((always_inline)) void radio_uart_dma_enable(uint8_t size)
 	USART2->CR1 |= USART_CR1_RE;
 }
 
-inline __attribute__((always_inline)) void radio_uart_dma_disable(void)
+inline __attribute__((always_inline)) void radio_uart_dma_disable()
 {
 	DMA1->IFCR = DMA_IFCR_CGIF6; // Clear all DMA flags
 	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
@@ -439,14 +438,14 @@ void board_init()
 	GPIOB->PUPDR = 0;
 	GPIOB->OSPEEDR = 0;
 
-	// A1 : Motor 5, to TIM2_CH2, AF1, NOT USED
-	// A2 : Motor 6, to TIM2_CH3, AF1, USED for Runcam
-	// A3 : Motor 7, NOT USED
-	// A8 : Motor 8, NOT USED
+	// IOs not used:
+	// A1 : Motor 5, to TIM2_CH2, AF1
+	// A3 : Motor 7
+	// A8 : Motor 8
 	// A13: SWDIO, AF0
 	// A14: SWCLK, AF0
-	// B3 : UART2 Tx, AF7, NOT USED
-	// B7 : UART1 Rx, AF7, NOT USED
+	// B3 : UART2 Tx, AF7
+	// B7 : UART1 Rx, AF7
 
 	/* USB ----------------------------------------*/
 

@@ -26,13 +26,12 @@
 /* Global variables --------------------------------------*/
 
 volatile uint8_t spi1_tx_buffer[15];
-volatile uint8_t spi3_rx_buffer[7];
-volatile uint8_t spi3_tx_buffer[7];
 #if (ESC == DSHOT)
 	volatile uint8_t dshot12[17*2];
 	volatile uint8_t dshot34[17*2];
 #endif
 volatile _Bool sensor_busy;
+volatile uint8_t radio_nb_bytes;
 //volatile uint8_t uart1_tx_buffer[16];
 //volatile uint8_t uart2_tx_buffer[4];
 //volatile uint8_t uart3_tx_buffer[3];
@@ -59,25 +58,6 @@ inline __attribute__((always_inline)) void sensor_spi_dma_disable()
 	DMA2_Stream3->CR &= ~DMA_SxCR_EN;
 	while ((DMA2_Stream0->CR & DMA_SxCR_EN) && (DMA2_Stream3->CR & DMA_SxCR_EN)) {}
 	SPI1->CR1 &= ~SPI_CR1_SPE;
-}
-
-inline __attribute__((always_inline)) void rf_spi_dma_enable(uint8_t size)
-{
-	DMA1_Stream0->NDTR = size + 1;
-	DMA1_Stream7->NDTR = size + 1;
-	DMA1_Stream0->CR |= DMA_SxCR_EN;
-	DMA1_Stream7->CR |= DMA_SxCR_EN;
-	SPI3->CR1 |= SPI_CR1_SPE;
-}
-
-inline __attribute__((always_inline)) void rf_spi_dma_disable()
-{
-	DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_0;
-	DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_7;
-	DMA1_Stream0->CR &= ~DMA_SxCR_EN;
-	DMA1_Stream7->CR &= ~DMA_SxCR_EN;
-	while ((DMA1_Stream0->CR & DMA_SxCR_EN) && (DMA1_Stream7->CR & DMA_SxCR_EN)) {}
-	SPI3->CR1 &= ~SPI_CR1_SPE;
 }
 
 inline __attribute__((always_inline)) void radio_uart_dma_enable(uint8_t size)
@@ -120,23 +100,12 @@ void sensor_read(uint8_t addr, uint8_t size)
 	sensor_busy = 1;
 }
 
-void rf_write(uint8_t addr, uint8_t * data, uint8_t size)
-{
-	spi3_tx_buffer[0] = 0x80 | (addr & 0x7F);
-	memcpy((uint8_t *)&spi3_tx_buffer[1], data, size);
-	rf_spi_dma_enable(size);
-}
-
-void rf_read(uint8_t addr, uint8_t size)
-{
-	spi3_tx_buffer[0] = addr & 0x7F;
-	rf_spi_dma_enable(size);
-}
-
 void radio_sync()
 {
 	radio_uart_dma_disable();
-	USART1->CR1 |= USART_CR1_RE | USART_CR1_IDLEIE; // Enable UART with IDLE line detection
+	USART1->SR; USART1->DR; // Clear IDLE and RXNE flags
+	USART1->CR3 &= ~USART_CR3_DMAR;
+	USART1->CR1 |= USART_CR1_RE | USART_CR1_IDLEIE | USART_CR1_RXNEIE;
 }
 
 void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
@@ -155,16 +124,16 @@ void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
 		DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_2;
 		DMA1_Stream2->CR &= ~DMA_SxCR_EN;
 		
-		TIM5->DIER = 0;
-		TIM5->CR1 = 0;
-		TIM5->CNT = 60;
+		TIM4->DIER = 0;
+		TIM4->CR1 = 0;
+		TIM4->CNT = 60;
 		DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_6;
 		DMA1_Stream6->CR &= ~DMA_SxCR_EN;
-		
+
 		dshot_encode(&motor_raw[0], motor2_dshot, motor_telemetry[0]);
 		dshot_encode(&motor_raw[1], motor1_dshot, motor_telemetry[1]);
-		dshot_encode(&motor_raw[2], motor4_dshot, motor_telemetry[2]);
-		dshot_encode(&motor_raw[3], motor3_dshot, motor_telemetry[3]);
+		dshot_encode(&motor_raw[2], motor3_dshot, motor_telemetry[2]);
+		dshot_encode(&motor_raw[3], motor4_dshot, motor_telemetry[3]);
 		for (i=0; i<16; i++) {
 			dshot12[i*2+0] = motor1_dshot[i];
 			dshot12[i*2+1] = motor2_dshot[i];
@@ -175,27 +144,27 @@ void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
 		DMA1_Stream2->NDTR = 17*2;
 		DMA1_Stream2->CR |= DMA_SxCR_EN;
 		TIM3->DIER = TIM_DIER_UDE;
-		
+
 		DMA1_Stream6->NDTR = 17*2;
 		DMA1_Stream6->CR |= DMA_SxCR_EN;
-		TIM5->DIER = TIM_DIER_UDE;
+		TIM4->DIER = TIM_DIER_UDE;
 		
 		TIM3->CR1 = TIM_CR1_CEN;
-		TIM5->CR1 = TIM_CR1_CEN;
+		TIM4->CR1 = TIM_CR1_CEN;
 	}
 #else
-	TIM3->CCR4 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[0];
-	TIM3->CCR3 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[1];
-	TIM5->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[2];
-	TIM5->CCR1 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[3];
+	TIM3->CCR1 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[0];
+	TIM3->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[1];
+	TIM4->CCR1 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[2];
+	TIM4->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[3];
 	TIM3->CR1 |= TIM_CR1_CEN;
-	TIM5->CR1 |= TIM_CR1_CEN;
+	TIM4->CR1 |= TIM_CR1_CEN;
 #endif
 }
 
 void toggle_led()
 {
-	GPIOB->ODR ^= GPIO_ODR_OD5;
+	GPIOC->ODR ^= GPIO_ODR_OD13;
 }
 
 void toggle_beeper(_Bool en)
@@ -214,12 +183,12 @@ void host_send(uint8_t * data, uint8_t size)
 
 int32_t get_t_us(void)
 {
-	return (int32_t)TIM6->CNT;
+	return (int32_t)TIM11->CNT;
 }
 
 void trig_vbat_meas(void)
 {
-	//ADC2->CR |= ADC_CR_JADSTART;
+	ADC1->CR2 |= ADC_CR2_JSWSTART;
 }
 
 void osd_send(uint8_t * data, uint8_t size)
@@ -235,14 +204,14 @@ void osd_send(uint8_t * data, uint8_t size)
 
 void runcam_send(uint8_t * data, uint8_t size)
 {
-	/*DMA1->IFCR = DMA_IFCR_CGIF7; // Clear all DMA flags
-	DMA1_Channel7->CCR &= ~DMA_CCR_EN;
-	USART2->CR1 &= ~USART_CR1_TE;
-
-	memcpy((uint8_t*)uart2_tx_buffer, data, size);
-	DMA1_Channel7->CNDTR = size;
-	DMA1_Channel7->CCR |= DMA_CCR_EN;
-	USART2->CR1 |= USART_CR1_TE;*/
+	DMA2->HIFCR = DMA_CLEAR_ALL_FLAGS_7;
+	DMA2_Stream7->CR &= ~DMA_SxCR_EN;
+	while (DMA2_Stream7->CR & DMA_SxCR_EN) {};
+	USART1->CR1 &= ~USART_CR1_TE;
+	
+	DMA2_Stream7->NDTR = size;
+	DMA2_Stream7->CR |= DMA_SxCR_EN;
+	USART1->CR1 |= USART_CR1_TE;
 }
 
 void sma_send(uint8_t * data, uint8_t size)
@@ -295,14 +264,6 @@ void SysTick_Handler()
 	flag_time = 1;
 }
 
-/* RF Rx Done ----------------------------*/
-
-void EXTI0_IRQHandler()
-{
-	EXTI->PR = EXTI_PR_PR0; // Clear pending request
-	flag_rf_rxtx_done = 1;
-}
-
 /* Sensor ready IRQ ---------------------------*/
 
 void EXTI4_IRQHandler()
@@ -338,42 +299,22 @@ void DMA2_Stream0_IRQHandler()
 	}
 }
 
-/* RF SPI IRQ ---------------------------------------*/
-
-void SPI3_IRQHandler()
-{
-	rf_spi_dma_disable();
-	rf_error_count++;
-}
-
-/* DMA IRQ of RF Rx SPI --------------------------------*/
-
-void DMA1_Stream0_IRQHandler()
-{
-	rf_spi_dma_disable();
-
-	if (REG_CTRL__RF_HOST_CTRL == 1) // Send SPI read data to host
-		host_send((uint8_t*)&spi3_rx_buffer[1],1);
-	else
-		flag_rf = 1;
-}
-
-/* DMA IRQ of RF Rx SPI ------------------------*/
-
-void DMA1_Stream7_IRQHandler()
-{
-	rf_spi_dma_disable();
-	rf_error_count++;
-}
-
 /* Radio UART IRQ ------------------------------*/
 
 void USART1_IRQHandler()
 {
 	if (USART1->SR & USART_SR_IDLE) {
-		USART1->DR; // Clear status flags
-		USART1->CR1 &= ~USART_CR1_IDLEIE; // Disable idle line detection
-		radio_uart_dma_enable(sizeof(radio_frame));
+		USART1->DR; // Clear IDLE flag
+		radio_nb_bytes = sizeof(radio_frame);
+	}
+	else if (USART1->SR & USART_SR_RXNE) {
+		USART1->DR; // clear RXNE flag
+		radio_nb_bytes--;
+		if (radio_nb_bytes == 0) {
+			USART1->CR1 &= ~(USART_CR1_RE | USART_CR1_IDLEIE | USART_CR1_RXNEIE);
+			USART1->CR3 |= USART_CR3_DMAR;
+			radio_uart_dma_enable(sizeof(radio_frame));
+		}
 	}
 	else {
 		USART1->DR; // Clear status flags
@@ -392,18 +333,19 @@ void DMA2_Stream5_IRQHandler()
 }
 
 /* VBAT ADC conversion IRQ -----------------------------*/
-/*
+
 void ADC1_2_IRQHandler()
 {
-	ADC2->ISR = ADC_ISR_JEOS; // Clear IRQ
-
-	vbat = (float)ADC2->JDR1 * REG_VBAT_SCALE;
+	ADC1->SR = ADC_SR_JEOC; // Clear IRQ
+	//ADC1->SR = 0;
+	
+	vbat = (float)ADC1->JDR1 * REG_VBAT_SCALE;
 	#ifdef IBAT
-		ibat = (float)ADC2->JDR2 * REG_IBAT_SCALE;
+		ibat = (float)ADC1->JDR2 * REG_IBAT_SCALE;
 	#endif
 	flag_vbat = 1;
 }
-*/
+
 /* USB interrupt -----------------------------*/
 
 void OTG_FS_IRQHandler()
@@ -524,24 +466,8 @@ void board_init()
 	GPIOD->PUPDR = 0;
 	GPIOD->OSPEEDR = 0;
 	
-	// A9 : UART1 Tx
 	// A13: SWDIO, AF0
 	// A14: SWCLK, AF0
-	
-	// B8 : I2C1 SCL, AF4
-	// B9 : I2C1 SDA, AF4
-	// B12: Input 3
-	// B13: Input 4
-	// B14: Input 5
-	// B15: Input 6
-	
-	// C1 : Current sensor
-	// C4 : MPU interrupt
-	// C5 : 5V sensor
-	// C6 : Input 7
-	// C7 : Input 8
-	// C8 : Input 9
-	// C9 : Input 10
 
 	/* USB ----------------------------------------*/
 
@@ -561,18 +487,19 @@ void board_init()
 
 	/* Gyro/accel sensor ----------------------------------------------------*/
 
-	// A4 : SPI1 CS, AF5, need open-drain (external pull-up)
+	// A4 : SPI1 CS, AF5, need pull-up
 	// A5 : SPI1 CLK, AF5, need pull-up (CPOL = 1)
 	// A6 : SPI1 MISO, AF5
 	// A7 : SPI1 MOSI, AF5
 	GPIOA->MODER |= GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5_1 | GPIO_MODER_MODER6_1 | GPIO_MODER_MODER7_1;
 	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR4_1 | GPIO_OSPEEDER_OSPEEDR5_1 | GPIO_OSPEEDER_OSPEEDR7_1;
-	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR5_0;
+	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR4_0 | GPIO_PUPDR_PUPDR5_0;
 	GPIOA->OTYPER |= GPIO_OTYPER_OT_4;
 	GPIOA->AFR[0] |= (5 << GPIO_AFRL_AFSEL4_Pos) | (5 << GPIO_AFRL_AFSEL5_Pos) | (5 << GPIO_AFRL_AFSEL6_Pos) | (5 << GPIO_AFRL_AFSEL7_Pos);
 	
 	// SPI config
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
+	RCC->APB2LPENR |= RCC_APB2LPENR_SPI1LPEN;
 	SPI1->CR1 = SPI_CR1_MSTR | (5 << SPI_CR1_BR_Pos) | SPI_CR1_CPOL | SPI_CR1_CPHA; // SPI clock = clock APB2/64 = 48MHz/64 = 750 kHz
 	SPI1->CR2 = SPI_CR2_SSOE | SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN | SPI_CR2_ERRIE;
 	NVIC_EnableIRQ(SPI1_IRQn);
@@ -585,14 +512,14 @@ void board_init()
 	NVIC_SetPriority(EXTI4_IRQn,0);
 
 	// DMA SPI1 Rx
-	DMA2_Stream0->CR = (3 << DMA_SxCR_CHSEL_Pos) | (1 << DMA_SxCR_PL_Pos) | DMA_SxCR_MINC | DMA_SxCR_TCIE | DMA_SxCR_TEIE;
+	DMA2_Stream0->CR = (3 << DMA_SxCR_CHSEL_Pos) | (1 << DMA_SxCR_PL_Pos) | DMA_SxCR_MINC | DMA_SxCR_TCIE;
 	DMA2_Stream0->M0AR = (uint32_t)&sensor_raw;
 	DMA2_Stream0->PAR = (uint32_t)&(SPI1->DR);
 	NVIC_EnableIRQ(DMA2_Stream0_IRQn);
 	NVIC_SetPriority(DMA2_Stream0_IRQn,0);
 
 	// DMA SPI1 Tx
-	DMA2_Stream3->CR = (3 << DMA_SxCR_CHSEL_Pos) | (3 << DMA_SxCR_PL_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos) | DMA_SxCR_TEIE;
+	DMA2_Stream3->CR = (3 << DMA_SxCR_CHSEL_Pos) | (3 << DMA_SxCR_PL_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
 	DMA2_Stream3->M0AR = (uint32_t)spi1_tx_buffer;
 	DMA2_Stream3->PAR = (uint32_t)&(SPI1->DR);
 
@@ -603,14 +530,11 @@ void board_init()
 	/* Radio Rx UART ---------------------------------------------------*/
 
 	// A10: UART1 Rx, AF7, pull-up for IDLE
-	// C0 : SBUS invert
 	GPIOA->MODER |= GPIO_MODER_MODER10_1;
 	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR10_0;
 	GPIOA->AFR[1] |= 7 << GPIO_AFRH_AFSEL10_Pos;
-	GPIOC->MODER |= GPIO_MODER_MODER0_0;
 
 	// UART config
-	GPIOC->BSRR = GPIO_BSRR_BR_0; // Do not invert Rx
 	RCC->APB2ENR |= RCC_APB2ENR_USART1EN;
 	USART1->BRR = 417; // 48MHz/115200bps
 	USART1->CR1 = USART_CR1_UE;
@@ -630,39 +554,32 @@ void board_init()
 
 	/* Motors -----------------------------------------*/
 
-	// A1 : Servo 5, TIM5_CH2, AF2
-	// A2 : Servo 4, TIM2_CH3, AF1
-	// A3 : Servo 3, TIM5_CH4, AF2
-	// B1 : Servo 2, TIM3_CH4, AF2
-	GPIOA->MODER |= GPIO_MODER_MODER1_1 | GPIO_MODER_MODER2_1 | GPIO_MODER_MODER3_1;
-	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR1_1 | GPIO_OSPEEDER_OSPEEDR2_1 | GPIO_OSPEEDER_OSPEEDR3_1;
-	GPIOA->AFR[0] |= (2 << GPIO_AFRL_AFSEL1_Pos) | (1 << GPIO_AFRL_AFSEL2_Pos) | (2 << GPIO_AFRL_AFSEL3_Pos);
-	GPIOB->MODER |= GPIO_MODER_MODER1_1;
-	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR1_1;
-	GPIOB->AFR[0] |= 2 << GPIO_AFRL_AFSEL1_Pos;
-
+	// B4 : Motor 1, TIM3_CH1, AF2
+	// B5 : Motor 2, TIM3_CH2, AF2
+	// B6 : Motor 3, TIM4_CH1, AF2
+	// B7 : Motor 4, TIM4_CH2, AF2
+	GPIOB->MODER |= GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5_1 | GPIO_MODER_MODER6_1 | GPIO_MODER_MODER7_1;
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR4 | GPIO_OSPEEDER_OSPEEDR5 | GPIO_OSPEEDER_OSPEEDR6 | GPIO_OSPEEDER_OSPEEDR7;
+	GPIOB->AFR[0] |= (2 << GPIO_AFRL_AFSEL4_Pos) | (2 << GPIO_AFRL_AFSEL5_Pos) | (2 << GPIO_AFRL_AFSEL6_Pos) | (2 << GPIO_AFRL_AFSEL7_Pos);
+	
 	// TIM clock enable
-	RCC->APB1ENR |= RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM5EN;
+	RCC->APB1ENR |= RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM4EN;
+	//RCC->APB1ENR |= RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM4EN;
 
 #if (ESC == DSHOT)
 	// DMA driven timer for DShot600, 48Mhz: 0:30, 1:60, T:80
-	#if (DSHOT_RATE == 300)
-		TIM3->PSC = 1;
-	#else // DSHOT_RATE == 600
-		TIM3->PSC = 0;
-	#endif
+	TIM3->PSC = 2; // 1:DShot600, 2:DShot300
 	TIM3->ARR = 80;
 	//TIM3->DIER = TIM_DIER_UDE; // Managed in motor function
-	TIM3->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;
-	TIM3->CCMR2 = (6 << TIM_CCMR2_OC3M_Pos) | TIM_CCMR2_OC3PE | (6 << TIM_CCMR2_OC4M_Pos) | TIM_CCMR2_OC4PE;
-	TIM3->DCR = (1 << TIM_DCR_DBL_Pos) | (15 << TIM_DCR_DBA_Pos);
-
-	TIM5->PSC = 0;
-	TIM5->ARR = 80;
-	//TIM5->DIER = TIM_DIER_UDE; // Managed in motor function
-	TIM5->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;
-	TIM5->CCMR1 = (6 << TIM_CCMR1_OC1M_Pos) | TIM_CCMR1_OC1PE | (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
+	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;
+	TIM3->CCMR1 = (6 << TIM_CCMR1_OC1M_Pos) | TIM_CCMR1_OC1PE | (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
 	TIM3->DCR = (1 << TIM_DCR_DBL_Pos) | (13 << TIM_DCR_DBA_Pos);
+	
+	TIM4->PSC = 2;
+	TIM4->ARR = 80;
+	TIM4->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;
+	TIM4->CCMR1 = (6 << TIM_CCMR1_OC1M_Pos) | TIM_CCMR1_OC1PE | (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
+	TIM4->DCR = (1 << TIM_DCR_DBL_Pos) | (13 << TIM_DCR_DBA_Pos);
 
 	// Pad DSHOT pulse with zeros
 	dshot12[16*2+0] = 0;
@@ -676,31 +593,32 @@ void board_init()
 	DMA1_Stream2->PAR = (uint32_t)&(TIM3->DMAR);
 
 	// DMA TIM5_UP
-	DMA1_Stream6->CR = (6 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
+	DMA1_Stream6->CR = (2 << DMA_SxCR_CHSEL_Pos) | (2 << DMA_SxCR_PL_Pos) | (2 << DMA_SxCR_MSIZE_Pos) | (2 << DMA_SxCR_PSIZE_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
 	DMA1_Stream6->M0AR = (uint32_t)dshot34;
-	DMA1_Stream6->PAR = (uint32_t)&(TIM5->DMAR);
+	DMA1_Stream6->PAR = (uint32_t)&(TIM4->DMAR);
+
 #else
 	// One-pulse mode for OneShot125
 	TIM3->CR1 = TIM_CR1_OPM;
 	TIM3->PSC = 3-1;
 	TIM3->ARR = SERVO_MAX*2 + 1;
-	TIM3->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;
-	TIM3->CCMR2 = (7 << TIM_CCMR2_OC3M_Pos) | (7 << TIM_CCMR2_OC4M_Pos);
+	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;
+	TIM3->CCMR1 = (7 << TIM_CCMR1_OC1M_Pos) | (7 << TIM_CCMR1_OC2M_Pos);
 
-	TIM5->CR1 = TIM_CR1_OPM;
-	TIM5->PSC = 3-1;
-	TIM5->ARR = SERVO_MAX*2 + 1;
-	TIM5->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;
-	TIM5->CCMR1 = (7 << TIM_CCMR1_OC1M_Pos) | (7 << TIM_CCMR1_OC2M_Pos);
+	TIM4->CR1 = TIM_CR1_OPM;
+	TIM4->PSC = 3-1;
+	TIM4->ARR = SERVO_MAX*2 + 1;
+	TIM4->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;
+	TIM4->CCMR1 = (7 << TIM_CCMR1_OC1M_Pos) | (7 << TIM_CCMR1_OC2M_Pos);
 #endif
 
 	/* LED -----------------------*/
 
-	// B4 : Red LED, need open-drain
-	// B5 : Blue LED, need open-drain
-	GPIOB->MODER |= GPIO_MODER_MODER4_0 | GPIO_MODER_MODER5_0;;
-	GPIOB->OTYPER |= GPIO_OTYPER_OT_4 | PIO_OTYPER_OT_5;
-	GPIOB->BSRR = GPIO_BSRR_BS_4 | GPIO_BSRR_BS_5;
+	// A13: Blue LED, need open-drain
+	// A14: Green LED, need open-drain
+	GPIOA->MODER |= GPIO_MODER_MODER13_0 | GPIO_MODER_MODER14_0;
+	GPIOA->OTYPER |= GPIO_OTYPER_OT_13 | GPIO_OTYPER_OT_14;
+	GPIOA->BSRR = GPIO_BSRR_BS_13 | GPIO_BSRR_BS_14;
 
 	/* Time in us ----------------------------------------------------------*/
 
@@ -713,23 +631,36 @@ void board_init()
 
 #ifdef VBAT
 
-	// Clock enable
-	RCC->AHBENR |= RCC_AHBENR_ADC12EN;
+	// B0 : VBAT, ADC1_8
+	// B1 : Current, ADC1_9
+	GPIOB->MODER |= GPIO_MODER_MODER0 | GPIO_MODER_MODER1;
 
-	// C2 : Voltage sensor, ADC1
-	GPIOC->MODER |= GPIO_MODER_MODER2;
+	// ADC config
+	RCC->APB2ENR |= RCC_APB2ENR_ADC1EN; // Clock enable
+	//ADC1_COMMON->CCR = (0 << ADC_CCR_ADCPRE_Pos); // ADC clock prescaler (div from APB2 clock), 0=2, 1=4, 2=6, 3=8
+	ADC1->CR1 = ADC_CR1_SCAN;
+	ADC1->JSQR = (1 << ADC_JSQR_JL_Pos) | (8 << ADC_JSQR_JSQ3_Pos) | (9 << ADC_JSQR_JSQ4_Pos); // 2 injected conversion of channel 8 and 9
+	ADC1->SMPR2 = (2 << ADC_SMPR2_SMP8_Pos) | (2 << ADC_SMPR2_SMP9_Pos); // sampling time (in cycles), 0=3, 1=15, 2=28, 3=56
 
 	// Enable
 	ADC1->CR2 |= ADC_CR2_ADON;
 	wait_ms(1);
 
-	ADC1->SMPR2 = 4 << ADC_SMPR2_SMP2_Pos;
-	ADC1->SQR3 = 2 << ADC_SQR3_SQ1_Pos;
+	// Get first value
+	ADC1->CR2 |= ADC_CR2_JSWSTART;
+	while ((ADC1->SR & ADC_SR_JEOC) == 0) {}
+	vbat_smoothed = (float)ADC1->JDR1 * VBAT_SCALE;
+	ibat = (float)ADC1->JDR2 * IBAT_SCALE;
+	//ADC1->SR = 0;
+
+	NVIC_EnableIRQ(ADC1_2_IRQn);
+	NVIC_SetPriority(ADC1_2_IRQn,0);
 
 	// Get first vbat value
-	ADC1->CR |= ADC_CR_ADSTART;
-	while ((ADC1->ISR & ADC_ISR_EOC) == 0) {}
-	vbat_smoothed = (float)ADC1->DR * ADC_SCALE;
+	trig_vbat_meas();
+	while (!flag_vbat)
+		__WFI();
+	flag_vbat = 0;
 
 #endif
 
@@ -775,18 +706,18 @@ void board_init()
 
 #ifdef RUNCAM
 
-	// A2 : UART2 Tx, AF7, pull-up for IDLE
-	GPIOA->MODER |= GPIO_MODER_MODER2_1;
-	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR2_0;
-	GPIOA->AFR[0] |= 7 << GPIO_AFRL_AFRL2_Pos;
+	// A9 : UART1 Tx, AF7, pull-up for IDLE
+	GPIOA->MODER |= GPIO_MODER_MODER9_1;
+	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR9_0;
+	GPIOA->AFR[1] |= 7 << GPIO_AFRH_AFSEL9_Pos;
 
-	// UART2 extra config for Tx (already configured for Rx)
-	USART2->CR3 |= USART_CR3_DMAT;
+	// UART1 extra config for Tx (already configured for Rx)
+	USART1->CR3 |= USART_CR3_DMAT;
 
 	// DMA UART1 Tx
-	DMA1_Channel7->CCR = DMA_CCR_MINC | DMA_CCR_DIR;
-	DMA1_Channel7->CMAR = (uint32_t)uart2_tx_buffer;
-	DMA1_Channel7->CPAR = (uint32_t)&(USART2->TDR);
+	DMA2_Stream7->CR = (4 << DMA_SxCR_CHSEL_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
+	DMA2_Stream7->M0AR = (uint32_t)host_buffer_rx.data.u8;
+	DMA2_Stream7->PAR = (uint32_t)&(USART1->DR);
 
 #endif
 
@@ -844,44 +775,6 @@ void board_init()
 	DMA2_Channel5->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PSIZE_0;
 	DMA2_Channel5->CMAR = (uint32_t)led_buffer;
 	DMA2_Channel5->CPAR = (uint32_t)&(TIM8->CCR2);
-
-#endif
-
-	/* RF ------------------------*/
-	
-#ifdef RF
-
-	// A0 : Servo 6, used as SX1276 DIO[0]
-	// A15: SPI3 CS, AF6, need open-drain (external pull-up)
-	// C10: SPI3 CLK, AF6, need pull-down (CPOL = 0)
-	// C11: SPI3 MISO, AF6
-	// C12: SPI3 MOSI, AF6
-	// D2 : RF reset, need open-drain (external pull-up)
-	GPIOA->MODER |= GPIO_MODER_MODER15_1;
-	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR15_1;
-	GPIOA->OTYPER |= GPIO_OTYPER_OT_15;
-	GPIOA->AFR[1] |= 6 << GPIO_AFRH_AFSEL15_Pos;
-	GPIOC->MODER |= GPIO_MODER_MODER10_1 | GPIO_MODER_MODER11_1 | GPIO_MODER_MODER12_1;
-	GPIOC->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR10_1 | GPIO_OSPEEDER_OSPEEDR12_1;
-	GPIOC->PUPDR |= GPIO_PUPDR_PUPDR10_1;
-	GPIOC->AFR[1] |= (6 << GPIO_AFRH_AFSEL10_Pos) | (6 << GPIO_AFRH_AFSEL11_Pos) | (6 << GPIO_AFRH_AFSEL12_Pos);
-	GPIOD->MODER |= GPIO_MODER_MODER2_0;
-	GPIOD->OTYPER |= GPIO_OTYPER_OT_2;
-
-	// SPI config
-	RCC->APB1ENR |= RCC_APB1ENR_SPI3EN;
-	SPI3->CR1 = SPI_CR1_MSTR | (1 << SPI_CR1_BR_Pos); // SPI clock = clock APB1/4 = 24MHz/4 = 6 MHz
-	SPI3->CR2 = SPI_CR2_SSOE | SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN | SPI_CR2_ERRIE;
-	NVIC_EnableIRQ(SPI3_IRQn);
-	NVIC_SetPriority(SPI3_IRQn,0);
-	
-	// Init
-	GPIOD->BSRR = GPIO_BSRR_BR_2; // Reset
-	wait_ms(1);
-	GPIOD->BSRR = GPIO_BSRR_BS_2;
-	wait_ms(1);
-	sx1276_init();
-	EXTI->IMR |= EXTI_IMR_MR0; // Enable external interrupts now
 
 #endif
 

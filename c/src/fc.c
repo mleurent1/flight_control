@@ -31,7 +31,7 @@
 
 sensor_raw_t sensor_raw;
 radio_frame_t radio_frame;
-volatile float vbat;
+volatile float vbat = 0;
 volatile float ibat = 0;
 
 volatile uint8_t sensor_error_count = 0;
@@ -133,8 +133,9 @@ int main(void)
 	int32_t t_proc = 0;
 	uint16_t t_proc_max = 0;
 	uint16_t t_proc_max_hold = 0;
-
-	uint8_t grb[3];
+	#ifdef LED
+		uint8_t grb[3];
+	#endif
 	_Bool led_en = 1;
 
 	/* Init -----------------------------------------------------*/

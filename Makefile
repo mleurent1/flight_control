@@ -17,10 +17,13 @@ ifeq ($(DRONE),warpquad)
    FC_FLAGS = -DM1_CCW -DESC=$(ONESHOT) -DBEEPER -DVBAT
 else ifeq ($(DRONE),alien6)
    BOARD = cyclone
-   FC_FLAGS = -DM1_CCW -DESC=$(DSHOT) -DSHOT_RATE=600 -DBEEPER -DVBAT
+   FC_FLAGS = -DM1_CCW -DESC=$(DSHOT) -DSHOT_RATE=600 -DBEEPER -DVBAT -DOSD -DRUNCAM -DSMART_AUDIO -DLED=4
 else ifeq ($(DRONE),practice)
    BOARD = motof3
    FC_FLAGS = -DESC=$(DSHOT) -DSHOT_RATE=600 -DBEEPER -DVBAT -DIBAT -DVBAT_USE_RSSI -DOSD -DRUNCAM -DSMART_AUDIO -DLED=4
+else ifeq ($(DRONE),f4)
+   BOARD = f405wing
+   FC_FLAGS = -DESC=$(DSHOT) -DSHOT_RATE=600
 endif
 
 # Source list
@@ -33,6 +36,10 @@ ifeq ($(BOARD),nucleo)
    LD_SCRIPT = c/stm32f3/ldscripts/stm32f303k8tx.ld
    FC_OBJ += system_stm32f3xx.o startup_stm32f303x8.o
 else ifeq ($(BOARD),revolution)
+   STM32_FLAGS = -DSTM32F4 -DSTM32F405xx -Ic/stm32f4/cmsis/inc -DHAL_PCD_MODULE_ENABLED -DHAL_RCC_MODULE_ENABLED -Ic/stm32f4/hal/inc
+   LD_SCRIPT = c/stm32f4/ldscripts/stm32f405rgtx.ld
+   FC_OBJ += system_stm32f4xx.o startup_stm32f405xx.o $(USB_OBJ) stm32f4xx_hal_pcd.o stm32f4xx_hal_pcd_ex.o stm32f4xx_ll_usb.o
+else ifeq ($(BOARD),f405wing)
    STM32_FLAGS = -DSTM32F4 -DSTM32F405xx -Ic/stm32f4/cmsis/inc -DHAL_PCD_MODULE_ENABLED -DHAL_RCC_MODULE_ENABLED -Ic/stm32f4/hal/inc
    LD_SCRIPT = c/stm32f4/ldscripts/stm32f405rgtx.ld
    FC_OBJ += system_stm32f4xx.o startup_stm32f405xx.o $(USB_OBJ) stm32f4xx_hal_pcd.o stm32f4xx_hal_pcd_ex.o stm32f4xx_ll_usb.o
