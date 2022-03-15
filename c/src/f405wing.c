@@ -87,6 +87,7 @@ void sensor_write(uint8_t addr, uint8_t data)
 	// Wait for end of transaction
 	while (sensor_busy)
 		__WFI();
+	wait_ms(1);
 }
 
 void sensor_read(uint8_t addr, uint8_t size)
@@ -149,8 +150,8 @@ void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
 		TIM4->CR1 = TIM_CR1_CEN;
 	}
 #else
-	TIM3->CCR1 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[0];
-	TIM3->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[1];
+	TIM3->CCR3 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[0];
+	TIM3->CCR4 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[1];
 	TIM4->CCR1 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[2];
 	TIM4->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[3];
 	TIM3->CR1 |= TIM_CR1_CEN;
@@ -362,7 +363,7 @@ void board_init()
 	// A1 : UART4 Rx (AF8)
 	// A2 : UART2 Tx (AF7)
 	// A3 : UART2 Rx (AF7)
-
+	// A4 : Gyro SPI1 CSN  (AF5), external pull-up
 	// A5 : Gyro SPI1 CLK  (AF5)
 	// A6 : Gyro SPI1 MISO (AF5)
 	// A7 : Gyro SPI1 MOSI (AF5)
@@ -372,26 +373,36 @@ void board_init()
 
 	// A13: Green LED
 	// A14: Blue LED
-	// A15: Servo 5, TIM2 CH1 (AF1), SPI3 CSN (AF6)
 
-	// B0 : Servo 3, TIM3 CH3 (AF2)
-	// B1 : Servo 4, TIM3 CH4 (AF2)
-	// B2 : Gyro CSN
-	// B3 : Servo 6, TIM2 CH2 (AF1), SPI3 CLK (AF6)
-	// B4 : Servo 1, TIM3 CH1 (AF2)
-	// B5 : Servo 2, TIM3 CH2 (AF2)
-	// B6 : Servo 7, TIM4 CH1 (AF2)
-	// B7 : Servo 8, TIM4 CH2 (AF2)
+
+	//SPI angle sensor
+	// PC8: Servo 5
+	// PC9 : Servo 6
+	// PB14 : Servo 7, SPI2 MISO (AF5)
+	// PB15 : Servo 8, SPI2 MOSI (AF5)
+	// PA8 : Servo 9
+
+
+   // control PWM des moteurs
+	// B0 : Servo 3, TIM3 CH3 (AF2) :  MOT1
+	// B1 : Servo 4, TIM3 CH4 (AF2) :  MOT2
+	// B6 : Servo 1, TIM4 CH1 (AF2) :  MOT4
+	// B7 : Servo 2, TIM4 CH2 (AF2) :  MOT3
+
+
 	// B8 : Baro I2C1 SCL (AF4), external pull-up
 	// B9 : Baro I2C1 SDA (AF4), external pull-up
 	// B10: UART3 Tx (AF7), I2C2 SCL (AF4), TIM2 CH3 (AF1)
 	// B11: UART3 Rx (AF7), I2C2 SDA (AF4), TIM2 CH4 (AF1)
+	
+	
 	// B12: OSD SPI2 CSN  (AF5)
 	// B13: OSD SPI2 CLK  (AF5)
-	// B14: OSD SPI2 MISO (AF5)
-	// B15: OSD SPI2 MOSI (AF5)
+	// PC2: OSD SPI2 MISO (AF5)
+	// PC3: OSD SPI2 MOSI (AF5)
 
 	// C4 : Gyro interrupt
+	// C15: Beeper
 	
 	/* USB ----------------------------------------*/
 
@@ -411,19 +422,19 @@ void board_init()
 
 	/* Gyro/accel sensor ----------------------------------------------------*/
 
-	// A4 : SPI1 CS   (AF5), need pull-up
+	// A4 : SPI1 CSN  (AF5), need pull-up 
 	// A5 : SPI1 CLK  (AF5), CPOL=1 => need pull-up 
 	// A6 : SPI1 MISO (AF5)
 	// A7 : SPI1 MOSI (AF5)
 	GPIOA->MODER |= GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5_1 | GPIO_MODER_MODER6_1 | GPIO_MODER_MODER7_1;
 	GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR4_1 | GPIO_OSPEEDER_OSPEEDR5_1 | GPIO_OSPEEDER_OSPEEDR7_1;
-	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR4_0 | GPIO_PUPDR_PUPDR5_0;
-	GPIOA->OTYPER |= GPIO_OTYPER_OT_4;
+	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR5_0 | GPIO_PUPDR_PUPDR4_0;
+
+	//GPIOA->OTYPER |= GPIO_OTYPER_OT_4;
 	GPIOA->AFR[0] |= (5 << GPIO_AFRL_AFSEL4_Pos) | (5 << GPIO_AFRL_AFSEL5_Pos) | (5 << GPIO_AFRL_AFSEL6_Pos) | (5 << GPIO_AFRL_AFSEL7_Pos);
 	
 	// SPI config
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
-	RCC->APB2LPENR |= RCC_APB2LPENR_SPI1LPEN;
 	SPI1->CR1 = SPI_CR1_MSTR | (5 << SPI_CR1_BR_Pos) | SPI_CR1_CPOL | SPI_CR1_CPHA; // SPI clock = clock APB2/64 = 48MHz/64 = 750 kHz
 	SPI1->CR2 = SPI_CR2_SSOE | SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN | SPI_CR2_ERRIE;
 	NVIC_EnableIRQ(SPI1_IRQn);
@@ -452,8 +463,8 @@ void board_init()
 	EXTI->IMR = EXTI_IMR_MR4; // enable external interrupt now
 
 	/* Radio Rx UART ---------------------------------------------------*/
-
-	// A10: UART1 Rx (AF7), pull-up for IDLE
+#ifdef TOTO
+	// A10: UART1 Rx (AF7), pull-up for IDLEDSTM32F405xx
 	GPIOA->MODER |= GPIO_MODER_MODER10_1;
 	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR10_0;
 	GPIOA->AFR[1] |= 7 << GPIO_AFRH_AFSEL10_Pos;
@@ -475,20 +486,21 @@ void board_init()
 
 	// Init
 	radio_sync();
-
+#endif
 	/* Motors -----------------------------------------*/
 
-	// B4 : Motor 1, TIM3_CH1, AF2
-	// B5 : Motor 2, TIM3_CH2, AF2
-	// B6 : Motor 3, TIM4_CH1, AF2
-	// B7 : Motor 4, TIM4_CH2, AF2
-	GPIOB->MODER |= GPIO_MODER_MODER4_1 | GPIO_MODER_MODER5_1 | GPIO_MODER_MODER6_1 | GPIO_MODER_MODER7_1;
-	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR4 | GPIO_OSPEEDER_OSPEEDR5 | GPIO_OSPEEDER_OSPEEDR6 | GPIO_OSPEEDER_OSPEEDR7;
-	GPIOB->AFR[0] |= (2 << GPIO_AFRL_AFSEL4_Pos) | (2 << GPIO_AFRL_AFSEL5_Pos) | (2 << GPIO_AFRL_AFSEL6_Pos) | (2 << GPIO_AFRL_AFSEL7_Pos);
+	
+
+	// B0 : Servo 3, TIM3 CH3 (AF2) :  MOT1
+	// B1 : Servo 4, TIM3 CH4 (AF2) :  MOT2
+	// B6 : Servo 1, TIM4 CH1 (AF2) :  MOT4
+	// B7 : Servo 2, TIM4 CH2 (AF2) :  MOT3
+	GPIOB->MODER |= GPIO_MODER_MODER0_1 | GPIO_MODER_MODER1_1 | GPIO_MODER_MODER6_1 | GPIO_MODER_MODER7_1;
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR0 | GPIO_OSPEEDER_OSPEEDR1 | GPIO_OSPEEDER_OSPEEDR6 | GPIO_OSPEEDER_OSPEEDR7;
+	GPIOB->AFR[0] |= (2 << GPIO_AFRL_AFSEL0_Pos) | (2 << GPIO_AFRL_AFSEL1_Pos) | (2 << GPIO_AFRL_AFSEL6_Pos) | (2 << GPIO_AFRL_AFSEL7_Pos);
 	
 	// TIM clock enable
 	RCC->APB1ENR |= RCC_APB1ENR_TIM3EN | RCC_APB1ENR_TIM4EN;
-	//RCC->APB1ENR |= RCC_APB1ENR_TIM2EN | RCC_APB1ENR_TIM4EN;
 
 #if (ESC == DSHOT)
 	// DMA driven timer for DShot600, 48Mhz: 0:30, 1:60, T:80
@@ -524,13 +536,21 @@ void board_init()
 #else
 	// One-pulse mode for OneShot125
 	TIM3->CR1 = TIM_CR1_OPM;
-	TIM3->PSC = 3-1;
+	#if (ESC == PWM)
+		TIM3->PSC = 24-1;
+	#else
+		TIM3->PSC = 3-1;
+	#endif
 	TIM3->ARR = SERVO_MAX*2 + 1;
-	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;
-	TIM3->CCMR1 = (7 << TIM_CCMR1_OC1M_Pos) | (7 << TIM_CCMR1_OC2M_Pos);
+	TIM3->CCER = TIM_CCER_CC3E | TIM_CCER_CC4E;
+	TIM3->CCMR2 = (7 << TIM_CCMR2_OC3M_Pos) | (7 << TIM_CCMR2_OC4M_Pos);
 
 	TIM4->CR1 = TIM_CR1_OPM;
-	TIM4->PSC = 3-1;
+	#if (ESC == PWM)
+		TIM4->PSC = 24-1;
+	#else
+		TIM4->PSC = 3-1;
+	#endif
 	TIM4->ARR = SERVO_MAX*2 + 1;
 	TIM4->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E;
 	TIM4->CCMR1 = (7 << TIM_CCMR1_OC1M_Pos) | (7 << TIM_CCMR1_OC2M_Pos);
@@ -582,9 +602,9 @@ void board_init()
 
 #ifdef BEEPER
 
-	// C13 : Beeper
-	GPIOC->MODER |= GPIO_MODER_MODER13_0;
-	GPIOC->BSRR = GPIO_BSRR_BR_13;
+	// C15 : Beeper
+	GPIOC->MODER |= GPIO_MODER_MODER15_0;
+	GPIOC->BSRR = GPIO_BSRR_BR_15;
 
 #endif
 

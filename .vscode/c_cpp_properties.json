@@ -9,21 +9,14 @@
                 "c/usb_vcp/inc"
             ],
             "defines": [
-                "STM32F3",
-                "STM32F303xC",
+                "STM32F4",
+                "STM32F405xx",
                 "HAL_PCD_MODULE_ENABLED",
-                "SENSOR=6050",
+                "SENSOR=6000",
                 "DSHOT=1",
                 "ONESHOT=0",
-                "ESC=1",
-                "DHSOT_RATE=600",
-                "BEEPER",
-                "VBAT",
-                "IBAT",
-                "OSD",
-                "RUNCAM",
-                "SMART_AUDIO",
-                "LED"
+                "PWM=2",
+                "ESC=2"
             ],
             "compilerPath": "~/programs/gcc-arm-none-eabi-10-2020-q4-major/bin/arm-none-eabi-gcc",
             "cStandard": "c11",

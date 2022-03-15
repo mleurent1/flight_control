@@ -1,7 +1,10 @@
 # Compiler and tools
-CC = ~/programs/gcc-arm-none-eabi-10-2020-q4-major/bin/arm-none-eabi-gcc
-OBJCOPY = ~/programs/gcc-arm-none-eabi-10-2020-q4-major//bin/arm-none-eabi-objcopy
-SIZE = ~/programs/gcc-arm-none-eabi-10-2020-q4-major//bin/arm-none-eabi-size
+
+CC = /usr/local/arm_tool_chain/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-gcc
+OBJCOPY = /usr/local/arm_tool_chain/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-objcopy
+SIZE = /usr/local/arm_tool_chain/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-size
+
+
 STLINK = "/mnt/c/Program Files (x86)/STMicroelectronics/STM32 ST-LINK Utility/ST-LINK Utility/ST-LINK_CLI.exe"
 DFU = sudo dfu-util
 LDFLAGS = *.o -lm -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs --specs=nosys.specs
@@ -24,7 +27,7 @@ else ifeq ($(DRONE),practice)
    FC_FLAGS = -DESC=$(DSHOT) -DSHOT_RATE=600 -DBEEPER -DVBAT -DIBAT -DVBAT_USE_RSSI -DOSD -DRUNCAM -DSMART_AUDIO -DLED=4
 else ifeq ($(DRONE),f4)
    BOARD = f405wing
-   FC_FLAGS = -DESC=$(PWM) -DSHOT_RATE=600 -DDUAL_LED_STATUS
+   FC_FLAGS = -DESC=$(PWM) -DDUAL_LED_STATUS
 endif
 
 # Source list

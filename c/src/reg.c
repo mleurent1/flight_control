@@ -232,7 +232,7 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 						sma_send_cmd(SMA_SET_POWER, REG_VTX__PWR);
 					}
 					else if (addr == REG_DEBUG_INT_Addr) {
-						/* Put your debug command here */
+						EXTI->IMR = EXTI_IMR_MR4;
 					}
 					else if (addr == REG_DEBUG_FLOAT_Addr) {
 						/* Put your debug command here */

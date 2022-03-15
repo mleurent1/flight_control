@@ -32,8 +32,11 @@ void mpu_init(void)
 	wait_ms(100);
 	sensor_write(MPU_USER_CTRL, MPU_USER_CTRL__I2C_IF_DIS);
 #endif
-	sensor_write(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__CLKSEL(1));// | MPU_PWR_MGMT_1__TEMP_DIS); // Get MPU out of sleep, set CLK = gyro X clock, and disable temperature sensor
+	sensor_write(MPU_PWR_MGMT_1,0); // | MPU_PWR_MGMT_1__TEMP_DIS); // Get MPU out of sleep, set CLK = gyro X clock, and disable temperature sensor
 	wait_ms(100);
+	sensor_write(MPU_PWR_MGMT_1,MPU_PWR_MGMT_1__CLKSEL(1));
+	wait_ms(100);
+
 	//sensor_write(MPU_PWR_MGMT_2, MPU_PWR_MGMT_2__STDBY_XA | MPU_PWR_MGMT_2__STDBY_YA | MPU_PWR_MGMT_2__STDBY_ZA); // Disable accelerometers
 	sensor_write(MPU_SMPLRT_DIV, REG_MPU_CFG__RATE); // Sample rate = Fs/(x+1)
 	sensor_write(MPU_CFG, MPU_CFG__DLPF_CFG(REG_MPU_CFG__FILT)); // Filter ON => Fs=1kHz, else 8kHz
