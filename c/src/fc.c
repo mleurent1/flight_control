@@ -115,6 +115,7 @@ int main(void)
 	int16_t motor_clip[4];
 	uint16_t motor_raw[4];
 	_Bool motor_telemetry[4];
+	uint8_t motor_period_cnt = 0;
 
 	float vbat_smoothed;
 	float nb_cells;
@@ -312,7 +313,7 @@ int main(void)
 				yaw_i_term += error_yaw * REG_I_YAW;
 
 			// Yaw induced I transfer
-			if (REG_I_TRANSFER) {
+			if (REG_FC_CFG__I_TRANSFER) {
 				i_transfer = SINUS(sensor.gyro_z * 1.745329252e-5f);
 				pitch_i_term += pitch_i_term  * i_transfer;
 				roll_i_term  -= roll_i_term * i_transfer;
@@ -387,7 +388,11 @@ int main(void)
 					motor_telemetry[i] = 0;
 				}
 			}
-			set_motors(motor_raw, motor_telemetry);
+			if (motor_period_cnt == REG_FC_CFG__MOTOR_PERIOD-1) {
+				motor_period_cnt = 0;
+				set_motors(motor_raw, motor_telemetry);
+			} else
+				motor_period_cnt++;
 		}
 
 		/* VBAT ---------------------------------------------------------------------*/
@@ -459,12 +464,20 @@ int main(void)
 
 				// LED double blinks when timeout on sensor or radio samples, or vbat too low
 				if (flag_sensor_timeout || flag_radio_timeout || ((vbat_cell < REG_VBAT_MIN) && (nb_cells > 0))) {
-					if ((status_cnt & 0x01) == 0)
-						toggle_led();
+					#ifdef DUAL_LED_STATUS
+						if ((status_cnt & 0x07) == 0) {
+							toggle_led();
+							toggle_led2(1);
+						}
+					#else
+						if ((status_cnt & 0x01) == 0)
+							toggle_led();
+					#endif
 				}
 				else {
 					if ((status_cnt & 0x07) == 0)
 						toggle_led();
+					toggle_led2(0);
 				}
 
 				// beep when requested by user or, timeout on sensor or radio samples, or vbat too low

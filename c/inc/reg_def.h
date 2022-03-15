@@ -200,7 +200,13 @@
 #define REG_MPU_CFG__RATE_Msk 65280U
 #define REG_MPU_CFG__RATE_Pos 8U
 #define REG_MPU_CFG_Addr 36
-#define REG_I_TRANSFER reg[37]
+#define REG_FC_CFG reg[37]
+#define REG_FC_CFG__I_TRANSFER (uint8_t)((reg[37] & 1U) >> 0)
+#define REG_FC_CFG__I_TRANSFER_Msk 1U
+#define REG_FC_CFG__I_TRANSFER_Pos 0U
+#define REG_FC_CFG__MOTOR_PERIOD (uint8_t)((reg[37] & 510U) >> 1)
+#define REG_FC_CFG__MOTOR_PERIOD_Msk 510U
+#define REG_FC_CFG__MOTOR_PERIOD_Pos 1U
 #define REG_FC_CFG_Addr 37
 #define REG_VTX reg[38]
 #define REG_VTX__CHAN (uint8_t)((reg[38] & 255U) >> 0)

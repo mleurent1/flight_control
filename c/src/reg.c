@@ -14,7 +14,7 @@ uint32_t reg[NB_REG];
 float regf[NB_REG];
 const reg_properties_t reg_properties[NB_REG] =
 {
-	{1, 1, 0, 37}, // VERSION
+	{1, 1, 0, 38}, // VERSION
 	{1, 0, 0, 0}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
@@ -51,7 +51,7 @@ const reg_properties_t reg_properties[NB_REG] =
 	{0, 1, 0, 32769500}, // RUDDER
 	{0, 1, 0, 65537000}, // AUX
 	{0, 1, 0, 1}, // MPU_CFG
-	{0, 1, 0, 1}, // FC_CFG
+	{0, 1, 0, 3}, // FC_CFG
 	{0, 0, 0, 0}, // VTX
 	{0, 1, 1, 1006895490}, // VBAT_SCALE
 	{0, 1, 1, 1022363278}, // IBAT_SCALE

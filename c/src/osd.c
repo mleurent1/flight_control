@@ -508,9 +508,9 @@ void osd_menu(struct radio_s * radio)
 			}
 			case 10 : {
 				if (state == REG_UP)
-					REG_I_TRANSFER = 1;
+					REG_FC_CFG |= REG_FC_CFG__I_TRANSFER_Msk;
 				else if (state == REG_DOWN)
-					REG_I_TRANSFER = 0;
+					REG_FC_CFG &= ~REG_FC_CFG__I_TRANSFER_Msk;
 				break;
 			}
 			case 11 : {
@@ -585,7 +585,7 @@ void osd_menu(struct radio_s * radio)
 				break;
 			}
 			case 10 : {
-				float_to_str((float)REG_I_TRANSFER, &reg_val_str[12], &reg_val_str[8], 4, 3);
+				float_to_str((float)REG_FC_CFG__I_TRANSFER, &reg_val_str[12], &reg_val_str[8], 4, 3);
 				break;
 			}
 			case 11 : {

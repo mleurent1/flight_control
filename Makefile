@@ -12,6 +12,7 @@ CFLAGS = -c -Wall -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --s
 # Drone board and feature flags
 ONESHOT = 0
 DSHOT = 1
+PWM = 2
 ifeq ($(DRONE),warpquad)
    BOARD = motof3
    FC_FLAGS = -DM1_CCW -DESC=$(ONESHOT) -DBEEPER -DVBAT
@@ -23,7 +24,7 @@ else ifeq ($(DRONE),practice)
    FC_FLAGS = -DESC=$(DSHOT) -DSHOT_RATE=600 -DBEEPER -DVBAT -DIBAT -DVBAT_USE_RSSI -DOSD -DRUNCAM -DSMART_AUDIO -DLED=4
 else ifeq ($(DRONE),f4)
    BOARD = f405wing
-   FC_FLAGS = -DESC=$(DSHOT) -DSHOT_RATE=600
+   FC_FLAGS = -DESC=$(PWM) -DSHOT_RATE=600 -DDUAL_LED_STATUS
 endif
 
 # Source list
@@ -82,7 +83,7 @@ endif
 
 flash:
 	$(OBJCOPY) $(CURRENT_DRONE).elf fc.hex -O ihex
-	$(STLINK) -P fc.hex -Rst
+	$(STLINK) -c SWD UR -P fc.hex -Rst
 
 dfu:
 	$(OBJCOPY) $(CURRENT_DRONE).elf fc.bin -O binary

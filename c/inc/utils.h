@@ -8,6 +8,7 @@
 
 #define ONESHOT 0
 #define DSHOT 1
+#define PWM 2
 
 #define EXPONENTIAL expf
 #define ARCSINUS asinf
