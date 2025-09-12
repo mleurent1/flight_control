@@ -28,6 +28,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_cdc_if.h"
 #include "usb.h"
+//#include "fc.h"
+#include "usb2spi.h"
 
 /** @addtogroup STM32_USB_DEVICE_LIBRARY
   * @{
@@ -101,7 +103,7 @@ USBD_CDC_LineCodingTypeDef linecoding =
   */
 static int8_t USBD_CDC_IF_Init(void)
 {
-	USBD_CDC_SetRxBuffer(&USBD_device_handler, (uint8_t *)&host_buffer_rx);
+  USBD_CDC_SetRxBuffer(&USBD_device_handler, host_rx_buffer);
 	USBD_CDC_ReceivePacket(&USBD_device_handler);
 	return (0);
 }
@@ -208,7 +210,7 @@ static int8_t USBD_CDC_IF_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length)
   */
 static int8_t USBD_CDC_IF_Receive (uint8_t* Buf, uint32_t *Len)
 {
-	flag_host = 1;
+  host_bytes_avail = *Len;
 	USBD_CDC_ReceivePacket(&USBD_device_handler);
 	return (0);
 }

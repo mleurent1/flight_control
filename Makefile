@@ -1,8 +1,8 @@
 # Compiler and tools
-CC = ~/programs/gcc-arm-none-eabi-10-2020-q4-major/bin/arm-none-eabi-gcc
-OBJCOPY = ~/programs/gcc-arm-none-eabi-10-2020-q4-major//bin/arm-none-eabi-objcopy
-SIZE = ~/programs/gcc-arm-none-eabi-10-2020-q4-major//bin/arm-none-eabi-size
-STLINK = "/mnt/c/Program Files (x86)/STMicroelectronics/STM32 ST-LINK Utility/ST-LINK Utility/ST-LINK_CLI.exe"
+CC = arm-none-eabi-gcc
+OBJCOPY = arm-none-eabi-objcopy
+SIZE = arm-none-eabi-size
+STLINK = /home/tools/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/STM32_Programmer_CLI
 DFU = sudo dfu-util
 LDFLAGS = *.o -lm -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs --specs=nosys.specs
 #KEIL:-mthumb-interwork -nostartfiles
@@ -29,7 +29,12 @@ endif
 
 # Source list
 USB_OBJ = usb.o usbd_cdc_if.o usbd_cdc.o usbd_conf.o usbd_core.o usbd_ctlreq.o usbd_desc.o usbd_ioreq.o
-FC_OBJ = fc.o $(BOARD).o sensor.o radio.o reg.o utils.o osd.o smart_audio.o
+ifeq ($(DRONE),usb2spi)
+   BOARD = revolution_usb2spi
+   FC_OBJ = usb2spi.o $(BOARD).o utils.o
+else
+   FC_OBJ = fc.o $(BOARD).o sensor.o radio.o reg.o utils.o osd.o smart_audio.o
+endif
 
 # STM32 sources, flags and link files
 ifeq ($(BOARD),nucleo)
@@ -48,6 +53,10 @@ else ifeq ($(BOARD),toothpick)
    STM32_FLAGS = -DSTM32F4 -DSTM32F411xE -Ic/stm32f4/cmsis/inc -DHAL_PCD_MODULE_ENABLED -DHAL_RCC_MODULE_ENABLED -Ic/stm32f4/hal/inc
    LD_SCRIPT = c/stm32f4/ldscripts/stm32f411cetx.ld
    FC_OBJ += system_stm32f4xx.o startup_stm32f411xe.o $(USB_OBJ) stm32f4xx_hal_pcd.o stm32f4xx_hal_pcd_ex.o stm32f4xx_ll_usb.o
+else ifeq ($(BOARD),revolution_usb2spi)
+   STM32_FLAGS = -DSTM32F4 -DSTM32F405xx -Ic/stm32f4/cmsis/inc -DHAL_PCD_MODULE_ENABLED -DHAL_RCC_MODULE_ENABLED -Ic/stm32f4/hal/inc
+   LD_SCRIPT = c/stm32f4/ldscripts/stm32f405rgtx.ld
+   FC_OBJ += system_stm32f4xx.o startup_stm32f405xx.o $(USB_OBJ) stm32f4xx_hal_pcd.o stm32f4xx_hal_pcd_ex.o stm32f4xx_ll_usb.o
 else
    STM32_FLAGS = -DSTM32F3 -DSTM32F303xC -Ic/stm32f3/cmsis/inc -DHAL_PCD_MODULE_ENABLED -Ic/stm32f3/hal/inc
    LD_SCRIPT = c/stm32f3/ldscripts/stm32f303cctx.ld
@@ -83,8 +92,7 @@ endif
 
 flash:
 	$(OBJCOPY) $(CURRENT_DRONE).elf fc.hex -O ihex
-	$(STLINK) -c SWD UR -P fc.hex -Rst
-
+	$(STLINK) -c port=SWD reset=HWrst -w fc.hex 0x08000000 -hardRst
 dfu:
 	$(OBJCOPY) $(CURRENT_DRONE).elf fc.bin -O binary
 	$(DFU) -a 0 -s 0x08000000$(DFU_OPT) -D fc.bin
