@@ -362,36 +362,53 @@ void board_init()
 	// A1 : UART4 Rx (AF8)
 	// A2 : UART2 Tx (AF7)
 	// A3 : UART2 Rx (AF7)
-
-	// A5 : Gyro SPI1 CLK  (AF5)
-	// A6 : Gyro SPI1 MISO (AF5)
-	// A7 : Gyro SPI1 MOSI (AF5)
-	// A8 : Geek LED
+	// A4 : Gyro (MPU600) SPI1 CSN  (AF5)
+	// A5 : Gyro (MPU600) SPI1 CLK  (AF5)
+	// A6 : Gyro (MPU600) SPI1 MISO (AF5)
+	// A7 : Gyro (MPU600) SPI1 MOSI (AF5)
+	// A8 : Servo 9. TIM1 CH1 (AF1)
 	// A9 : UART1 Tx (AF7), TIM1 CH2 (AF1)
 	// A10: UART1 Rx (AF7), TIM1 CH3 (AF1)
 
 	// A13: Green LED
 	// A14: Blue LED
-	// A15: Servo 5, TIM2 CH1 (AF1), SPI3 CSN (AF6)
+	// A15: LED strip, TIM2 CH1 (AF1), SPI3 CSN (AF6)
 
 	// B0 : Servo 3, TIM3 CH3 (AF2)
 	// B1 : Servo 4, TIM3 CH4 (AF2)
-	// B2 : Gyro CSN
-	// B3 : Servo 6, TIM2 CH2 (AF1), SPI3 CLK (AF6)
-	// B4 : Servo 1, TIM3 CH1 (AF2)
-	// B5 : Servo 2, TIM3 CH2 (AF2)
-	// B6 : Servo 7, TIM4 CH1 (AF2)
-	// B7 : Servo 8, TIM4 CH2 (AF2)
-	// B8 : Baro I2C1 SCL (AF4), external pull-up
-	// B9 : Baro I2C1 SDA (AF4), external pull-up
-	// B10: UART3 Tx (AF7), I2C2 SCL (AF4), TIM2 CH3 (AF1)
-	// B11: UART3 Rx (AF7), I2C2 SDA (AF4), TIM2 CH4 (AF1)
-	// B12: OSD SPI2 CSN  (AF5)
-	// B13: OSD SPI2 CLK  (AF5)
-	// B14: OSD SPI2 MISO (AF5)
-	// B15: OSD SPI2 MOSI (AF5)
 
-	// C4 : Gyro interrupt
+	// B3 : SD card SPI3 CLK  (AF6)
+	// B4 : SD card SPI3 MISO (AF6)
+	// B5 : SD card SPI3 MOSI (AF6)
+	// B6 : Servo 2, TIM4 CH1 (AF2), UART1 Tx (AF7), I2C1 SCL (AF4)
+	// B7 : Servo 1, TIM4 CH2 (AF2), UART1 Rx (AF7), I2C1 SDA (AF4)
+	// B8 : Baro (BMP280) + "CL1" I2C1 SCL (AF4), external pull-up
+	// B9 : Baro (BMP280) + "DA1" I2C1 SDA (AF4), SPI2 CSN (AF5), external pull-up
+	// B10: "CL2", I2C2 SCL (AF4), UART3 Tx (AF7), TIM2 CH3 (AF1), SPI2 CLK (AF5)
+	// B11: "DA2", I2C2 SDA (AF4), UART3 Rx (AF7), TIM2 CH4 (AF1)
+	// B12: OSD (MAX7456) SPI2 CSN (AF5)
+	// B13: OSD (MAX7456) SPI2 CLK (AF5)
+	// B14: Servo 7, TIM12 CH1 (AF9), SPI2 MISO (AF5)
+	// B15: Servo 8, TIM12 CH2 (AF9), SPI2 MOSI (AF5)
+
+	// C0 : VBAT, ADC1 chan 1
+	// C1 : Current meter, ADC1 chan 2
+	// C2 : OSD (MAX7456) SPI2 MISO (AF5)
+	// C3 : OSD (MAX7456) SPI2 MOSI (AF5)
+	// C4 : Gyro (MPU600) interrupt
+	// C5 : RSSI, ADC1 chan 3
+	// C6 : UART6 Tx (AF8), TIM3 CH1 (AF2), TIM8 CH1 (AF3)
+	// C7 : UART6 Rx (AF8), TIM3 CH2 (AF2), TIM8 CH2 (AF3)
+	// C8 : Servo 5,        TIM3 CH3 (AF2), TIM8 CH3 (AF3)
+	// C9 : Servo 6,        TIM3 CH4 (AF2), TIM8 CH4 (AF3)
+	// C10: UART3 Tx (AF7), SPI3 CLK  (AF6)
+	// C11: UART3 Rx (AF7), SPI3 MISO (AF6)
+	// C12: UART5 Tx (AF8), SPI3 MOSI (AF6)
+	// C13: VBUS sensing
+	// C14: SD card SPI CSN (GPIO)
+	// C15: Beeper
+
+	// D2 : UART5 Rx (AF8)
 	
 	/* USB ----------------------------------------*/
 
@@ -562,7 +579,7 @@ void board_init()
 	// ADC config
 	RCC->APB2ENR |= RCC_APB2ENR_ADC1EN; // Clock enable
 	//ADC1_COMMON->CCR = (0 << ADC_CCR_ADCPRE_Pos); // ADC clock prescaler (div from APB2 clock), 0=2, 1=4, 2=6, 3=8
-	ADC1->CR1 = ADC_CR1_SCAN;
+	ADC1->CR1 = ADC_CR1_SCAN | ADC_CR1_JEOCIE;
 	ADC1->JSQR = (1 << ADC_JSQR_JL_Pos) | (8 << ADC_JSQR_JSQ3_Pos) | (9 << ADC_JSQR_JSQ4_Pos); // 2 injected conversion of channel 8 and 9
 	ADC1->SMPR2 = (2 << ADC_SMPR2_SMP8_Pos) | (2 << ADC_SMPR2_SMP9_Pos); // sampling time (in cycles), 0=3, 1=15, 2=28, 3=56
 

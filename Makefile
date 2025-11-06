@@ -1,9 +1,7 @@
 # Compiler and tools
-CC = ~/programs/gcc-arm-none-eabi-10-2020-q4-major/bin/arm-none-eabi-gcc
-OBJCOPY = ~/programs/gcc-arm-none-eabi-10-2020-q4-major//bin/arm-none-eabi-objcopy
-SIZE = ~/programs/gcc-arm-none-eabi-10-2020-q4-major//bin/arm-none-eabi-size
-STLINK = "/mnt/c/Program Files (x86)/STMicroelectronics/STM32 ST-LINK Utility/ST-LINK Utility/ST-LINK_CLI.exe"
-DFU = sudo dfu-util
+CC = /tools/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-gcc
+OBJCOPY = /tools/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-objcopy
+SIZE = /tools/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-size
 LDFLAGS = *.o -lm -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs --specs=nosys.specs
 #KEIL:-mthumb-interwork -nostartfiles
 CFLAGS = -c -Wall -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -Wdouble-promotion -O #--fsingle-precision-constant
@@ -82,12 +80,12 @@ all: $(DRONE).elf
 endif
 
 flash:
-	$(OBJCOPY) $(CURRENT_DRONE).elf fc.hex -O ihex
-	$(STLINK) -c SWD UR -P fc.hex -Rst
+	$(OBJCOPY) $(CURRENT_DRONE).elf fc.bin -O binary
+	sudo st-flash write --connect-under-reset --reset fc.bin 0x08000000
 
 dfu:
 	$(OBJCOPY) $(CURRENT_DRONE).elf fc.bin -O binary
-	$(DFU) -a 0 -s 0x08000000$(DFU_OPT) -D fc.bin
+	sudo dfu-util -a 0 -s 0x08000000$(DFU_OPT) -D fc.bin
 
 $(DRONE).elf: $(FC_OBJ)
 	$(CC) -o $(DRONE).elf -T $(LD_SCRIPT) $(LDFLAGS)
@@ -118,4 +116,4 @@ system_stm32f4xx.o: c/stm32f4/cmsis/src/system_stm32f4xx.c c/stm32f4/cmsis/inc/*
 	$(CC) $< -Ic/inc -Ic/usb_vcp/inc $(CFLAGS) $(STM32_FLAGS)
 
 clean:
-	rm -rf *.o fc.hex fc.bin
+	rm -rf *.o fc.bin

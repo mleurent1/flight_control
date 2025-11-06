@@ -590,7 +590,7 @@ int main(void)
 			// Reset processing time measurement
 			flag_proc = 1;
 
-			__WFI();
+			//__WFI(); // Can potentially mask a flag that have just been raised after the if condition
 		}
 	}
 }

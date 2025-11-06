@@ -707,6 +707,26 @@ classdef fc_reg
 				obj.write(37, uint32(x));
 			end
 		end
+		function y = FC_CFG__I_TRANSFER(obj,x)
+			r = double(obj.read(37));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 1), 0)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 0), 1) + bitand(r, 4294967294);
+				obj.write(37, uint32(w));
+			end
+		end
+		function y = FC_CFG__MOTOR_PERIOD(obj,x)
+			r = double(obj.read(37));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 510), -1)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 1), 510) + bitand(r, 4294966785);
+				obj.write(37, uint32(w));
+			end
+		end
 		function y = VTX(obj,x)
 			if nargin < 2
 				y = obj.read(38);
@@ -846,7 +866,9 @@ classdef fc_reg
 			'MPU_CFG', [36,1,0,1],...
 			'MPU_CFG__FILT', [36,1,0,2],...
 			'MPU_CFG__RATE', [36,1,0,2],...
-			'FC_CFG', [37,1,0,0],...
+			'FC_CFG', [37,1,0,1],...
+			'FC_CFG__I_TRANSFER', [37,1,0,2],...
+			'FC_CFG__MOTOR_PERIOD', [37,1,0,2],...
 			'VTX', [38,0,0,1],...
 			'VTX__CHAN', [38,0,0,2],...
 			'VTX__PWR', [38,0,0,2],...

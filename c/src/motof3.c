@@ -126,6 +126,11 @@ void toggle_led()
 	GPIOB->ODR ^= GPIO_ODR_5;
 }
 
+void toggle_led2(_Bool en)
+{
+	
+}
+
 void toggle_beeper(_Bool en)
 {
 	if (en)
