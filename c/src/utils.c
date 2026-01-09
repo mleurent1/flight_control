@@ -33,26 +33,6 @@ uint32_t float_to_uint32(float x)
 	return f2u.u;
 }
 
-uint32_t int32_to_uint32(int32_t x)
-{
-	union {
-		int32_t i;
-		uint32_t u;
-	} i2u;
-	i2u.i = x;
-	return i2u.u;
-}
-
-int32_t uint32_to_int32(uint32_t x)
-{
-	union {
-		int32_t i;
-		uint32_t u;
-	} i2u;
-	i2u.u = x;
-	return i2u.i;
-}
-
 void dshot_encode(volatile uint16_t* val, volatile uint8_t buf[16], _Bool telemetry)
 {
 	int i;

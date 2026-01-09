@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 #include "board.h" // sma_send()
 #ifdef STM32F4
 	#include "stm32f4xx.h" // __WFI()
@@ -65,20 +66,23 @@ void sma_send_cmd(enum sma_cmd_e sma_cmd, uint8_t data)
 	sma_send(buf, len + 1);
 }
 
-void sma_process_resp(void)
+bool sma_process_resp(void)
 {
 	uint8_t cmd, len, crc_calc;
 
 	cmd = sma_data_received[3];
 	len = sma_data_received[4] + 5;
 
-	if ((len > 11) || (len < 8))
-		return;
+	// Check length
+	if ((len > 11) || (len < 8)) {
+		return false;
+	}
 	
+	// Check CRC
 	crc_calc = crc8((uint8_t *)&sma_data_received[3], len-4);
-
-	if (sma_data_received[len-1] != crc_calc)
-		return;
+	if (sma_data_received[len-1] != crc_calc) {
+		return false;
+	}
 
 	switch (cmd) {
 		case 0x09 : {
@@ -95,6 +99,6 @@ void sma_process_resp(void)
 			break;
 		}
 	}
-}
 
-void __attribute__((weak)) sma_send(uint8_t * data, uint8_t size) {}
+	return true;
+}

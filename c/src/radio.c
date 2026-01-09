@@ -19,32 +19,50 @@ uint8_t rf_data_w[6];
 
 /* Public Functions -----------------------*/
 
-_Bool radio_decode(radio_frame_t * radio_frame, struct radio_raw_s * radio_raw, struct radio_s * radio)
+int8_t radio_decode(radio_frame_t * radio_frame, struct radio_s * radio)
 {
-	// TODO: verify checksum
-	if (radio_frame->frame.header == 0x4020) {
-		radio_raw->throttle = radio_frame->frame.chan[2];
-		radio_raw->aileron  = radio_frame->frame.chan[0];
-		radio_raw->elevator = radio_frame->frame.chan[1];
-		radio_raw->rudder   = radio_frame->frame.chan[3];
-		radio_raw->aux[0]   = radio_frame->frame.chan[4];
-		radio_raw->aux[1]   = radio_frame->frame.chan[5];
-		radio_raw->aux[2]   = radio_frame->frame.chan[6];
-		radio_raw->aux[3]   = radio_frame->frame.chan[7];
-		
-		radio->throttle = (float)((int32_t)radio_raw->throttle - (int32_t)REG_THROTTLE__IDLE) / (float)REG_THROTTLE__RANGE;
-		radio->pitch = (float)((int32_t)radio_raw->elevator - (int32_t)REG_ELEVATOR__IDLE) / (float)REG_ELEVATOR__RANGE;
-		radio->roll = (float)((int32_t)radio_raw->aileron - (int32_t)REG_AILERON__IDLE) / (float)REG_AILERON__RANGE;
-		radio->yaw = (float)((int32_t)radio_raw->rudder - (int32_t)REG_RUDDER__IDLE) / (float)REG_RUDDER__RANGE;
-		radio->aux[0] = (float)((int32_t)radio_raw->aux[0] - (int32_t)REG_AUX__IDLE) / (float)REG_AUX__RANGE;
-		radio->aux[1] = (float)((int32_t)radio_raw->aux[1] - (int32_t)REG_AUX__IDLE) / (float)REG_AUX__RANGE;
-		radio->aux[2] = (float)((int32_t)radio_raw->aux[2] - (int32_t)REG_AUX__IDLE) / (float)REG_AUX__RANGE;
-		radio->aux[3] = (float)((int32_t)radio_raw->aux[3] - (int32_t)REG_AUX__IDLE) / (float)REG_AUX__RANGE;
-		
-		return 0;
+	uint8_t crc_calc;
+	struct crsf_rc_chan_s *rc_chan = (struct crsf_rc_chan_s *)radio_frame->frame.payload;
+	struct crsf_link_stat_s *link_stat = (struct crsf_link_stat_s *)radio_frame->frame.payload;
+
+	// Check sync byte
+	if (radio_frame->frame.sync_byte != 0xC8) {
+		return RADIO_FRAME_ERROR;
 	}
-	else
-		return 1;
+
+	// Check frame length
+	if ((radio_frame->frame.frame_length != 12) && (radio_frame->frame.frame_length != 24)) {
+		return RADIO_FRAME_ERROR;
+	}
+
+	// Check CRC
+	crc_calc = crc8(&radio_frame->bytes[2], radio_frame->frame.frame_length-1);
+	if (radio_frame->frame.crc != crc_calc) {
+		return RADIO_FRAME_ERROR;
+	}
+
+	// Check type
+	if ((radio_frame->frame.type != 0x14) && (radio_frame->frame.type != 0x16)) {
+		return RADIO_FRAME_ERROR;
+	}
+
+	if (radio_frame->frame.type == 0x16) {
+		radio->throttle = (float)((int32_t)rc_chan->ch2 - (int32_t)REG_THROTTLE__IDLE) / (float)REG_THROTTLE__RANGE;
+		radio->pitch    = (float)((int32_t)rc_chan->ch1 - (int32_t)REG_ELEVATOR__IDLE) / (float)REG_ELEVATOR__RANGE;
+		radio->roll     = (float)((int32_t)rc_chan->ch0 - (int32_t)REG_AILERON__IDLE ) / (float)REG_AILERON__RANGE;
+		radio->yaw      = (float)((int32_t)rc_chan->ch3 - (int32_t)REG_RUDDER__IDLE  ) / (float)REG_RUDDER__RANGE;
+		radio->aux[0]   = (float)((int32_t)rc_chan->ch4 - (int32_t)REG_AUX__IDLE     ) / (float)REG_AUX__RANGE;
+		radio->aux[1]   = (float)((int32_t)rc_chan->ch5 - (int32_t)REG_AUX__IDLE     ) / (float)REG_AUX__RANGE;
+		radio->aux[2]   = (float)((int32_t)rc_chan->ch6 - (int32_t)REG_AUX__IDLE     ) / (float)REG_AUX__RANGE;
+		radio->aux[3]   = (float)((int32_t)rc_chan->ch7 - (int32_t)REG_AUX__IDLE     ) / (float)REG_AUX__RANGE;
+
+		return RADIO_FRAME_RC_CHAN;
+	} else {
+		radio->rssi = radio_frame->frame.payload[0];//link_stat->up_rssi_ant1; //TODO: debug
+		radio->snr = radio_frame->frame.payload[3];//link_stat->up_snr;
+
+		return RADIO_FRAME_LINK_STAT;
+	}
 }
 
 void radio_expo(struct radio_s * radio, _Bool acro_mode)
@@ -76,6 +94,3 @@ void sx1276_init(void)
 	RF_WRITE(SX1276_MODEM_CONFIG_3, SX1276_MODEM_CONFIG_3__AGC_AUTO_ON);
 	RF_WRITE(SX1276_OP_MODE, SX1276_OP_MODE__LONG_RANGE_MODE | SX1276_OP_MODE__MODE(5));
 }
-
-void __attribute__((weak)) rf_write(uint8_t addr, uint8_t * data, uint8_t size) {}
-void __attribute__((weak)) rf_read(uint8_t addr, uint8_t size) {}

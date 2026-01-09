@@ -31,11 +31,11 @@ const reg_properties_t reg_properties[NB_REG] =
 	{1, 1, 0, 0}, // GYRO_DC_Z
 	{1, 1, 0, 0}, // ACCEL_DC_XY
 	{1, 1, 0, 0}, // ACCEL_DC_Z
-	{0, 1, 0, 65537000}, // THROTTLE
-	{0, 1, 0, 32769500}, // AILERON
-	{0, 1, 0, 32769500}, // ELEVATOR
-	{0, 1, 0, 32769500}, // RUDDER
-	{0, 1, 0, 65537000}, // AUX
+	{0, 1, 0, 107479212}, // THROTTLE
+	{0, 1, 0, 53740512}, // AILERON
+	{0, 1, 0, 53740512}, // ELEVATOR
+	{0, 1, 0, 53740512}, // RUDDER
+	{0, 1, 0, 107479212}, // AUX
 	{0, 1, 0, 1}, // MPU_CFG
 	{0, 1, 0, 3}, // FC_CFG
 	{0, 0, 0, 0}, // VTX

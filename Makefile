@@ -6,6 +6,7 @@ LDFLAGS = *.o -lm -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --s
 #KEIL:-mthumb-interwork -nostartfiles
 CFLAGS = -c -Wall -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -Wdouble-promotion -O #--fsingle-precision-constant
 #KEIL:-gdwarf-2 -MD -O -mapcs-frame -mthumb-interwork -D__GCC -D__GCC_VERSION="821"
+STLINK = /tools/STMicroelectronics/STM32Cube/STM32CubeProgrammer/bin/STM32_Programmer_CLI
 
 # Drone board and feature flags
 ONESHOT = 0
@@ -16,18 +17,21 @@ ifeq ($(DRONE),warpquad)
    FC_FLAGS = -DM1_CCW -DESC=$(ONESHOT) -DBEEPER -DVBAT
 else ifeq ($(DRONE),alien6)
    BOARD = cyclone
-   FC_FLAGS = -DM1_CCW -DESC=$(DSHOT) -DSHOT_RATE=600 -DBEEPER -DVBAT -DOSD -DRUNCAM -DSMART_AUDIO -DLED=4
+   FC_FLAGS = -DM1_CCW -DESC=$(DSHOT) -DDSHOT_RATE=600 -DBEEPER -DVBAT -DOSD -DRUNCAM -DSMART_AUDIO -DLED=4
 else ifeq ($(DRONE),practice)
    BOARD = motof3
-   FC_FLAGS = -DESC=$(DSHOT) -DSHOT_RATE=600 -DBEEPER -DVBAT -DIBAT -DVBAT_USE_RSSI -DOSD -DRUNCAM -DSMART_AUDIO -DLED=4
-else ifeq ($(DRONE),f4)
-   BOARD = f405wing
-   FC_FLAGS = -DESC=$(PWM) -DSHOT_RATE=600 -DDUAL_LED_STATUS
+   FC_FLAGS = -DESC=$(DSHOT) -DDSHOT_RATE=600 -DBEEPER -DVBAT -DIBAT -DVBAT_USE_RSSI -DOSD -DRUNCAM -DSMART_AUDIO -DLED=4
+else ifeq ($(DRONE),micro)
+   BOARD = toothpick
+   FC_FLAGS = -DDUAL_LED_STATUS -DESC=$(DSHOT) -DDSHOT_RATE=300 -DVBAT -DIBAT -DOSD -DSMART_AUDIO
+else ifeq ($(DRONE),test)
+   BOARD = revolution
+   FC_FLAGS = -DDUAL_LED_STATUS -DESC=$(DSHOT) -DDSHOT_RATE=600 #-DVBAT -DIBAT -DOSD -DSMART_AUDIO -DRUNCAM 
 endif
 
 # Source list
 USB_OBJ = usb.o usbd_cdc_if.o usbd_cdc.o usbd_conf.o usbd_core.o usbd_ctlreq.o usbd_desc.o usbd_ioreq.o
-FC_OBJ = fc.o $(BOARD).o sensor.o radio.o reg.o utils.o osd.o smart_audio.o
+FC_OBJ = fc.o board.o $(BOARD).o sensor.o radio.o reg.o utils.o osd.o smart_audio.o
 
 # STM32 sources, flags and link files
 ifeq ($(BOARD),nucleo)
@@ -70,7 +74,7 @@ else
 endif
 
 # Check current drone. If different, clean before compile
-CURRENT_DRONE = $(shell cat CURRENT_DRONE)
+CURRENT_DRONE != cat CURRENT_DRONE
 ifneq ($(CURRENT_DRONE),$(DRONE))
 all:
 	echo $(DRONE) >CURRENT_DRONE
@@ -81,11 +85,11 @@ endif
 
 flash:
 	$(OBJCOPY) $(CURRENT_DRONE).elf fc.bin -O binary
-	sudo st-flash write --connect-under-reset --reset fc.bin 0x08000000
+	$(STLINK) -c port=swd reset=HWrst -w fc.bin 0x08000000 -v -hardRst
 
 dfu:
 	$(OBJCOPY) $(CURRENT_DRONE).elf fc.bin -O binary
-	sudo dfu-util -a 0 -s 0x08000000$(DFU_OPT) -D fc.bin
+	dfu-util -a 0 -s 0x08000000$(DFU_OPT) -D fc.bin
 
 $(DRONE).elf: $(FC_OBJ)
 	$(CC) -o $(DRONE).elf -T $(LD_SCRIPT) $(LDFLAGS)

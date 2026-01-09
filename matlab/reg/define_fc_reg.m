@@ -212,36 +212,36 @@ n = n + 1;
 reg(n).name = 'THROTTLE';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'IDLE',15,0,'uint16',1000};
-reg(n).subf{2} = {'RANGE',31,16,'uint16',1000};
+reg(n).subf{1} = {'IDLE',15,0,'uint16',992-820};
+reg(n).subf{2} = {'RANGE',31,16,'uint16',820*2};
 
 n = n + 1;
 reg(n).name = 'AILERON';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'IDLE',15,0,'uint16',1500};
-reg(n).subf{2} = {'RANGE',31,16,'uint16',500};
+reg(n).subf{1} = {'IDLE',15,0,'uint16',992};
+reg(n).subf{2} = {'RANGE',31,16,'uint16',820};
 
 n = n + 1;
 reg(n).name = 'ELEVATOR';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'IDLE',15,0,'uint16',1500};
-reg(n).subf{2} = {'RANGE',31,16,'uint16',500};
+reg(n).subf{1} = {'IDLE',15,0,'uint16',992};
+reg(n).subf{2} = {'RANGE',31,16,'uint16',820};
 
 n = n + 1;
 reg(n).name = 'RUDDER';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'IDLE',15,0,'uint16',1500};
-reg(n).subf{2} = {'RANGE',31,16,'uint16',500};
+reg(n).subf{1} = {'IDLE',15,0,'uint16',992};
+reg(n).subf{2} = {'RANGE',31,16,'uint16',820};
 
 n = n + 1;
 reg(n).name = 'AUX';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'IDLE',15,0,'uint16',1000};
-reg(n).subf{2} = {'RANGE',31,16,'uint16',1000};
+reg(n).subf{1} = {'IDLE',15,0,'uint16',992-820};
+reg(n).subf{2} = {'RANGE',31,16,'uint16',820*2};
 
 n = n + 1;
 reg(n).name = 'MPU_CFG';

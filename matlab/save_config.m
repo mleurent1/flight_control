@@ -4,7 +4,9 @@ global fc
 global ser
 
 fwrite(ser,6);
-sleep(3000)
+tic
+fc.STATUS;
+toc
 
 reg = fieldnames(fc.info);
 

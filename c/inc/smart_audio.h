@@ -2,6 +2,7 @@
 #define __SMART_AUDIO_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /* Public types --------------------------------------*/
 
@@ -18,7 +19,6 @@ extern volatile uint8_t vtx_current_pwr;
 
 void wait_sma(void);
 void sma_send_cmd(enum sma_cmd_e sma_cmd, uint8_t data);
-void sma_process_resp(void);
-
+bool sma_process_resp(void);
 
 #endif

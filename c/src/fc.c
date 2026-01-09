@@ -1,5 +1,6 @@
 #include "fc.h"
 #include "board.h" // board_init()
+#include "usb.h" // usb_init()
 #include "sensor.h" // mpu_process_samples()
 #include "radio.h" // radio_decode()
 #include "reg.h" // REG__*
@@ -11,6 +12,7 @@
 #endif
 #include <string.h> // memcpy()
 #include "osd.h" // osd_menu()
+#include "smart_audio.h" // sma_send_cmd()
 
 /* Private defines ------------------------------------*/
 
@@ -58,8 +60,8 @@ volatile uint32_t t_ms;
 
 int main(void)
 {
-	int i;
-	_Bool error;
+	uint8_t i;
+	int8_t status;
 
 	_Bool flag_radio_connected = 0;
 	_Bool flag_armed = 0;
@@ -67,10 +69,8 @@ int main(void)
 	_Bool flag_acro_z = 0;
 	_Bool flag_sensor_timeout = 0;
 	_Bool flag_radio_timeout = 0;
-	_Bool flag_proc = 0;
 
 	radio_frame_t radio_frame1;
-	struct radio_raw_s radio_raw;
 	struct radio_s radio;
 
 	float radio_pitch_smooth = 0;
@@ -131,18 +131,15 @@ int main(void)
 
 	host_buffer_tx_t host_buffer_tx;
 
-	int32_t t_proc = 0;
+	uint16_t t_proc_0;
+	uint16_t t_proc;
 	uint16_t t_proc_max = 0;
-	uint16_t t_proc_max_hold = 0;
-	#ifdef LED
-		uint8_t grb[3];
-	#endif
+#ifdef LED
+	uint8_t grb[3];
+#endif
 	_Bool led_en = 1;
 
 	/* Init -----------------------------------------------------*/
-
-	reg_init();
-	board_init();
 
 	radio.throttle = 0;
 	radio.pitch = 0;
@@ -152,10 +149,17 @@ int main(void)
 	radio.aux[1] = 0;
 	radio.aux[2] = 0;
 	radio.aux[3] = 0;
+	radio.rssi = 0;
+	radio.snr = 0;
 
 	angle.pitch = 0;
 	angle.roll = 0;
 
+	board_init();
+
+	usb_init();
+
+	reg_init();
 	p_pitch = REG_P_PITCH;
 	i_pitch = REG_I_PITCH;
 	d_pitch = REG_D_PITCH;
@@ -163,24 +167,45 @@ int main(void)
 	i_roll  = REG_I_ROLL;
 	d_roll  = REG_D_ROLL;
 
+	wait_ms(1000); // Wait for regulators to settle
+
+	mpu_init();
+
+	trig_radio_rx();
+
+#ifdef VBAT
+	// Get first vbat value
+	trig_vbat_meas();
+	while (!flag_vbat) __WFI();
+	flag_vbat = 0;
+#endif
+
 	vbat_smoothed = vbat;
 	nb_cells = floor(vbat / 3.6f);
 	vbat_cell = vbat / nb_cells;
 	ibat_smoothed = ibat;
+
+#ifdef OSD
+	osd_init();
+#endif
+
+#ifdef SMART_AUDIO
+	sma_send_cmd(SMA_GET_SETTINGS, 0);
+	//wait_sma();
+	wait_ms(1); // In case VTX is not powered by USB
+	sma_process_resp();
+	REG_VTX = (vtx_current_chan << REG_VTX__CHAN_Pos) | (vtx_current_pwr << REG_VTX__PWR_Pos);
+#endif
+
+	en_sensor_irq();
+
+	t_proc_0 = get_t_us();
 
 	/* Loop ----------------------------------------------------------------------------
 	-----------------------------------------------------------------------------------*/
 
 	while (1)
 	{
-		/* Processing time measurement ------------------------------------------------*/
-
-		if (flag_proc)
-		{
-			flag_proc = 0; // reset flag
-			t_proc = -get_t_us();
-		}
-
 		/* Process radio commands -----------------------------------------------------*/
 
 		if (flag_radio) // new radio commands are ready
@@ -188,14 +213,14 @@ int main(void)
 			flag_radio = 0; // reset flag
 
 			// Decode radio commands
-			error = radio_decode(&radio_frame, &radio_raw, &radio);
-			radio_frame1 = radio_frame;
-			if (error) {
+			status = radio_decode(&radio_frame, &radio);
+			radio_frame1 = radio_frame; // record buffer for debug
+
+			if (status == RADIO_FRAME_ERROR)
 				radio_error_count++;
-				radio_sync();
-			}
-			else
-			{
+
+			if (status == RADIO_FRAME_RC_CHAN) {
+				trig_radio_rx(); // to get next frame
 				flag_radio_timeout = 0; // reset timeout flag
 				flag_radio_connected = 1; // if we get here, there is a working radio receiver
 
@@ -209,14 +234,16 @@ int main(void)
 				else
 					flag_acro = 0;
 
-				#ifdef OSD
-					// OSD menu navigation from stick moves
-					if (!flag_armed)
-						osd_menu(&radio);
-				#endif
+			#ifdef OSD
+				// OSD menu navigation from stick moves
+				if (!flag_armed)
+					osd_menu(&radio);
+			#endif
 				
 				// Exponential
 				radio_expo(&radio, flag_acro);
+			} else {
+				trig_delayed_radio_rx();
 			}
 		}
 
@@ -351,17 +378,17 @@ int main(void)
 			/*------ Motor command ------*/
 
 			// Motor matrix
-			#ifdef M1_CCW
-				motor[0] = radio.throttle * (float)REG_MOTOR__RANGE + roll + pitch - yaw;
-				motor[1] = radio.throttle * (float)REG_MOTOR__RANGE + roll - pitch + yaw;
-				motor[2] = radio.throttle * (float)REG_MOTOR__RANGE - roll - pitch - yaw;
-				motor[3] = radio.throttle * (float)REG_MOTOR__RANGE - roll + pitch + yaw;
-			#else
-				motor[0] = radio.throttle * (float)REG_MOTOR__RANGE + roll + pitch + yaw;
-				motor[1] = radio.throttle * (float)REG_MOTOR__RANGE + roll - pitch - yaw;
-				motor[2] = radio.throttle * (float)REG_MOTOR__RANGE - roll - pitch + yaw;
-				motor[3] = radio.throttle * (float)REG_MOTOR__RANGE - roll + pitch - yaw;
-			#endif
+		#ifdef M1_CCW
+			motor[0] = radio.throttle * (float)REG_MOTOR__RANGE + roll + pitch - yaw;
+			motor[1] = radio.throttle * (float)REG_MOTOR__RANGE + roll - pitch + yaw;
+			motor[2] = radio.throttle * (float)REG_MOTOR__RANGE - roll - pitch - yaw;
+			motor[3] = radio.throttle * (float)REG_MOTOR__RANGE - roll + pitch + yaw;
+		#else
+			motor[0] = radio.throttle * (float)REG_MOTOR__RANGE + roll + pitch + yaw;
+			motor[1] = radio.throttle * (float)REG_MOTOR__RANGE + roll - pitch - yaw;
+			motor[2] = radio.throttle * (float)REG_MOTOR__RANGE - roll - pitch + yaw;
+			motor[3] = radio.throttle * (float)REG_MOTOR__RANGE - roll + pitch - yaw;
+		#endif
 
 			// Offset and clip motor value
 			for (i=0; i<4; i++) {
@@ -403,10 +430,8 @@ int main(void)
 
 			vbat_smoothed += filter_alpha_vbat * vbat - filter_alpha_vbat * vbat_smoothed; // low-pass filter
 			vbat_cell = vbat_smoothed / nb_cells;
-			#ifdef IBAT
-				ibat_smoothed += filter_alpha_ibat * ibat - filter_alpha_ibat * ibat_smoothed; // low-pass filter
-				imah += ibat_smoothed / 3600.0f;
-			#endif
+			ibat_smoothed += filter_alpha_ibat * ibat - filter_alpha_ibat * ibat_smoothed; // low-pass filter
+			imah += ibat_smoothed / 3600.0f;
 		}
 
 		/* Flight controller status: LED, beeper, timeout and debug output -----------------------------------------------*/
@@ -428,10 +453,10 @@ int main(void)
 				}
 			}
 			
-			#ifdef VBAT
-				// Measure Vbat every ms
-				trig_vbat_meas();
-			#endif
+		#ifdef VBAT
+			// Measure Vbat every ms
+			trig_vbat_meas();
+		#endif
 
 
 			if ((t_ms - t_status_prev) >= STATUS_PERIOD) {
@@ -465,18 +490,14 @@ int main(void)
 				// LED double blinks when timeout on sensor or radio samples, or vbat too low
 				if (flag_sensor_timeout || flag_radio_timeout || ((vbat_cell < REG_VBAT_MIN) && (nb_cells > 0))) {
 					#ifdef DUAL_LED_STATUS
-						if ((status_cnt & 0x07) == 0) {
-							toggle_led();
-							toggle_led2(1);
-						}
+						if ((status_cnt & 0x03) == 0) toggle_led(1);
+						if ((status_cnt & 0x03) == 2) toggle_led2(1);
 					#else
-						if ((status_cnt & 0x01) == 0)
-							toggle_led();
+						toggle_led(1);
 					#endif
 				}
 				else {
-					if ((status_cnt & 0x07) == 0)
-						toggle_led();
+					if ((status_cnt & 0x03) == 0) toggle_led(1);
 					toggle_led2(0);
 				}
 
@@ -494,28 +515,28 @@ int main(void)
 
 				// Set flags, to be cleared when new samples are ready
 				flag_sensor_timeout = 1;
-				if (flag_radio_connected && ((status_cnt & 0x03) == 0))
+				if (flag_radio_connected)
 					flag_radio_timeout = 1;
 
-				#ifdef OSD
-					// OSD telemetry
-					osd_telemetry(vbat_cell, ibat_smoothed, imah, t_s, t_min);
-				#endif
+			#ifdef OSD
+				// OSD telemetry
+				osd_telemetry(vbat_cell, ibat_smoothed, imah, t_s, t_min, radio.rssi, radio.snr);
+			#endif
 
-				#ifdef LED
-					// Change LED color
-					if (radio.aux[3] < 0.5f) {
-						grb[0] = (uint8_t)((0.5f-radio.aux[3])*510.0f) * led_en;
-						grb[1] = (uint8_t)(radio.aux[3]*510.0f) * led_en;
-						grb[2] = 0;
-					}
-					else {
-						grb[0] = 0;
-						grb[1] = (uint8_t)((1.0f-radio.aux[3])*510.0f) * led_en;
-						grb[2] = (uint8_t)((radio.aux[3]-0.5f)*510.0f) * led_en;
-					}
-					set_leds(grb);
-				#endif
+			#ifdef LED
+				// Change LED color
+				if (radio.aux[3] < 0.5f) {
+					grb[0] = (uint8_t)((0.5f-radio.aux[3])*510.0f) * led_en;
+					grb[1] = (uint8_t)(radio.aux[3]*510.0f) * led_en;
+					grb[2] = 0;
+				}
+				else {
+					grb[0] = 0;
+					grb[1] = (uint8_t)((1.0f-radio.aux[3])*510.0f) * led_en;
+					grb[2] = (uint8_t)((radio.aux[3]-0.5f)*510.0f) * led_en;
+				}
+				set_leds(grb);
+			#endif
 
 				// Send data to host
 				if (REG_CTRL__DEBUG) {
@@ -551,8 +572,7 @@ int main(void)
 					host_buffer_tx.u16[22*2]   = motor_raw[2];
 					host_buffer_tx.u16[22*2+1] = motor_raw[3];
 					host_buffer_tx.u16[23*2]   = t_proc_max;
-					host_buffer_tx.u16[23*2+1] = t_proc_max_hold;
-					host_send(host_buffer_tx.u8, 24*4);
+					host_send(host_buffer_tx.u8, 21*4 + 5*2);
 				}
 				else if (REG_CTRL__DEBUG_RADIO) {
 					memcpy(host_buffer_tx.u8, radio_frame1.bytes, sizeof(radio_frame1));
@@ -561,7 +581,6 @@ int main(void)
 
 				// Reset max processing time
 				t_proc_max = 0;
-				t_proc_max_hold = 0;
 			}
 		}
 
@@ -579,16 +598,12 @@ int main(void)
 		if (!flag_radio && !flag_sensor && !flag_vbat && !flag_time && !flag_host)
 		{
 			// Record processing time
-			t_proc += (int32_t)get_t_us();
-			if (t_proc < 0)
-				t_proc += 0x0000FFFF;
-			if ((uint16_t)t_proc > t_proc_max)
-				t_proc_max = (uint16_t)t_proc;
-			if ((uint16_t)t_proc > t_proc_max_hold)
-				t_proc_max_hold = (uint16_t)t_proc;
+			t_proc = get_t_us() - t_proc_0;
+			if (t_proc > t_proc_max)
+				t_proc_max = t_proc;
 
 			// Reset processing time measurement
-			flag_proc = 1;
+			t_proc_0 = get_t_us();
 
 			//__WFI(); // Can potentially mask a flag that have just been raised after the if condition
 		}

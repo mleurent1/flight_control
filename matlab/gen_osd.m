@@ -1,22 +1,41 @@
-menu = [
-   'P PITCH ROLL'
-   'I PITCH ROLL'
-   'D PITCH ROLL'
-   'P YAW       '
-   'I YAW       '
-   'RATE        '
-   'EXPO        '
-   'MOTOR START '
-   'MOTOR ARMED '
-   'MOTOR RANGE '
-   'I TRANSFER  '
-   'VTX CHANNEL '
-   'VTX POWER   '
-   'SAVE REG    '
-   'SAVE VTX    '
-   'RUNCAM      '];
+% telem = ' 00.00V                00:00  -000dBm -00dB';
+telem = ' 00.00V 000.0A 0000mAh 00:00  -000dBm -00dB';
 
-menu_str = [menu - 'A' + 11, zeros(size(menu,1),3), 255*ones(size(menu,1),1)];
+t = telem - ' ' + 32; % ASCII conversion
+telem_str = t;
+telem_str((t>=65)&(t<=90)) = telem_str((t>=65)&(t<=90)) - 65 + 11; % A-Z
+telem_str((t>=97)&(t<=122)) = telem_str((t>=97)&(t<=122)) - 97 + 2*16+5; % a-z
+telem_str((t==32)) = 0; % ' '
+telem_str((t==45)) = 4*16+9; % '-'
+telem_str((t==46)) = 4*16+1; % '.'
+telem_str((t==48)) = 0; % '0'
+telem_str((t==58)) = 4*16+4; % ':'
+telem_str = [telem_str, 255];
+
+fprintf('uint8_t telem_str[%d] = {',length(telem_str));
+% fprintf('0x%02X, ',telem_str)
+fprintf('0x%02X, ',fliplr(telem_str))
+fprintf('\b\b}; // %s\n', strtrim(telem))
+
+menu = [
+   'P PITCH ROLL   '
+   'I PITCH ROLL   '
+   'D PITCH ROLL   '
+   'P YAW          '
+   'I YAW          '
+   'RATE           '
+   'EXPO           '
+   'MOTOR START    '
+   'MOTOR ARMED    '
+   'MOTOR RANGE    '
+   'I TRANSFER     '
+   'VTX CHANNEL    '
+   'VTX POWER      '
+   'SAVE REG       '
+   'SAVE VTX       '
+   'RUNCAM         '];
+
+menu_str = [menu - 'A' + 11, 255*ones(size(menu,1),1)];
 menu_str(menu_str<0) = 0;
 
 fprintf('const uint8_t menu_str[%d][%d] = {\n\t{',size(menu_str,1),size(menu_str,2));

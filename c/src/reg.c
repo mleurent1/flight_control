@@ -45,11 +45,11 @@ const reg_properties_t reg_properties[NB_REG] =
 	{1, 1, 0, 0}, // GYRO_DC_Z
 	{1, 1, 0, 0}, // ACCEL_DC_XY
 	{1, 1, 0, 0}, // ACCEL_DC_Z
-	{0, 1, 0, 65537000}, // THROTTLE
-	{0, 1, 0, 32769500}, // AILERON
-	{0, 1, 0, 32769500}, // ELEVATOR
-	{0, 1, 0, 32769500}, // RUDDER
-	{0, 1, 0, 65537000}, // AUX
+	{0, 1, 0, 107479212}, // THROTTLE
+	{0, 1, 0, 53740512}, // AILERON
+	{0, 1, 0, 53740512}, // ELEVATOR
+	{0, 1, 0, 53740512}, // RUDDER
+	{0, 1, 0, 107479212}, // AUX
 	{0, 1, 0, 1}, // MPU_CFG
 	{0, 1, 0, 3}, // FC_CFG
 	{0, 0, 0, 0}, // VTX
@@ -59,14 +59,12 @@ const reg_properties_t reg_properties[NB_REG] =
 	{0, 0, 1, 0} // DEBUG_FLOAT
 };
 
+// Place Registers at 48kB in flash
+#define REG_FLASH_ADDR 0x0800C000
+uint32_t* flash_r = (uint32_t*)REG_FLASH_ADDR;
 #ifdef STM32F3
-	#define REG_FLASH_ADDR 0x0800F800
-	uint32_t* flash_r = (uint32_t*)REG_FLASH_ADDR;
 	uint16_t* flash_w = (uint16_t*)REG_FLASH_ADDR;
 #elif defined(STM32F4)
-	//#define REG_FLASH_ADDR 0x080E0000
-	#define REG_FLASH_ADDR 0x08060000
-	uint32_t* flash_r = (uint32_t*)REG_FLASH_ADDR;
 	uint32_t* flash_w = (uint32_t*)REG_FLASH_ADDR;
 #endif
 
@@ -80,41 +78,38 @@ float filter_alpha_radio;
 
 void flash_erase(void)
 {
-	if (FLASH->CR & FLASH_CR_LOCK) {
-		FLASH->KEYR = 0x45670123;
-		FLASH->KEYR = 0xCDEF89AB;
-	}
+	// Unclock
+	FLASH->KEYR = 0x45670123;
+	FLASH->KEYR = 0xCDEF89AB;
 	#ifdef STM32F3
-		FLASH->CR |= FLASH_CR_PER;
+		// Clear page 24 (2kB) located at 48kB
+		FLASH->CR = FLASH_CR_PER;
 		FLASH->AR = REG_FLASH_ADDR;
-		FLASH->CR |= FLASH_CR_STRT;
-		while (FLASH->SR & FLASH_SR_BSY) {}
-		FLASH->CR &= ~FLASH_CR_PER;
 	#elif defined(STM32F4)
-		FLASH->CR |= FLASH_CR_SER | (7 << FLASH_CR_SNB_Pos);
-		FLASH->CR |= FLASH_CR_STRT;
-		while (FLASH->SR & FLASH_SR_BSY) {}
-		FLASH->CR &= ~FLASH_CR_SER;
+		// Clear sector 3 (16kB) located at 48kB
+		FLASH->CR = FLASH_CR_SER | (3 << FLASH_CR_SNB_Pos);
 	#endif
+	FLASH->CR |= FLASH_CR_STRT;
+	while (FLASH->SR & FLASH_SR_BSY) {}
+	FLASH->SR = FLASH_SR_EOP; // Clear end of operation flag
+	FLASH->CR = FLASH_CR_LOCK; // Lock
 }
 
 void flash_write(uint8_t addr, uint32_t data) {
-	if (FLASH->CR & FLASH_CR_LOCK) {
-		FLASH->KEYR = 0x45670123;
-		FLASH->KEYR = 0xCDEF89AB;
-	}
+	// Unclock
+	FLASH->KEYR = 0x45670123;
+	FLASH->KEYR = 0xCDEF89AB;
 	#ifdef STM32F3
-		FLASH->CR |= FLASH_CR_PG;
+		FLASH->CR = FLASH_CR_PG;
 		flash_w[addr*2] = (uint16_t)(data & 0x0000FFFF);
 		flash_w[addr*2+1] = (uint16_t)((data & 0xFFFF0000) >> 16);
-		while (FLASH->SR & FLASH_SR_BSY) {}
-		FLASH->CR &= ~FLASH_CR_PG;
 	#elif defined(STM32F4)
-		FLASH->CR |= FLASH_CR_PG | (2 << FLASH_CR_PSIZE_Pos);
+		FLASH->CR = FLASH_CR_PG | (2 << FLASH_CR_PSIZE_Pos);
 		flash_w[addr] = data;
-		while (FLASH->SR & FLASH_SR_BSY) {}
-		FLASH->CR &= ~FLASH_CR_PG;
 	#endif
+	while (FLASH->SR & FLASH_SR_BSY) {}
+	FLASH->SR = FLASH_SR_EOP; // Clear end of operation flag
+	FLASH->CR = FLASH_CR_LOCK; // Lock
 }
 
 /* Public functions ----------------------------------------*/
@@ -226,11 +221,13 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 						else
 							filter_alpha_radio = 7.0f / (float)REG_TIME_CONSTANT_2__RADIO;
 					}
+				#ifdef SMART_AUDIO
 					else if (addr == REG_VTX_Addr) {
 						sma_send_cmd(SMA_SET_CHANNEL, REG_VTX__CHAN);
 						wait_sma();
 						sma_send_cmd(SMA_SET_POWER, REG_VTX__PWR);
 					}
+				#endif
 					else if (addr == REG_DEBUG_INT_Addr) {
 						/* Put your debug command here */
 					}
@@ -242,13 +239,11 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			break;
 		}
 		case 2: { // SPI read to MPU
-			if (REG_CTRL__SENSOR_HOST_CTRL == 1)
-				sensor_read(addr,1);
+			sensor_read(addr,1);
 			break;
 		}
 		case 3: { // SPI write to MPU
-			if (REG_CTRL__SENSOR_HOST_CTRL == 1)
-				sensor_write(addr, host_buffer_rx->data.u8[3]);
+			sensor_write(addr, host_buffer_rx->data.u8[3]);
 			break;
 		}
 		case 4: { // Flash read
@@ -273,10 +268,7 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			break;
 		}
 		case 9: { // UART send to OSD
-			uint8_t buf[2];
-			buf[0] = host_buffer_rx->addr;
-			buf[1] = host_buffer_rx->data.u8[3];
-			osd_send(buf, 2);
+			osd_send(&host_buffer_rx->data.u8[0], host_buffer_rx->addr);
 			break;
 		}
 		case 10: { // UART send to Smart Audio

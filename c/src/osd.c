@@ -15,8 +15,8 @@
 
 /* Private defines --------------------------------------*/
 
-#define DISP_ADDR_MENU (uint8_t)(9*30+5)
-#define DISP_ADDR_TELEMETRY (uint8_t)(13*30+2)
+#define DISP_ADDR_MENU (9*30+5)
+#define DISP_ADDR_TELEMETRY (13*30)
 
 /* Private macros ------------------------------------------*/
 
@@ -103,7 +103,7 @@ const uint8_t saved_str[16] = {0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0
 
 /* Global variables -----------------------*/
 
-volatile uint8_t osd_data_to_send[30]; // 30 = nb of char in 1 line
+volatile uint8_t osd_data_to_send[30*2]; // 30 = nb of char in 1 line
 volatile uint8_t osd_nbytes_to_send = 0;
 volatile uint8_t osd_data_received[2];
 volatile uint8_t osd_nbytes_to_receive = 0;
@@ -242,29 +242,36 @@ void osd_init(void)
 		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN | MAX7456_VM0__PAL_NOT_NTSC);
 	else
 		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN);
-	//osd_write(MAX7456_HOS, 45); // 40
-	//osd_write(MAX7456_VOS, 28); // 22
-	osd_write(MAX7456_DMAH, MAX7456_DMAH__DMA_8);
-	osd_write(MAX7456_DMAL, DISP_ADDR_TELEMETRY);
+	osd_write(MAX7456_HOS, 40);
+	osd_write(MAX7456_VOS, 22);
+	osd_write(MAX7456_DMAH, MAX7456_DMAH__DMA_8); // Use half-bottom only
+	osd_write(MAX7456_DMAL, (uint8_t)DISP_ADDR_TELEMETRY);
 }
 
-void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_min)
+void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_min, uint8_t rssi, int8_t snr)
 {
-	#ifdef IBAT
-		uint8_t str[28] = {0xFF, 0,0,68,0,0, 0, 44,11,49,0,0,0,0, 0, 11,0,65,0,0,0, 0, 32,0,0,65,0,0};
-	#else
-		uint8_t str[28] = {0xFF, 0,0,68,0,0, 0,  0, 0, 0,0,0,0,0, 0,  0,0, 0,0,0,0, 0, 32,0,0,65,0,0};
-	#endif
+#ifdef IBAT
+	uint8_t telem_str[44] = {0xFF, 0x0C, 0x28, 0x00, 0x00, 0x49, 0x00, 0x31, 0x0C, 0x28, 0x00, 0x00, 0x00, 0x49, 0x00, 0x00, 0x00, 0x00, 0x44, 0x00, 0x00, 0x00, 0x2C, 0x0B, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x41, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x41, 0x00, 0x00, 0x00}; //  00.00V 000.0A 0000mAh 00:00  -000dBm -00dB
+#else
+	uint8_t telem_str[44] = {0xFF, 0x0C, 0x28, 0x00, 0x00, 0x49, 0x00, 0x31, 0x0C, 0x28, 0x00, 0x00, 0x00, 0x49, 0x00, 0x00, 0x00, 0x00, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x41, 0x00, 0x00, 0x00}; //  00.00V                00:00  -000dBm -00dB
+#endif
 
 	if ((state == TELEMETRY) && (osd_nbytes_to_send == 0) && (osd_nbytes_to_receive == 0)) {
-		float_to_str(vbat, &str[26], &str[23], 2, 2);
-		#ifdef IBAT
-			float_to_str(ibat, &str[18], &str[16], 3, 1);
-			float_to_str(imah, &str[10], &str[10], 4, 0);
-		#endif
-		float_to_str((float)t_min, &str[4], &str[4], 2, 0);
-		float_to_str((float)t_s, &str[1], &str[1], 2, 0);
-		osd_write_str(str, sizeof(str));
+		float_to_str(vbat, &telem_str[41], &telem_str[38], 2, 2);
+	#ifdef IBAT
+		float_to_str(ibat, &telem_str[33], &telem_str[31], 3, 1);
+		float_to_str(imah, &telem_str[25], &telem_str[25], 4, 0);
+	#endif
+		float_to_str((float)t_min, &telem_str[19], &telem_str[19], 2, 0);
+		float_to_str((float)t_s, &telem_str[16], &telem_str[16], 2, 0);
+		float_to_str((float)rssi, &telem_str[10], &telem_str[10], 3, 0);
+		if (snr > 0) {
+			float_to_str((float)snr, &telem_str[3], &telem_str[3], 2, 0);
+			telem_str[5] = 0;
+		} else {
+			float_to_str(-(float)snr, &telem_str[3], &telem_str[3], 2, 0);
+		}
+		osd_write_str(telem_str, sizeof(telem_str));
 	}
 }
 
@@ -422,13 +429,13 @@ void osd_menu(struct radio_s * radio)
 	// Display menu
 	if ((state_prev == TELEMETRY) && (state == TELEMETRY_ENTER)) {
 		wait_osd();
-		osd_write(MAX7456_DMAL, DISP_ADDR_MENU);
+		osd_write(MAX7456_DMAL, (uint8_t)DISP_ADDR_MENU);
 		osd_write(MAX7456_DMM, MAX7456_DMM__CLR_DISPLAY_MEM);
 		osd_write_str((uint8_t*)menu_str[menu_idx], sizeof(menu_str[0]));
 	} else if ( ((state_prev == MENU) && ((state == MENU_UP) || (state == MENU_DOWN))) || ((state_prev == REG) && (state == REG_LEFT)) || ((state_prev == RUNCAM_MENU) && (state == RUNCAM_EXIT)) ) {
 		osd_write_str((uint8_t*)menu_str[menu_idx], sizeof(menu_str[0]));
 	} else if ((state_prev == MENU) && (state == MENU_EXIT)) {
-		osd_write(MAX7456_DMAL, DISP_ADDR_TELEMETRY);
+		osd_write(MAX7456_DMAL, (uint8_t)DISP_ADDR_TELEMETRY);
 		osd_write(MAX7456_DMM, MAX7456_DMM__CLR_DISPLAY_MEM);
 		REG_VTX = (vtx_current_chan << REG_VTX__CHAN_Pos) | (vtx_current_pwr << REG_VTX__PWR_Pos); // Update VTX register at exit
 	}
@@ -617,6 +624,7 @@ void osd_menu(struct radio_s * radio)
 		osd_write_str((uint8_t*)saved_str, sizeof(saved_str));
 	}
 
+#ifdef SMART_AUDIO
 	// Apply VTX settings
 	if ((state_prev == MENU) && (menu_idx == 14) && (state == MENU_RIGHT)) {
 		sma_send_cmd(SMA_SET_CHANNEL, REG_VTX__CHAN);
@@ -627,6 +635,7 @@ void osd_menu(struct radio_s * radio)
 		vtx_current_pwr = REG_VTX__PWR;
 		osd_write_str((uint8_t*)saved_str, sizeof(saved_str));
 	}
+#endif
 
 	// Runcam
 	if ((state_prev == MENU) && (state == MENU_RIGHT) && (menu_idx == 15)) {
@@ -669,6 +678,3 @@ void osd_menu(struct radio_s * radio)
 
 	state_prev = state;
 }
-
-void __attribute__((weak)) osd_send(uint8_t * data, uint8_t size) {}
-void __attribute__((weak)) runcam_send(uint8_t * data, uint8_t size) {}

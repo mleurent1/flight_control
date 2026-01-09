@@ -6,7 +6,7 @@ global KEY_IS_PRESSED
 
 t_max = 10;
 status_period = 0.1;
-buf_len = 24*4;
+buf_len = 21*4 + 5*2;
 
 KEY_IS_PRESSED = 0;
 
@@ -56,15 +56,14 @@ l{8,1} = bar(1:4,zeros(1,4),'Parent',a{8});
 set(a{8},'XLabel',text('String','motor'),'YLim',[0,2010]);
 
 set(a{9},'XLim',[t(1),t(end)],'YLabel',text('String','time process (us)'));%,'YLim',[-10,1010]);
-l{9,1} = line(t,nan(1,len),'Parent',a{9},'Color','b','DisplayName','max');
-l{9,2} = line(t,nan(1,len),'Parent',a{9},'Color','r','DisplayName','max hold','LineStyle','--');
+l{9,1} = line(t,nan(1,len),'Parent',a{9},'Color','b');
 
-for n = [1,2,3,7,9]
+for n = [1,2,3,5,6,7,9]
 	set(a{n},'XLabel',text('String','time (s)'));
-	%legend(a{n},'show','Location','NorthWest')
 end
-set(a{5},'XLabel',text('String','time (s)'));
-set(a{6},'XLabel',text('String','time (s)'));
+% for n = [1,2,3,7]
+% 	legend(a{n},'show','Location','NorthWest')
+% end
 
 sensor.gyro_x = nan(1,len);
 sensor.gyro_y = nan(1,len);
@@ -92,7 +91,7 @@ yaw = nan(1,len);
 
 motor = zeros(4,1);
 
-t_processing = nan(2,len);
+t_processing = nan(1,len);
 
 while ser.BytesAvailable > 0
 	fread(ser,ser.BytesAvailable);
@@ -126,9 +125,7 @@ while ~KEY_IS_PRESSED
 		roll(1:len-d) = roll(d+1:len);
 		yaw(1:len-d) = yaw(d+1:len);
 		
-		for m = 1:2
-			t_processing(m,1:len-d) = t_processing(m,d+1:len);
-		end
+		t_processing(1:len-d) = t_processing(d+1:len);
 
 		n = 0;
 
@@ -181,10 +178,8 @@ while ~KEY_IS_PRESSED
 			n = n + 2;
 		end
 
-		for m = 1:2
-			t_processing(m,len1:len) = 2^8*r(n+2,:) + r(n+1,:);
-			n = n + 2;
-		end
+		t_processing(len1:len) = 2^8*r(n+2,:) + r(n+1,:);
+		n = n + 2;
 
 		set(l{1,1},'YData',sensor.gyro_x);
 		set(l{1,2},'YData',sensor.gyro_y);
@@ -209,9 +204,7 @@ while ~KEY_IS_PRESSED
 		
 		set(l{8,1},'YData',motor);
 		
-		for m = 1:2
-			set(l{9,m},'YData',t_processing(m,:));
-		end
+		set(l{9,1},'YData',t_processing);
 		
 		drawnow
 		

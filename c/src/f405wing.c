@@ -158,9 +158,12 @@ void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
 #endif
 }
 
-void toggle_led()
+void toggle_led(_Bool en)
 {
-	GPIOA->ODR ^= GPIO_ODR_OD13;
+	if (en)
+		GPIOA->ODR ^= GPIO_ODR_OD13;
+	else
+		GPIOA->BSRR = GPIO_BSRR_BS_13;
 }
 
 void toggle_led2(_Bool en)
@@ -358,17 +361,22 @@ void board_init()
 	GPIOD->PUPDR = 0;
 	GPIOD->OSPEEDR = 0;
 
-	// A0 : UART4 Tx (AF8)
-	// A1 : UART4 Rx (AF8)
-	// A2 : UART2 Tx (AF7)
-	// A3 : UART2 Rx (AF7)
-	// A4 : Gyro (MPU600) SPI1 CSN  (AF5)
-	// A5 : Gyro (MPU600) SPI1 CLK  (AF5)
-	// A6 : Gyro (MPU600) SPI1 MISO (AF5)
-	// A7 : Gyro (MPU600) SPI1 MOSI (AF5)
-	// A8 : Servo 9. TIM1 CH1 (AF1)
-	// A9 : UART1 Tx (AF7), TIM1 CH2 (AF1)
-	// A10: UART1 Rx (AF7), TIM1 CH3 (AF1)
+	// From INAV target MATEKF405SE:
+
+	// Gyro: MPU6000
+	// Baro: BMP280
+
+	// A0 : USART4_TX (AF8)
+	// A1 : USART4_RX (AF8)
+	// A2 : USART2_TX (AF7)
+	// A3 : USART2_RX (AF7)
+	// A4 : Gyro NSS,  SPI1_NSS  (AF5)
+	// A5 : Gyro SCK,  SPI1_SCK  (AF5)
+	// A6 : Gyro MISO, SPI1_MISO (AF5)
+	// A7 : Gyro MOSI, SPI1_MOSI (AF5)
+	// A8 : Servo 9, TIM1 CH1 (AF1)
+	// A9 : USART1_TX (AF7), TIM1 CH2 (AF1)
+	// A10: USART1_RX (AF7), TIM1 CH3 (AF1)
 
 	// A13: Green LED
 	// A14: Blue LED
@@ -377,13 +385,13 @@ void board_init()
 	// B0 : Servo 3, TIM3 CH3 (AF2)
 	// B1 : Servo 4, TIM3 CH4 (AF2)
 
-	// B3 : SD card SPI3 CLK  (AF6)
+	// B3 : SD card SPI3 SCK  (AF6)
 	// B4 : SD card SPI3 MISO (AF6)
 	// B5 : SD card SPI3 MOSI (AF6)
 	// B6 : Servo 2, TIM4 CH1 (AF2), UART1 Tx (AF7), I2C1 SCL (AF4)
 	// B7 : Servo 1, TIM4 CH2 (AF2), UART1 Rx (AF7), I2C1 SDA (AF4)
-	// B8 : Baro (BMP280) + "CL1" I2C1 SCL (AF4), external pull-up
-	// B9 : Baro (BMP280) + "DA1" I2C1 SDA (AF4), SPI2 CSN (AF5), external pull-up
+	// B8 : Baro SCL + "CL1" I2C1 SCL (AF4), external pull-up
+	// B9 : Baro SDA + "DA1" I2C1 SDA (AF4), SPI2_NSS (AF5), external pull-up
 	// B10: "CL2", I2C2 SCL (AF4), UART3 Tx (AF7), TIM2 CH3 (AF1), SPI2 CLK (AF5)
 	// B11: "DA2", I2C2 SDA (AF4), UART3 Rx (AF7), TIM2 CH4 (AF1)
 	// B12: OSD (MAX7456) SPI2 CSN (AF5)

@@ -129,14 +129,12 @@ void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
 #endif
 }
 
-void toggle_led()
+void toggle_led(_Bool en)
 {
-	GPIOB->ODR ^= GPIO_ODR_5;
-}
-
-void toggle_led2(_Bool en)
-{
-	
+	if (en)
+		GPIOB->ODR ^= GPIO_ODR_5;
+	else
+		GPIOB->BSRR = GPIO_BSRR_BS_5;
 }
 
 void toggle_beeper(_Bool en)
@@ -194,37 +192,33 @@ void sma_send(uint8_t * data, uint8_t size)
 	USART1->CR1 |= USART_CR1_TE;
 }
 
-#ifdef LED
+void set_leds(uint8_t * grb)
+{
+	int i;
 
-	void set_leds(uint8_t * grb)
-	{
-		int i;
+	if (DMA2_Channel5->CNDTR == 0) {
+		TIM8->DIER = 0;
+		TIM8->CR1 = 0;
+		TIM8->CNT = 40;
+		DMA2->IFCR = DMA_IFCR_CGIF5; // Clear all DMA flags
+		DMA2_Channel5->CCR &= ~DMA_CCR_EN; // Disable DMA
 
-		if (DMA2_Channel5->CNDTR == 0) {
-			TIM8->DIER = 0;
-			TIM8->CR1 = 0;
-			TIM8->CNT = 40;
-			DMA2->IFCR = DMA_IFCR_CGIF5; // Clear all DMA flags
-			DMA2_Channel5->CCR &= ~DMA_CCR_EN; // Disable DMA
-
-			for (i=0; i<8; i++) {
-				led_buffer[ 0+i] = (grb[0] & (1 << (7-i))) ? 38 : 19;
-				led_buffer[ 8+i] = (grb[1] & (1 << (7-i))) ? 38 : 19;
-				led_buffer[16+i] = (grb[2] & (1 << (7-i))) ? 38 : 19;
-			}
-			for (i=1; i<LED; i++) {
-				memcpy((uint8_t*)&led_buffer[i*24], (uint8_t*)&led_buffer[(i-1)*24], 24);
-			}
-			led_buffer[24*LED] = 0;
-
-			DMA2_Channel5->CNDTR = 24*LED+1;
-			DMA2_Channel5->CCR |= DMA_CCR_EN;
-			TIM8->DIER = TIM_DIER_CC2DE;
-			TIM8->CR1 = TIM_CR1_CEN;
+		for (i=0; i<8; i++) {
+			led_buffer[ 0+i] = (grb[0] & (1 << (7-i))) ? 38 : 19;
+			led_buffer[ 8+i] = (grb[1] & (1 << (7-i))) ? 38 : 19;
+			led_buffer[16+i] = (grb[2] & (1 << (7-i))) ? 38 : 19;
 		}
-	}
+		for (i=1; i<LED; i++) {
+			memcpy((uint8_t*)&led_buffer[i*24], (uint8_t*)&led_buffer[(i-1)*24], 24);
+		}
+		led_buffer[24*LED] = 0;
 
-#endif
+		DMA2_Channel5->CNDTR = 24*LED+1;
+		DMA2_Channel5->CCR |= DMA_CCR_EN;
+		TIM8->DIER = TIM_DIER_CC2DE;
+		TIM8->CR1 = TIM_CR1_CEN;
+	}
+}
 
 /* --------------------------------------------------------------------------------
  Interrupt routines
@@ -578,12 +572,12 @@ void board_init()
 	
 	/* VBAT ADC -----------------------------------------------------*/
 
-#ifdef VBAT
-
 	// A5 : VBAT/10
 	GPIOA->MODER |= GPIO_MODER_MODER5;
-	// A7 : PPM, used for IBAT
-	GPIOA->MODER |= GPIO_MODER_MODER7;
+	#ifdef IBAT
+		// A7 : PPM, used for IBAT
+		GPIOA->MODER |= GPIO_MODER_MODER7;
+	#endif
 
 	// ADC Clock enable
 	RCC->AHBENR |= RCC_AHBENR_ADC12EN; 
@@ -621,8 +615,6 @@ void board_init()
 	while (!flag_vbat)
 		__WFI();
 	flag_vbat = 0;
-
-#endif
 
 	/* Beeper -----------------------------------------*/
 

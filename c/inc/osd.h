@@ -10,7 +10,7 @@
 
 /* Exported variables -----------------*/
 
-extern volatile uint8_t osd_data_to_send[30];
+extern volatile uint8_t osd_data_to_send[30*2];
 extern volatile uint8_t osd_nbytes_to_send;
 extern volatile uint8_t osd_data_received[2];
 extern volatile uint8_t osd_nbytes_to_receive;
@@ -19,6 +19,6 @@ extern volatile uint8_t osd_nbytes_to_receive;
 
 void osd_init(void);
 void osd_menu(struct radio_s * radio);
-void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_min);
+void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_min, uint8_t rssi, int8_t snr);
 
 #endif

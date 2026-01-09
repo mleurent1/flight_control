@@ -2,26 +2,33 @@ classdef max7456_reg
 	methods
 		function data = read(obj,addr)
 			global ser
-         if obj.method
-            fwrite(ser,[2,128+addr,0]);
-            r = fread(ser,2);
-            data = r(2);
-         else
-            fwrite(ser,[9,128+addr]);
-            r = fread(ser,2);
-            data = r(1);
-         end
-         
+			if obj.method % direct UART connection to OSD module
+				cmd = [];
+			else
+				cmd = 9;
+			end
+         fwrite(ser,[cmd,2,128+addr,0]);
+			r = fread(ser,2);
+			if obj.method % direct UART connection to OSD module
+				data = r(2);
+			else
+				data = r(1); % Bytes order inverted
+			end
 		end
 		function write(obj,addr,data)
 			global ser
-         if obj.method
-            fwrite(ser,[length(data)+1,addr,data]);
-            fread(ser,length(data)+1);
-         else
-            fwrite(ser,[9,addr,0,0,0,data]);
-            fread(ser,2);
-         end
+			if obj.method % direct UART connection to OSD module
+				cmd = [];
+			else
+				cmd = 9;
+			end
+			if isempty(addr)
+				fwrite(ser,[cmd,length(data),data]);
+				fread(ser,length(data));
+			else
+				fwrite(ser,[cmd,length(data)+1,addr,data]);
+				fread(ser,length(data)+1);
+			end	
 		end
 		function y = VM0(obj,x)
 			if nargin < 2
