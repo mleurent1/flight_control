@@ -37,7 +37,7 @@ int8_t radio_decode(radio_frame_t * radio_frame, struct radio_s * radio)
 
 	// Check CRC
 	crc_calc = crc8(&radio_frame->bytes[2], radio_frame->frame.frame_length-1);
-	if (radio_frame->frame.crc != crc_calc) {
+	if (radio_frame->bytes[radio_frame->frame.frame_length+1] != crc_calc) {
 		return RADIO_FRAME_ERROR;
 	}
 
@@ -58,8 +58,8 @@ int8_t radio_decode(radio_frame_t * radio_frame, struct radio_s * radio)
 
 		return RADIO_FRAME_RC_CHAN;
 	} else {
-		radio->rssi = radio_frame->frame.payload[0];//link_stat->up_rssi_ant1; //TODO: debug
-		radio->snr = radio_frame->frame.payload[3];//link_stat->up_snr;
+		radio->rssi = link_stat->up_rssi_ant1;
+		radio->snr = link_stat->up_snr;
 
 		return RADIO_FRAME_LINK_STAT;
 	}
