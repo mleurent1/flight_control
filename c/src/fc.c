@@ -1,3 +1,6 @@
+#include <stdint.h>
+#include <stdbool.h>
+
 #include "fc.h"
 #include "board.h" // board_init()
 #include "usb.h" // usb_init()
@@ -40,14 +43,14 @@ volatile uint8_t sensor_error_count = 0;
 volatile uint8_t radio_error_count = 0;
 volatile uint8_t rf_error_count = 0;
 
-volatile _Bool flag_sensor = 0;
-volatile _Bool flag_radio = 0;
-volatile _Bool flag_vbat = 0;
-volatile _Bool flag_rf = 0;
-volatile _Bool flag_host = 0;
-volatile _Bool flag_time = 0;
-volatile _Bool flag_rf_host_read = 0;
-volatile _Bool flag_rf_rxtx_done = 0;
+volatile bool flag_sensor = false;
+volatile bool flag_radio = false;
+volatile bool flag_vbat = false;
+volatile bool flag_rf = false;
+volatile bool flag_host = false;
+volatile bool flag_time = false;
+volatile bool flag_rf_host_read = false;
+volatile bool flag_rf_rxtx_done = false;
 
 host_buffer_rx_t host_buffer_rx;
 
@@ -63,12 +66,13 @@ int main(void)
 	uint8_t i;
 	int8_t status;
 
-	_Bool flag_radio_connected = 0;
-	_Bool flag_armed = 0;
-	_Bool flag_acro = 0;
-	_Bool flag_acro_z = 0;
-	_Bool flag_sensor_timeout = 0;
-	_Bool flag_radio_timeout = 0;
+	bool flag_radio_connected = false;
+	bool flag_armed = false;
+	bool flag_acro = false;
+	bool flag_acro_z = false;
+	bool flag_sensor_timeout = false;
+	bool flag_radio_timeout = false;
+	bool warning;
 
 	radio_frame_t radio_frame1;
 	struct radio_s radio;
@@ -114,7 +118,7 @@ int main(void)
 	float motor[4];
 	int16_t motor_clip[4];
 	uint16_t motor_raw[4];
-	_Bool motor_telemetry[4];
+	bool motor_telemetry[4];
 	uint8_t motor_period_cnt = 0;
 
 	float vbat_smoothed;
@@ -137,7 +141,6 @@ int main(void)
 #ifdef LED
 	uint8_t grb[3];
 #endif
-	_Bool led_en = 1;
 
 	/* Init -----------------------------------------------------*/
 
@@ -418,8 +421,9 @@ int main(void)
 			if (motor_period_cnt == REG_FC_CFG__MOTOR_PERIOD-1) {
 				motor_period_cnt = 0;
 				set_motors(motor_raw, motor_telemetry);
-			} else
+			} else {
 				motor_period_cnt++;
+			}
 		}
 
 		/* VBAT ---------------------------------------------------------------------*/
@@ -488,29 +492,31 @@ int main(void)
 					REG_STATUS |= 0x04;
 
 				// LED double blinks when timeout on sensor or radio samples, or vbat too low
-				if (flag_sensor_timeout || flag_radio_timeout || ((vbat_cell < REG_VBAT_MIN) && (nb_cells > 0))) {
-					#ifdef DUAL_LED_STATUS
-						if ((status_cnt & 0x03) == 0) toggle_led(1);
-						if ((status_cnt & 0x03) == 2) toggle_led2(1);
-					#else
-						toggle_led(1);
-					#endif
+				warning = flag_sensor_timeout || flag_radio_timeout || ((vbat_cell < REG_VBAT_MIN) && (nb_cells > 0));
+			#ifdef DUAL_LED_STATUS
+				if (warning) {
+					toggle_led(false);
+					if ((status_cnt & 0x03) == 0) toggle_led2(true);
 				}
 				else {
-					if ((status_cnt & 0x03) == 0) toggle_led(1);
-					toggle_led2(0);
+					if ((status_cnt & 0x03) == 0) toggle_led(true);
+					toggle_led2(false);
 				}
+			#else
+				if (warning) {
+					toggle_led(true);
+				}
+				else {
+					if ((status_cnt & 0x03) == 0) toggle_led(true);
+				}
+			#endif
+				
 
 				// beep when requested by user or, timeout on sensor or radio samples, or vbat too low
-				if ((radio.aux[2] > 0.5f) || flag_sensor_timeout || flag_radio_timeout || ((vbat_cell < REG_VBAT_MIN) && (nb_cells > 0)) || (REG_CTRL__BEEP_TEST == 1)) {
-					if ((status_cnt & 0x03) == 0) {
-						toggle_beeper(1);
-						led_en ^= 1;
-					}
-				}
-				else {
-					toggle_beeper(0);
-					led_en = 1;
+				if ((radio.aux[2] > 0.5f) || (REG_CTRL__BEEP_TEST == 1) || warning) {
+					if ((status_cnt & 0x03) == 0) toggle_beeper(true);
+				} else {
+					toggle_beeper(false);
 				}
 
 				// Set flags, to be cleared when new samples are ready
@@ -526,15 +532,20 @@ int main(void)
 			#ifdef LED
 				// Change LED color
 				if (radio.aux[3] < 0.5f) {
-					grb[0] = (uint8_t)((0.5f-radio.aux[3])*510.0f) * led_en;
-					grb[1] = (uint8_t)(radio.aux[3]*510.0f) * led_en;
+					grb[0] = (uint8_t)((0.5f-radio.aux[3])*510.0f);
+					grb[1] = (uint8_t)(radio.aux[3]*510.0f);
 					grb[2] = 0;
 				}
 				else {
 					grb[0] = 0;
-					grb[1] = (uint8_t)((1.0f-radio.aux[3])*510.0f) * led_en;
-					grb[2] = (uint8_t)((radio.aux[3]-0.5f)*510.0f) * led_en;
+					grb[1] = (uint8_t)((1.0f-radio.aux[3])*510.0f);
+					grb[2] = (uint8_t)((radio.aux[3]-0.5f)*510.0f);
 				}
+				if (warning && ((status_cnt & 0x01) == 0)) { // Toggle when warning
+					grb[0] = 0;
+					grb[1] = 0;
+					grb[2] = 1;
+				};
 				set_leds(grb);
 			#endif
 

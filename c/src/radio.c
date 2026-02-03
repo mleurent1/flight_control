@@ -1,3 +1,6 @@
+#include <stdint.h>
+#include <stdbool.h>
+
 #include "radio.h"
 #include "sx1276_reg.h"
 #include "reg.h" // filter_alpha
@@ -65,7 +68,7 @@ int8_t radio_decode(radio_frame_t * radio_frame, struct radio_s * radio)
 	}
 }
 
-void radio_expo(struct radio_s * radio, _Bool acro_mode)
+void radio_expo(struct radio_s * radio, bool acro_mode)
 {
 	if (acro_mode) {
 		if (radio->pitch >= 0) radio->pitch =  (EXPONENTIAL( radio->pitch * REG_EXPO_PITCH_ROLL) - 1.0f) / (EXPONENTIAL(REG_EXPO_PITCH_ROLL) - 1.0f);

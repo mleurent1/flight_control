@@ -1,3 +1,6 @@
+#include <stdint.h>
+#include <stdbool.h>
+
 #include "board.h"
 #include "stm32f4xx.h" // CMSIS
 #include "fc.h" // flags
@@ -31,7 +34,7 @@ volatile uint8_t spi3_tx_buffer[7];
 #if (ESC == DSHOT)
 	volatile uint32_t dshot[17*4]; // Bit size must be the same as timer register, because MSIZE = PSIZE = register bit size
 #endif
-volatile _Bool sensor_busy;
+volatile bool sensor_busy;
 #ifdef LED
 	volatile uint8_t led_buffer[24*LED+1];
 #endif
@@ -102,7 +105,7 @@ void sensor_write(uint8_t addr, uint8_t data)
 	spi1_tx_buffer[0] = addr & 0x7F;
 	spi1_tx_buffer[1] = data;
 	sensor_spi_dma_enable(2);
-	sensor_busy = 1;
+	sensor_busy = true;
 	// Wait for end of transaction
 	while (sensor_busy)
 		__WFI();
@@ -112,7 +115,7 @@ void sensor_read(uint8_t addr, uint8_t size)
 {
 	spi1_tx_buffer[0] = 0x80 | (addr & 0x7F);
 	sensor_spi_dma_enable(size+1);
-	sensor_busy = 1;
+	sensor_busy = true;
 }
 
 void en_sensor_irq(void)
@@ -143,10 +146,10 @@ void trig_delayed_radio_rx(void)
 	TIM7->CR1 |= TIM_CR1_CEN;
 }
 
-void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
+void set_motors(uint16_t * motor_raw, bool * motor_telemetry)
 {
 #if (ESC == DSHOT)
-	int i;
+	uint8_t i;
 	uint8_t motor1_dshot[16];
 	uint8_t motor2_dshot[16];
 	uint8_t motor3_dshot[16];
@@ -184,7 +187,7 @@ void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
 #endif
 }
 
-void toggle_led(_Bool en)
+void toggle_led(bool en)
 {
 	if (en)
 		GPIOB->ODR ^= GPIO_ODR_OD5;
@@ -192,7 +195,7 @@ void toggle_led(_Bool en)
 		GPIOB->BSRR = GPIO_BSRR_BS_5;
 }
 
-void toggle_led2(_Bool en)
+void toggle_led2(bool en)
 {
 	if (en)
 		GPIOB->ODR ^= GPIO_ODR_OD4;
@@ -200,7 +203,7 @@ void toggle_led2(_Bool en)
 		GPIOB->BSRR = GPIO_BSRR_BS_4;
 }
 
-void toggle_beeper(_Bool en)
+void toggle_beeper(bool en)
 {
 	if (en)
 		GPIOB->ODR ^= GPIO_ODR_OD0;
@@ -269,7 +272,7 @@ void __attribute__((section(".RamFunc"))) SPI1_IRQHandler()
 void __attribute__((section(".RamFunc"))) DMA2_Stream0_IRQHandler()
 {
 	sensor_spi_dma_disable();
-	sensor_busy = 0;
+	sensor_busy = false;
 
 	if (REG_CTRL__SENSOR_HOST_CTRL == 1) {
 		host_send(&sensor_raw.bytes[1], 1);

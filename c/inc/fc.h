@@ -2,6 +2,8 @@
 #define __FC_H
 
 #include <stdint.h>
+#include <stdbool.h>
+
 #include "reg.h" // host_buffer_rx_t
 #include "sensor.h" // sensor_raw_t
 #include "radio.h" // radio_frame_t
@@ -21,14 +23,14 @@ extern volatile uint8_t sensor_error_count;
 extern volatile uint8_t radio_error_count;
 extern volatile uint8_t rf_error_count;
 
-extern volatile _Bool flag_sensor;
-extern volatile _Bool flag_radio;
-extern volatile _Bool flag_vbat;
-extern volatile _Bool flag_rf;
-extern volatile _Bool flag_host;
-extern volatile _Bool flag_time;
-extern volatile _Bool flag_rf_host_read;
-extern volatile _Bool flag_rf_rxtx_done;
+extern volatile bool flag_sensor;
+extern volatile bool flag_radio;
+extern volatile bool flag_vbat;
+extern volatile bool flag_rf;
+extern volatile bool flag_host;
+extern volatile bool flag_time;
+extern volatile bool flag_rf_host_read;
+extern volatile bool flag_rf_rxtx_done;
 
 extern host_buffer_rx_t host_buffer_rx;
 

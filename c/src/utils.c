@@ -1,3 +1,6 @@
+#include <stdint.h>
+#include <stdbool.h>
+
 #include "utils.h"
 #ifdef STM32F4
 	#include "stm32f4xx.h" // __WFI()
@@ -33,10 +36,10 @@ uint32_t float_to_uint32(float x)
 	return f2u.u;
 }
 
-void dshot_encode(volatile uint16_t* val, volatile uint8_t buf[16], _Bool telemetry)
+void dshot_encode(volatile uint16_t* val, volatile uint8_t buf[16], bool telemetry)
 {
-	int i;
-	_Bool bit[11];
+	uint8_t i;
+	uint8_t bit[11];
 	for (i=0; i<11; i++)
 	{
 		buf[i] = (*val & (1 << (10-i))) ? 60 : 30;

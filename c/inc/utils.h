@@ -2,7 +2,8 @@
 #define __UTILS_H
 
 #include <stdint.h>
-#include <math.h>
+#include <stdbool.h>
+#include <math.h> // expf
 
 /* Public defines -----------------*/
 
@@ -25,7 +26,7 @@
 void wait_ms(uint32_t t);
 float uint32_to_float(uint32_t x);
 uint32_t float_to_uint32(float x);
-void dshot_encode(volatile uint16_t* val, volatile uint8_t buf[16], _Bool telemetry);
+void dshot_encode(volatile uint16_t* val, volatile uint8_t buf[16], bool telemetry);
 float expo(float lin);
 float arcsin(float sin_val);
 float sinus(float angle);

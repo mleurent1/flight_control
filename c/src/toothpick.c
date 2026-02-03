@@ -1,3 +1,6 @@
+#include <stdint.h>
+#include <stdbool.h>
+
 #include "board.h"
 #include "stm32f4xx.h" // CMSIS
 #include "fc.h" // flags
@@ -31,7 +34,7 @@ volatile uint8_t spi1_tx_buffer[16];
 	volatile uint16_t dshot[17*4];
 	volatile uint16_t dshot2[17*4];
 #endif
-volatile _Bool sensor_busy;
+volatile bool sensor_busy;
 volatile uint8_t spi2_rx_buffer[3];
 volatile uint8_t spi2_tx_buffer[3];
 volatile uint8_t uart2_tx_buffer[16];
@@ -103,7 +106,7 @@ void sensor_write(uint8_t addr, uint8_t data)
 	spi1_tx_buffer[0] = addr & 0x7F;
 	spi1_tx_buffer[1] = data;
 	sensor_spi_dma_enable(2);
-	sensor_busy = 1;
+	sensor_busy = true;
 	// Wait for end of transaction
 	while (sensor_busy)
 		__WFI();
@@ -113,7 +116,7 @@ void sensor_read(uint8_t addr, uint8_t size)
 {
 	spi1_tx_buffer[0] = 0x80 | (addr & 0x7F);
 	sensor_spi_dma_enable(size+1);
-	sensor_busy = 1;
+	sensor_busy = true;
 }
 
 void en_sensor_irq(void)
@@ -131,10 +134,10 @@ void trig_delayed_radio_rx(void)
 	TIM10->CR1 |= TIM_CR1_CEN;
 }
 
-void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
+void set_motors(uint16_t * motor_raw, bool * motor_telemetry)
 {
 #if (ESC == DSHOT)
-	int i;
+	uint8_t i;
 	uint8_t motor1_dshot[16];
 	uint8_t motor2_dshot[16];
 	uint8_t motor3_dshot[16];
@@ -182,7 +185,7 @@ void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry)
 #endif
 }
 
-void toggle_led(_Bool en)
+void toggle_led(bool en)
 {
 	if (en)
 		GPIOC->ODR ^= GPIO_ODR_OD13;
@@ -190,7 +193,7 @@ void toggle_led(_Bool en)
 		GPIOC->BSRR = GPIO_BSRR_BS_13;
 }
 
-void toggle_led2(_Bool en)
+void toggle_led2(bool en)
 {
 	if (en)
 		GPIOC->ODR ^= GPIO_ODR_OD14;
@@ -198,7 +201,7 @@ void toggle_led2(_Bool en)
 		GPIOC->BSRR = GPIO_BSRR_BS_14;
 }
 
-void toggle_beeper(_Bool en)
+void toggle_beeper(bool en)
 {
 	if (en)
 		GPIOB->ODR ^= GPIO_ODR_OD2;
@@ -274,7 +277,7 @@ void __attribute__((section(".RamFunc"))) SPI1_IRQHandler()
 void __attribute__((section(".RamFunc"))) DMA2_Stream0_IRQHandler()
 {
 	sensor_spi_dma_disable();
-	sensor_busy = 0;
+	sensor_busy = false;
 
 	if (REG_CTRL__SENSOR_HOST_CTRL == 1) {
 		host_send(&sensor_raw.bytes[1], 1);
@@ -327,7 +330,7 @@ void OTG_FS_IRQHandler()
 	HAL_PCD_IRQHandler(&PCD_handler);
 }
 
-/* DMA IRQ of OSR Rx SPI ----------------------*/
+/* DMA IRQ of OSD Rx SPI ----------------------*/
 
 void __attribute__((section(".RamFunc"))) DMA1_Stream3_IRQHandler()
 {
@@ -520,7 +523,7 @@ void board_init()
 	DMA2_Stream3->M0AR = (uint32_t)spi1_tx_buffer;
 	DMA2_Stream3->PAR = (uint32_t)&(SPI1->DR);
 
-	/* Radio Rx UART ---------------------------------------------------*/
+	/* Radio UART ---------------------------------------------------*/
 
 	// A9 : USART1_TX (AF7), pull-up for IDLE
 	// A10: USART1_RX (AF7), pull-up for IDLE
@@ -547,7 +550,7 @@ void board_init()
 
 	// Timer for radio sync
 	RCC->APB2ENR |= RCC_APB2ENR_TIM10EN;
-	TIM10->PSC = 96-1; // 1us, TIM9 is running at 96MHz instead of 48MHz
+	TIM10->PSC = 96-1; // 1us
 	TIM10->ARR = 620; // 10bits*sizeof(radio_frame)/420000bps
 	TIM10->CR1 = TIM_CR1_OPM;
 	TIM10->DIER = TIM_DIER_UIE;
@@ -651,6 +654,7 @@ void board_init()
 	TIM4->ARR = SERVO_MAX*2 + 1;
 	TIM4->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E; // Enable outputs
 	TIM4->CCMR1 = (7 << TIM_CCMR1_OC1M_Pos) | (7 << TIM_CCMR1_OC2M_Pos); // 7: PWM mode 2 (active when CNT >= CCR)
+
 #endif
 
 	/* LED -----------------------*/
@@ -664,7 +668,7 @@ void board_init()
 	/* Time in us ----------------------------------------------------------*/
 
 	RCC->APB2ENR |= RCC_APB2ENR_TIM9EN;
-	TIM9->PSC = 96-1; // 1us, TIM9 is running at 96MHz instead of 48MHz
+	TIM9->PSC = 96-1;
 	TIM9->ARR = 65535;
 	TIM9->CR1 = TIM_CR1_CEN;
 	

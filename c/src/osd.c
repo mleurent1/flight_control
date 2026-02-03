@@ -1,4 +1,7 @@
 #include <stdint.h>
+#include <stdbool.h>
+#include <string.h> // memcpy()
+
 #include "osd.h"
 #include "max7456_reg.h"
 #include "board.h" // osd_send()
@@ -8,7 +11,6 @@
 	#include "stm32f3xx.h" // __WFI()
 #endif
 #include "radio.h" // struct radio_s
-#include <string.h> // memcpy()
 #include "reg.h" // reg_save()
 #include "utils.h" // crc8()
 #include "smart_audio.h" // sma_send_cmd()
@@ -152,14 +154,14 @@ void osd_write_str(uint8_t * str, uint8_t size)
 void float_to_str(float num, uint8_t * str_int, uint8_t * str_frac, uint8_t int_size, uint8_t frac_size)
 {
 	uint8_t dec_frac[3];
-	_Bool nonzero = 0;
+	bool nonzero = false;
 	int i;
 
 	float_to_dec(num, str_int, dec_frac, int_size, frac_size);
 
 	for (i=int_size-1; i>=0; i--) {
 		if (str_int[i] > 0)
-			nonzero = 1;
+			nonzero = true;
 		if ((str_int[i] == 0) && (nonzero || (i == 0)))
 			str_int[i] = 10;
 	}

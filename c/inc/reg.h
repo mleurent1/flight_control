@@ -2,7 +2,9 @@
 #define __REG_H
 
 #include <stdint.h>
-#include "reg_def.h"
+#include <stdbool.h>
+
+#include "reg_def.h" // NB_REG
 
 /* Public defines -----------------*/
 
@@ -10,9 +12,9 @@
 
 typedef struct
 {
-	_Bool read_only;
-	_Bool flash;
-	_Bool is_float;
+	bool read_only;
+	bool flash;
+	bool is_float;
 	uint32_t dflt;
 } reg_properties_t;
 

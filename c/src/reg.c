@@ -1,3 +1,6 @@
+#include <stdint.h>
+#include <stdbool.h>
+
 #include "reg.h"
 #include "fc.h" // flags, sensor_raw, radio_raw
 #include "sensor.h" // mpu_cal()
@@ -116,13 +119,13 @@ void flash_write(uint8_t addr, uint32_t data) {
 
 void reg_init(void)
 {
-	_Bool reg_flash_valid;
+	bool reg_flash_valid;
 	uint32_t reg_default;
 
 	if (flash_r[0] == reg_properties[0].dflt)
-		reg_flash_valid = 1;
+		reg_flash_valid = true;
 	else
-		reg_flash_valid = 0;
+		reg_flash_valid = false;
 
 	for (int i=0; i<NB_REG; i++) {
 		if (reg_properties[i].flash && reg_flash_valid)

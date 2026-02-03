@@ -2,6 +2,7 @@
 #define __BOARD_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /* Public defines -----------------*/
 
@@ -10,7 +11,7 @@
 
 /* Exported variables -----------------*/
 
-extern volatile _Bool sensor_busy;
+extern volatile bool sensor_busy;
 
 /* Public functions -----------------*/
 
@@ -23,10 +24,10 @@ void trig_radio_rx(void);
 void trig_delayed_radio_rx(void);
 void rf_write(uint8_t addr, uint8_t * data, uint8_t size);
 void rf_read(uint8_t addr, uint8_t size);
-void set_motors(uint16_t * motor_raw, _Bool * motor_telemetry);
-void toggle_led(_Bool en);
-void toggle_led2(_Bool en);
-void toggle_beeper(_Bool en);
+void set_motors(uint16_t * motor_raw, bool * motor_telemetry);
+void toggle_led(bool en);
+void toggle_led2(bool en);
+void toggle_beeper(bool en);
 uint16_t get_t_us(void);
 void trig_vbat_meas(void);
 void osd_send(uint8_t * data, uint8_t size);

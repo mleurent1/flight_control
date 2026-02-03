@@ -1,7 +1,8 @@
 #ifndef __RADIO_H
 #define __RADIO_H
 
-#include "board.h"
+#include <stdint.h>
+#include <stdbool.h>
 
 /* Public defines -----------------*/
 
@@ -56,14 +57,6 @@ typedef union {
 	struct crsf_frame_s frame;
 } radio_frame_t;
 
-struct radio_raw_s {
-	uint16_t throttle;
-	uint16_t aileron;
-	uint16_t elevator;
-	uint16_t rudder;
-	uint16_t aux[4];
-} __attribute__((packed));
-
 struct radio_s {
 	float throttle;
 	float pitch;
@@ -79,7 +72,7 @@ struct radio_s {
 /* Public functions -----------------*/
 
 int8_t radio_decode(radio_frame_t * radio_frame, struct radio_s * radio);
-void radio_expo(struct radio_s * radio, _Bool acro_mode);
+void radio_expo(struct radio_s * radio, bool acro_mode);
 void sx1276_init(void);
 
 #endif
