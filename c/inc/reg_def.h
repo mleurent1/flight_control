@@ -201,7 +201,7 @@
 #define REG_MPU_CFG__RATE_Pos 8U
 #define REG_MPU_CFG_Addr 36
 #define REG_MOTOR_PERIOD reg[37]
-#define REG_FC_CFG_Addr 37
+#define REG_MOTOR_PERIOD_Addr 37
 #define REG_VTX reg[38]
 #define REG_VTX__CHAN (uint8_t)((reg[38] & 255U) >> 0)
 #define REG_VTX__CHAN_Msk 255U

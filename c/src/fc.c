@@ -109,8 +109,6 @@ int main(void)
 	float yaw_i_term = 0;
 	float yaw_d_term;
 
-	float i_transfer;
-
 	float pitch = 0;
 	float roll = 0;
 	float yaw = 0;
@@ -184,7 +182,7 @@ int main(void)
 #endif
 
 	vbat_smoothed = vbat;
-	nb_cells = floor(vbat / 3.6f);
+	nb_cells = floorf(vbat / REG_VBAT_MIN);
 	vbat_cell = vbat / nb_cells;
 	ibat_smoothed = ibat;
 
@@ -342,13 +340,6 @@ int main(void)
 			else
 				yaw_i_term += error_yaw * REG_I_YAW;
 
-			// Yaw induced I transfer
-			if (REG_FC_CFG__I_TRANSFER) {
-				i_transfer = SINUS(sensor.gyro_z * 1.745329252e-5f);
-				pitch_i_term += pitch_i_term  * i_transfer;
-				roll_i_term  -= roll_i_term * i_transfer;
-			}
-
 			// D term
 			pitch_d_term = (error_pitch - error_pitch_z) * d_pitch;
 			roll_d_term = (error_roll - error_roll_z) * d_roll;
@@ -418,7 +409,7 @@ int main(void)
 					motor_telemetry[i] = 0;
 				}
 			}
-			if (motor_period_cnt == REG_FC_CFG__MOTOR_PERIOD-1) {
+			if (motor_period_cnt == REG_MOTOR_PERIOD-1) {
 				motor_period_cnt = 0;
 				set_motors(motor_raw, motor_telemetry);
 			} else {

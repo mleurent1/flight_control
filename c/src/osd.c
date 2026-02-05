@@ -24,10 +24,14 @@
 
 /* Private types --------------------------------------*/
 
-enum state_e {TELEMETRY, TELEMETRY_ENTER,
-	MENU, MENU_UP, MENU_DOWN, MENU_RIGHT, MENU_EXIT,
-	REG, REG_UP, REG_DOWN, REG_LEFT,
+enum state_e {TELEMETRY,
+	MENU_ENTER, MENU, MENU_UP, MENU_DOWN, MENU_RIGHT, MENU_EXIT,
+	REG, REG_UP, REG_DOWN, REG_EXIT,
+	SAVED, SAVED_EXIT,
 	RUNCAM_MENU, RUNCAM_LEFT, RUNCAM_RIGHT, RUNCAM_UP, RUNCAM_DOWN, RUNCAM_ENTER, RUNCAM_EXIT};
+
+enum menu_e {P_PITCH_ROLL=0, I_PITCH_ROLL, D_PITCH_ROLL, P_YAW, I_YAW, RATE, EXPO, MOTOR_START, MOTOR_ARMED, MOTOR_RANGE,
+	VTX_CHANNEL, VTX_POWER, SAVE_REG, SAVE_VTX, RUNCAM};
 
 enum runcam_cmd_e {LEFT, RIGHT, UP, DOWN, ENTER, RELEASE, OPEN, CLOSE};
 
@@ -44,7 +48,6 @@ const uint8_t menu_str[16][16] = {
 	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x1E, 0x1C, 0x0B, 0x1E, 0x1D, 0x00, 0x1C, 0x19, 0x1E, 0x19, 0x17}, // MOTOR START
 	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x0E, 0x0F, 0x17, 0x1C, 0x0B, 0x00, 0x1C, 0x19, 0x1E, 0x19, 0x17}, // MOTOR ARMED
 	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x11, 0x18, 0x0B, 0x1C, 0x00, 0x1C, 0x19, 0x1E, 0x19, 0x17}, // MOTOR RANGE
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1C, 0x0F, 0x10, 0x1D, 0x18, 0x0B, 0x1C, 0x1E, 0x00, 0x13}, // I TRANSFER
 	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x16, 0x0F, 0x18, 0x18, 0x0B, 0x12, 0x0D, 0x00, 0x22, 0x1E, 0x20}, // VTX CHANNEL
 	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1C, 0x0F, 0x21, 0x19, 0x1A, 0x00, 0x22, 0x1E, 0x20}, // VTX POWER
 	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x0F, 0x1C, 0x00, 0x0F, 0x20, 0x0B, 0x1D}, // SAVE REG
@@ -110,6 +113,8 @@ volatile uint8_t osd_nbytes_to_send = 0;
 volatile uint8_t osd_data_received[2];
 volatile uint8_t osd_nbytes_to_receive = 0;
 volatile enum state_e state = TELEMETRY;
+volatile enum state_e state_prev = TELEMETRY;
+volatile uint8_t menu_idx = 0;
 
 /* Private Functions -----------------------*/
 
@@ -246,8 +251,8 @@ void osd_init(void)
 		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN);
 	osd_write(MAX7456_HOS, 40);
 	osd_write(MAX7456_VOS, 22);
-	osd_write(MAX7456_DMAH, MAX7456_DMAH__DMA_8); // Use half-bottom only
-	osd_write(MAX7456_DMAL, (uint8_t)DISP_ADDR_TELEMETRY);
+	osd_write(MAX7456_DMAH, DISP_ADDR_TELEMETRY >> 8);
+	osd_write(MAX7456_DMAL, DISP_ADDR_TELEMETRY & 0xFF);
 }
 
 void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_min, uint8_t rssi, int8_t snr)
@@ -279,8 +284,6 @@ void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_mi
 
 void osd_menu(struct radio_s * radio)
 {
-	static enum state_e state_prev = TELEMETRY;
-	static uint8_t menu_idx = 0;
 	int32_t incr_int;
 	float incr_f;
 	int32_t rate;
@@ -293,10 +296,10 @@ void osd_menu(struct radio_s * radio)
 	switch (state_prev) {
 		case TELEMETRY : {
 			if (radio->yaw > 0.66f)
-				state = TELEMETRY_ENTER;
+				state = MENU_ENTER;
 			break;
 		}
-		case TELEMETRY_ENTER : {
+		case MENU_ENTER : {
 			if (radio->yaw < 0.33f)
 				state = MENU;
 			break;
@@ -324,12 +327,12 @@ void osd_menu(struct radio_s * radio)
 		}
 		case MENU_RIGHT : {
 			if (radio->roll < 0.33f) {
-				if (menu_idx < 13)
+				if (menu_idx < SAVE_REG)
 					state = REG;
-				else if (menu_idx == 15)
+				else if (menu_idx == RUNCAM)
 					state = RUNCAM_MENU;
-				else
-					state = MENU;
+				else // if ((menu_idx == SAVE_REG) || (menu_idx == SAVE_VTX))
+					state = SAVED;
 			}
 			break;
 		}
@@ -344,7 +347,7 @@ void osd_menu(struct radio_s * radio)
 			else if (radio->pitch < -0.66f)
 				state = REG_DOWN;
 			else if (radio->roll < -0.66f)
-				state = REG_LEFT;
+				state = REG_EXIT;
 			break;
 		}
 		case REG_UP : {
@@ -357,7 +360,17 @@ void osd_menu(struct radio_s * radio)
 				state = REG;
 			break;
 		}
-		case REG_LEFT : {
+		case REG_EXIT : {
+			if (radio->roll > -0.33f)
+				state = MENU;
+			break;
+		}
+		case SAVED : {
+			if (radio->roll < -0.66f)
+				state = SAVED_EXIT;
+			break;
+		}
+		case SAVED_EXIT : {
 			if (radio->roll > -0.33f)
 				state = MENU;
 			break;
@@ -429,29 +442,33 @@ void osd_menu(struct radio_s * radio)
 	}
 
 	// Display menu
-	if ((state_prev == TELEMETRY) && (state == TELEMETRY_ENTER)) {
+	if ((state_prev == TELEMETRY) && (state == MENU_ENTER)) {
 		wait_osd();
-		osd_write(MAX7456_DMAL, (uint8_t)DISP_ADDR_MENU);
+		osd_write(MAX7456_DMAH, DISP_ADDR_MENU >> 8);
+		osd_write(MAX7456_DMAL, DISP_ADDR_MENU & 0xFF);
 		osd_write(MAX7456_DMM, MAX7456_DMM__CLR_DISPLAY_MEM);
 		osd_write_str((uint8_t*)menu_str[menu_idx], sizeof(menu_str[0]));
-	} else if ( ((state_prev == MENU) && ((state == MENU_UP) || (state == MENU_DOWN))) || ((state_prev == REG) && (state == REG_LEFT)) || ((state_prev == RUNCAM_MENU) && (state == RUNCAM_EXIT)) ) {
+	} else if ( ((state_prev == MENU) && ((state == MENU_UP) || (state == MENU_DOWN)))
+		|| ((state_prev == REG) && (state == REG_EXIT))
+		|| ((state_prev == SAVED) && (state == SAVED_EXIT))
+		|| ((state_prev == RUNCAM_MENU) && (state == RUNCAM_EXIT)) ) {
 		osd_write_str((uint8_t*)menu_str[menu_idx], sizeof(menu_str[0]));
 	} else if ((state_prev == MENU) && (state == MENU_EXIT)) {
-		osd_write(MAX7456_DMAL, (uint8_t)DISP_ADDR_TELEMETRY);
+		osd_write(MAX7456_DMAH, DISP_ADDR_TELEMETRY >> 8);
+		osd_write(MAX7456_DMAL, DISP_ADDR_TELEMETRY & 0xFF);
 		osd_write(MAX7456_DMM, MAX7456_DMM__CLR_DISPLAY_MEM);
-		REG_VTX = (vtx_current_chan << REG_VTX__CHAN_Pos) | (vtx_current_pwr << REG_VTX__PWR_Pos); // Update VTX register at exit
 	}
 
 	// Update register
 	if ((state_prev == REG) && ((state == REG_UP) || (state == REG_DOWN))) {
 		// Increment value
-		if ((menu_idx == 0) || (menu_idx == 2) || (menu_idx == 3)) // P and D
+		if ((menu_idx == P_PITCH_ROLL) || (menu_idx == D_PITCH_ROLL) || (menu_idx == P_YAW)) // P and D
 			incr_f = 0.05f;
-		else if ((menu_idx == 1) || (menu_idx == 4)) // I
+		else if ((menu_idx == I_PITCH_ROLL) || (menu_idx == I_YAW)) // I
 			incr_f = 0.001f;
 		else // expo
 			incr_f = 0.01f;
-		if ((menu_idx == 11) || (menu_idx == 12)) // VTX
+		if ((menu_idx == VTX_CHANNEL) || (menu_idx == VTX_POWER)) // VTX
 			incr_int = 1;
 		else
 			incr_int = 5;
@@ -464,65 +481,58 @@ void osd_menu(struct radio_s * radio)
 		
 		// Write register
 		switch (menu_idx) {
-			case 0 : {
+			case P_PITCH_ROLL : {
 				REG_P_PITCH += incr_f;
 				REG_P_ROLL = REG_P_PITCH;
 				break;
 			}
-			case 1 : {
+			case I_PITCH_ROLL : {
 				REG_I_PITCH += incr_f;
 				REG_I_ROLL = REG_I_PITCH;
 				break;
 			}
-			case 2 : {
+			case D_PITCH_ROLL : {
 				REG_D_PITCH += incr_f;
 				REG_D_ROLL = REG_D_PITCH;
 				break;
 			}
-			case 3 : {
+			case P_YAW : {
 				REG_P_YAW += incr_f;
 				break;
 			}
-			case 4 : {
+			case I_YAW : {
 				REG_I_YAW += incr_f;
 				break;
 			}
-			case 5 : {
+			case RATE : {
 				rate = (int32_t)REG_RATE__PITCH_ROLL + incr_int;
 				REG_RATE = (rate << REG_RATE__PITCH_ROLL_Pos) | (rate << REG_RATE__YAW_Pos);
 				break;
 			}
-			case 6 : {
+			case EXPO : {
 				REG_EXPO_PITCH_ROLL += incr_f;
 				REG_EXPO_YAW = REG_EXPO_PITCH_ROLL;
 				break;
 			}
-			case 7 : {
+			case MOTOR_START : {
 				motor_start = (int32_t)REG_MOTOR__START + incr_int;
 				REG_MOTOR &= ~REG_MOTOR__START_Msk;
 				REG_MOTOR |= (uint32_t)motor_start << REG_MOTOR__START_Pos;
 				break;
 			}
-			case 8 : {
+			case MOTOR_ARMED : {
 				motor_armed = (int32_t)REG_MOTOR__ARMED + incr_int;
 				REG_MOTOR &= ~REG_MOTOR__ARMED_Msk;
 				REG_MOTOR |= (uint32_t)motor_armed << REG_MOTOR__ARMED_Pos;
 				break;
 			}
-			case 9 : {
+			case MOTOR_RANGE : {
 				motor_range = (int32_t)REG_MOTOR__RANGE + incr_int;
 				REG_MOTOR &= ~REG_MOTOR__RANGE_Msk;
 				REG_MOTOR |= (uint32_t)motor_range << REG_MOTOR__RANGE_Pos;
 				break;
 			}
-			case 10 : {
-				if (state == REG_UP)
-					REG_FC_CFG |= REG_FC_CFG__I_TRANSFER_Msk;
-				else if (state == REG_DOWN)
-					REG_FC_CFG &= ~REG_FC_CFG__I_TRANSFER_Msk;
-				break;
-			}
-			case 11 : {
+			case VTX_CHANNEL : {
 				if ((REG_VTX__CHAN == 47) && (incr_int > 0))
 					vtx_chan = 0;
 				else if ((REG_VTX__CHAN == 0) && (incr_int < 0))
@@ -533,7 +543,7 @@ void osd_menu(struct radio_s * radio)
 				REG_VTX |= (uint32_t)vtx_chan << REG_VTX__CHAN_Pos;
 				break;
 			}
-			case 12 : {
+			case VTX_POWER : {
 				if ((REG_VTX__PWR == 3) && (incr_int > 0))
 					vtx_pwr = 0;
 				else if ((REG_VTX__PWR == 0) && (incr_int < 0))
@@ -551,57 +561,50 @@ void osd_menu(struct radio_s * radio)
 	}
 
 	// Display register value
-	if ( ((state_prev == REG) && ((state == REG_UP) || (state == REG_DOWN))) || ((state_prev == MENU) && (state == MENU_RIGHT) && (menu_idx < 13)) ) {
+	if ( ((state_prev == REG) && ((state == REG_UP) || (state == REG_DOWN)))
+		|| ((state_prev == MENU) && (state == MENU_RIGHT) && (menu_idx < SAVE_REG)) ) {
 		switch (menu_idx) {
-			case 0 : {
+			case P_PITCH_ROLL : {
 				float_to_str(REG_P_PITCH, &reg_val_str[12], &reg_val_str[8], 4, 3);
 				break;
 			}
-			case 1 : {
+			case I_PITCH_ROLL : {
 				float_to_str(REG_I_PITCH, &reg_val_str[12], &reg_val_str[8], 4, 3);
 				break;
 			}
-			case 2 : {
+			case D_PITCH_ROLL : {
 				float_to_str(REG_D_PITCH, &reg_val_str[12], &reg_val_str[8], 4, 3);
 				break;
 			}
-			case 3 : {
+			case P_YAW : {
 				float_to_str(REG_P_YAW, &reg_val_str[12], &reg_val_str[8], 4, 3);
 				break;
 			}
-			case 4 : {
+			case I_YAW : {
 				float_to_str(REG_I_YAW, &reg_val_str[12], &reg_val_str[8], 4, 3);
 				break;
 			}
-			case 5 : {
+			case RATE : {
 				float_to_str((float)REG_RATE__PITCH_ROLL, &reg_val_str[12], &reg_val_str[8], 4, 3);
 				break;
 			}
-			case 6 : {
+			case EXPO : {
 				float_to_str(REG_EXPO_PITCH_ROLL, &reg_val_str[12], &reg_val_str[8], 4, 3);
 				break;
 			}
-			case 7 : {
+			case MOTOR_START : {
 				float_to_str((float)REG_MOTOR__START, &reg_val_str[12], &reg_val_str[8], 4, 3);
 				break;
 			}
-			case 8 : {
+			case MOTOR_ARMED : {
 				float_to_str((float)REG_MOTOR__ARMED, &reg_val_str[12], &reg_val_str[8], 4, 3);
 				break;
 			}
-			case 9 : {
+			case MOTOR_RANGE : {
 				float_to_str((float)REG_MOTOR__RANGE, &reg_val_str[12], &reg_val_str[8], 4, 3);
 				break;
 			}
-			case 10 : {
-				float_to_str((float)REG_FC_CFG__I_TRANSFER, &reg_val_str[12], &reg_val_str[8], 4, 3);
-				break;
-			}
-			case 11 : {
-				osd_write_str((uint8_t*)vtx_str[REG_VTX__CHAN], sizeof(vtx_str[0]));
-				break;
-			}
-			case 12 : {
+			case VTX_POWER : {
 				if (REG_VTX__PWR == 0)
 					vtx_pwr_mw = 25.0f;
 				else if (REG_VTX__PWR == 1)
@@ -616,19 +619,21 @@ void osd_menu(struct radio_s * radio)
 				break;
 			}
 		}
-		if (menu_idx != 11)
+		if (menu_idx == VTX_CHANNEL)
+			osd_write_str((uint8_t*)vtx_str[REG_VTX__CHAN], sizeof(vtx_str[0]));
+		else
 			osd_write_str(reg_val_str, sizeof(reg_val_str));
 	}
 
 	// Save register
-	if ((state_prev == MENU) && (menu_idx == 13) && (state == MENU_RIGHT)) {
+	if ((state_prev == MENU) && (menu_idx == SAVE_REG) && (state == MENU_RIGHT)) {
 		reg_save();
 		osd_write_str((uint8_t*)saved_str, sizeof(saved_str));
 	}
 
 #ifdef SMART_AUDIO
 	// Apply VTX settings
-	if ((state_prev == MENU) && (menu_idx == 14) && (state == MENU_RIGHT)) {
+	if ((state_prev == MENU) && (menu_idx == SAVE_VTX) && (state == MENU_RIGHT)) {
 		sma_send_cmd(SMA_SET_CHANNEL, REG_VTX__CHAN);
 		wait_sma();
 		sma_send_cmd(SMA_SET_POWER, REG_VTX__PWR);
@@ -640,7 +645,8 @@ void osd_menu(struct radio_s * radio)
 #endif
 
 	// Runcam
-	if ((state_prev == MENU) && (state == MENU_RIGHT) && (menu_idx == 15)) {
+#ifdef RUNCAM
+	if ((state_prev == MENU) && (state == MENU_RIGHT) && (menu_idx == RUNCAM)) {
 		osd_write(MAX7456_DMM, MAX7456_DMM__CLR_DISPLAY_MEM);
 		runcam_send_cmd(OPEN);
 	} else if (state_prev == RUNCAM_MENU) {
@@ -677,6 +683,7 @@ void osd_menu(struct radio_s * radio)
 	} else if ( ((state_prev == RUNCAM_UP) || (state_prev == RUNCAM_DOWN) || (state_prev == RUNCAM_LEFT) || (state_prev == RUNCAM_RIGHT) || (state_prev == RUNCAM_ENTER)) && (state == RUNCAM_MENU) ) {
 		runcam_send_cmd(RELEASE);
 	}
+#endif
 
 	state_prev = state;
 }
