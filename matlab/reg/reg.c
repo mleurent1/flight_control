@@ -1,6 +1,6 @@
 const reg_properties_t reg_properties[NB_REG] = 
 {
-	{1, 1, 0, 39}, // VERSION
+	{1, 1, 0, 40}, // VERSION
 	{1, 0, 0, 0}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
@@ -41,6 +41,8 @@ const reg_properties_t reg_properties[NB_REG] =
 	{0, 0, 0, 0}, // VTX
 	{0, 1, 1, 1006895490}, // VBAT_SCALE
 	{0, 1, 1, 1022363278}, // IBAT_SCALE
+	{0, 0, 0, 0}, // RADIO_TEST
+	{0, 0, 0, 0}, // RADIO_TEST_2
 	{0, 0, 0, 0}, // DEBUG_INT
 	{0, 0, 1, 0} // DEBUG_FLOAT
 };

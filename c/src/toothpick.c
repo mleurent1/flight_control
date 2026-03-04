@@ -28,42 +28,23 @@
 
 /* Global variables --------------------------------------*/
 
-volatile uint8_t spi1_tx_buffer[16];
+volatile uint8_t spi1_tx_buffer[15];
 #if (ESC == DSHOT)
 	// Bit size must be the same as timer register, because MSIZE = PSIZE = register bit size
 	volatile uint16_t dshot[17*4];
 	volatile uint16_t dshot2[17*4];
 #endif
-volatile bool sensor_busy;
-volatile uint8_t spi2_rx_buffer[3];
-volatile uint8_t spi2_tx_buffer[3];
+volatile uint8_t spi2_rx_nbytes;
 volatile uint8_t uart2_tx_buffer[16];
 volatile uint8_t uart2_rx_nbytes;
 
 /* Private functions ------------------------------------------------*/
 
-inline __attribute__((always_inline)) void sensor_spi_dma_enable(uint8_t size)
-{
-	DMA2_Stream0->NDTR = size;
-	DMA2_Stream3->NDTR = size;
-	DMA2_Stream0->CR |= DMA_SxCR_EN;
-	DMA2_Stream3->CR |= DMA_SxCR_EN;
-	SPI1->CR1 |= SPI_CR1_SPE;
-}
-
-inline __attribute__((always_inline)) void sensor_spi_dma_disable()
-{
-	DMA2_Stream0->CR &= ~DMA_SxCR_EN;
-	DMA2_Stream3->CR &= ~DMA_SxCR_EN;
-	while ((DMA2_Stream0->CR & DMA_SxCR_EN) && (DMA2_Stream3->CR & DMA_SxCR_EN)) {} // Wait for end of current transfer
-	DMA2->LIFCR = DMA_CLEAR_ALL_FLAGS_0 | DMA_CLEAR_ALL_FLAGS_3;
-	SPI1->CR1 &= ~SPI_CR1_SPE;
-}
-
 inline __attribute__((always_inline)) void radio_uart_dma_enable(uint8_t size)
 {
 	DMA2_Stream5->NDTR = size;
 	DMA2_Stream5->CR |= DMA_SxCR_EN;
+	USART1->SR = 0;
 	USART1->CR1 |= USART_CR1_RE;
 }
 
@@ -75,25 +56,6 @@ inline __attribute__((always_inline)) void radio_uart_dma_disable()
 	USART1->CR1 &= ~USART_CR1_RE;
 }
 
-inline __attribute__((always_inline)) void osd_spi_dma_enable(uint8_t size)
-{
-	DMA1_Stream3->NDTR = size;
-	DMA1_Stream4->NDTR = size;
-	DMA1_Stream3->CR |= DMA_SxCR_EN;
-	DMA1_Stream4->CR |= DMA_SxCR_EN;
-	SPI2->CR1 |= SPI_CR1_SPE;
-}
-
-inline __attribute__((always_inline)) void osd_spi_dma_disable()
-{
-	DMA1_Stream3->CR &= ~DMA_SxCR_EN;
-	DMA1_Stream4->CR &= ~DMA_SxCR_EN;
-	while ((DMA1_Stream3->CR & DMA_SxCR_EN) && (DMA1_Stream4->CR & DMA_SxCR_EN)) {} // Wait for end of current transfer
-	DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_3;
-	DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_4;
-	SPI2->CR1 &= ~SPI_CR1_SPE;
-}
-
 /* Public functions ---------------------------------------*/
 
 uint32_t HAL_RCC_GetHCLKFreq(void)
@@ -101,22 +63,38 @@ uint32_t HAL_RCC_GetHCLKFreq(void)
   return SystemCoreClock;
 }
 
+void sensor_transfer(uint8_t* data_in, uint8_t* data_out, uint8_t size)
+{
+	// Disable DMA channels in order to configure them
+	DMA2_Stream0->CR &= ~DMA_SxCR_EN;
+	DMA2_Stream3->CR &= ~DMA_SxCR_EN;
+
+	DMA2_Stream0->M0AR = (uint32_t)data_in;
+	DMA2_Stream3->M0AR = (uint32_t)data_out;
+	DMA2_Stream0->NDTR = size;
+	DMA2_Stream3->NDTR = size;
+
+	// Enable DMA channels and start SPI transaction
+	DMA2->LIFCR = DMA_LIFCR_CTCIF3; // Clear Transfer complete flag for Tx DMA (done for Rx DMA in IRQ handler), needed before re-enabling DMA
+	DMA2_Stream0->CR |= DMA_SxCR_EN;
+	DMA2_Stream3->CR |= DMA_SxCR_EN;
+	SPI1->CR1 |= SPI_CR1_SPE;
+
+	sensor_busy = true;
+}
+
 void sensor_write(uint8_t addr, uint8_t data)
 {
 	spi1_tx_buffer[0] = addr & 0x7F;
 	spi1_tx_buffer[1] = data;
-	sensor_spi_dma_enable(2);
-	sensor_busy = true;
-	// Wait for end of transaction
-	while (sensor_busy)
-		__WFI();
+	sensor_transfer((uint8_t*)&sensor_raw, (uint8_t*)spi1_tx_buffer, 2);
+	while (sensor_busy) {} // Wait for end of transaction
 }
 
 void sensor_read(uint8_t addr, uint8_t size)
 {
 	spi1_tx_buffer[0] = 0x80 | (addr & 0x7F);
-	sensor_spi_dma_enable(size+1);
-	sensor_busy = true;
+	sensor_transfer((uint8_t*)&sensor_raw, (uint8_t*)spi1_tx_buffer, size+1);
 }
 
 void en_sensor_irq(void)
@@ -143,15 +121,9 @@ void set_motors(uint16_t * motor_raw, bool * motor_telemetry)
 	uint8_t motor3_dshot[16];
 	uint8_t motor4_dshot[16];
 
-	// Disable DMA TIM update events, master timer and DMA
-	TIM2->DIER = 0;
+	// Disable master timer
 	TIM2->CR1 = 0;
-	DMA1_Stream1->CR &= ~DMA_SxCR_EN;
-	DMA1_Stream7->CR &= ~DMA_SxCR_EN;
-	while ((DMA1_Stream1->CR & DMA_SxCR_EN) && (DMA1_Stream7->CR & DMA_SxCR_EN)) {} // Wait for end of current transfer
-	DMA1->LIFCR = DMA_CLEAR_ALL_FLAGS_1;
-	DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_7;
-
+	
 	dshot_encode(&motor_raw[0], motor2_dshot, motor_telemetry[0]);
 	dshot_encode(&motor_raw[1], motor1_dshot, motor_telemetry[1]);
 	dshot_encode(&motor_raw[2], motor3_dshot, motor_telemetry[2]);
@@ -163,16 +135,22 @@ void set_motors(uint16_t * motor_raw, bool * motor_telemetry)
 		dshot2[i*4+1] = motor4_dshot[i];
 	}
 
-		
+	// Configure DMA
+	TIM2->DIER = 0; // DMA requests must be disabled before configuring DMA, otherwise there are glitches 
+	DMA1_Stream1->CR &= ~DMA_SxCR_EN; // Disable DMA channels in order to configure them
+	DMA1_Stream7->CR &= ~DMA_SxCR_EN;
 	DMA1_Stream1->NDTR = 17*4;
 	DMA1_Stream7->NDTR = 17*4;
+	DMA1->LIFCR = DMA_LIFCR_CTCIF1; // Clear Transfer complete flags, needed before re-enabling DMA
+	DMA1->HIFCR = DMA_HIFCR_CTCIF7;
 	DMA1_Stream1->CR |= DMA_SxCR_EN;
 	DMA1_Stream7->CR |= DMA_SxCR_EN;
+
 	// Reset timer just before an update event (overflow)
-	TIM2->CNT = TIM2->ARR;
+	/*TIM2->CNT = TIM2->ARR;
 	TIM3->CNT = TIM3->ARR;
-	TIM4->CNT = TIM4->ARR;
-	// Enable DMA TIM update events and master timer
+	TIM4->CNT = TIM4->ARR;*/
+	// Enable TIM update DMA requests and master timer
 	TIM2->DIER = TIM_DIER_UDE;
 	TIM2->CR1 = TIM_CR1_CEN;
 #else
@@ -225,11 +203,26 @@ void trig_vbat_meas(void)
 	ADC1->CR2 |= ADC_CR2_JSWSTART;
 }
 
-void __attribute__((section(".RamFunc"))) osd_send(uint8_t * data, uint8_t size)
+__attribute__((section(".RamFunc"))) void osd_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size)
 {
-	memcpy((uint8_t*)spi2_tx_buffer, data, size);
-	osd_nbytes_to_receive = size;
-	osd_spi_dma_enable(size);
+	spi2_rx_nbytes = size; // Record transfer size
+
+	// Disable DMA channels in order to configure them
+	DMA1_Stream3->CR &= ~DMA_SxCR_EN;
+	DMA1_Stream4->CR &= ~DMA_SxCR_EN;
+	
+	DMA1_Stream3->M0AR = (uint32_t)data_in;
+	DMA1_Stream4->M0AR = (uint32_t)data_out;
+	DMA1_Stream3->NDTR = size;
+	DMA1_Stream4->NDTR = size;
+
+	// Enable DMA channels and start SPI transaction
+	DMA1->HIFCR = DMA_HIFCR_CTCIF4; // Clear Transfer complete flag for Tx DMA (done for Rx DMA in IRQ handler), needed before re-enabling DMA
+	DMA1_Stream3->CR |= DMA_SxCR_EN;
+	DMA1_Stream4->CR |= DMA_SxCR_EN;
+	SPI2->CR1 |= SPI_CR1_SPE;
+
+	osd_busy = true;
 }
 
 void sma_send(uint8_t * data, uint8_t size)
@@ -244,7 +237,7 @@ void sma_send(uint8_t * data, uint8_t size)
  Interrupt routines
 --------------------------------------------------------------------------------- */
 
-void __attribute__((section(".RamFunc"))) SysTick_Handler()
+__attribute__((section(".RamFunc"))) void SysTick_Handler()
 {
 	t_ms++;
 	flag_time = 1;
@@ -252,7 +245,7 @@ void __attribute__((section(".RamFunc"))) SysTick_Handler()
 
 /* Sensor ready IRQ ---------------------------*/
 
-void __attribute__((section(".RamFunc"))) EXTI1_IRQHandler()
+__attribute__((section(".RamFunc"))) void EXTI1_IRQHandler()
 {
 	EXTI->PR = EXTI_PR_PR1; // Clear pending request
 	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && (!sensor_busy)) {
@@ -260,35 +253,33 @@ void __attribute__((section(".RamFunc"))) EXTI1_IRQHandler()
 	}
 }
 
-/* Sensor SPI IRQ ------------------------------*/
-
-void __attribute__((section(".RamFunc"))) SPI1_IRQHandler()
-{
-	SPI1->SR; // Read SR to clear flags
-	sensor_spi_dma_disable();
-	sensor_error_count++;
-	if (REG_CTRL__SENSOR_HOST_CTRL == 0) {
-		sensor_read(59,14);
-	}
-}
-
 /* DMA IRQ of sensor Rx SPI ----------------------*/
 
-void __attribute__((section(".RamFunc"))) DMA2_Stream0_IRQHandler()
+__attribute__((section(".RamFunc"))) void DMA2_Stream0_IRQHandler()
 {
-	sensor_spi_dma_disable();
+	DMA2->LIFCR = DMA_LIFCR_CTCIF0; // Clear transfer complete IRQ
+	SPI1->CR1 &= ~SPI_CR1_SPE; // End SPI transaction (release NSS)
 	sensor_busy = false;
 
 	if (REG_CTRL__SENSOR_HOST_CTRL == 1) {
 		host_send(&sensor_raw.bytes[1], 1);
 	} else {
-		flag_sensor = 1; // Raise flag for sample ready
+		if (SPI1->SR & SPI_SR_OVR) { // Overrun error
+			// Specific procedure to clear flag
+			SPI1->DR;
+			SPI1->SR;
+			sensor_error_count++;
+			flag_sensor = false; // In case last sample was not processed
+		}
+		else {
+			flag_sensor = true; // Raise flag for sample ready
+		}
 	}
 }
 
 /* Radio UART IRQ ------------------------------*/
 
-void __attribute__((section(".RamFunc"))) USART1_IRQHandler()
+__attribute__((section(".RamFunc"))) void USART1_IRQHandler()
 {
 	USART1->SR = 0; // Clear status flags
 	radio_uart_dma_disable();
@@ -298,7 +289,7 @@ void __attribute__((section(".RamFunc"))) USART1_IRQHandler()
 
 /* DMA IRQ of radio Rx UART-----------------------*/
 
-void __attribute__((section(".RamFunc"))) DMA2_Stream5_IRQHandler()
+__attribute__((section(".RamFunc"))) void DMA2_Stream5_IRQHandler()
 {
 	radio_uart_dma_disable();
 	flag_radio = 1; // Raise flag for radio commands ready
@@ -306,7 +297,7 @@ void __attribute__((section(".RamFunc"))) DMA2_Stream5_IRQHandler()
 
 /* Timer IRQ of radio sync -----------------------*/
 
-void __attribute__((section(".RamFunc"))) TIM1_UP_TIM10_IRQHandler()
+__attribute__((section(".RamFunc"))) void TIM1_UP_TIM10_IRQHandler()
 {
 	TIM10->SR = 0; // Clear IRQ
 	radio_uart_dma_enable(sizeof(radio_frame));
@@ -314,7 +305,7 @@ void __attribute__((section(".RamFunc"))) TIM1_UP_TIM10_IRQHandler()
 
 /* VBAT ADC conversion IRQ -----------------------------*/
 
-void __attribute__((section(".RamFunc"))) ADC_IRQHandler()
+__attribute__((section(".RamFunc"))) void ADC_IRQHandler()
 {
 	ADC1->SR = 0; // Clear IRQ
 
@@ -332,27 +323,26 @@ void OTG_FS_IRQHandler()
 
 /* DMA IRQ of OSD Rx SPI ----------------------*/
 
-void __attribute__((section(".RamFunc"))) DMA1_Stream3_IRQHandler()
+__attribute__((section(".RamFunc"))) void DMA1_Stream3_IRQHandler()
 {
-	uint8_t i, n;
+	DMA1->LIFCR = DMA_LIFCR_CTCIF3; // Clear transfer complete IRQ
+	SPI2->CR1 &= ~SPI_CR1_SPE; // End SPI transaction (release NSS)
 
-	osd_spi_dma_disable();
+	if (osd_next_nbytes_to_send == 0)
+		osd_busy = false;
 
-	// To be compatible with UART OSD
-	n = osd_nbytes_to_receive;
-	for (i = 0; i < n; i++)
-		osd_data_received[--osd_nbytes_to_receive] = spi2_rx_buffer[i];
-
-	if (REG_CTRL__OSD_HOST_CTRL == 1) { 
-		host_send((uint8_t*)osd_data_received, n);
-	} else if (osd_nbytes_to_send > 0) {
-		osd_send((uint8_t*)&osd_data_to_send[--osd_nbytes_to_send], 1);
+	if (REG_CTRL__OSD_HOST_CTRL == 1) {
+		host_send((uint8_t*)DMA1_Stream3->M0AR, spi2_rx_nbytes);
+	}
+	else if (osd_next_nbytes_to_send > 0) {
+		osd_transfer(osd_next_data_to_send, (uint8_t*)DMA1_Stream3->M0AR, osd_next_nbytes_to_send);
+		osd_next_nbytes_to_send = 0;
 	}
 }
 
 /* Smart Audio UART IRQ -----------------------------------*/
 
-void __attribute__((section(".RamFunc"))) USART2_IRQHandler()
+__attribute__((section(".RamFunc"))) void USART2_IRQHandler()
 {
 	if (USART2->SR & USART_SR_TC) { // transfer complete
 		USART2->SR = 0; // Clear status flags
@@ -385,7 +375,7 @@ void __attribute__((section(".RamFunc"))) USART2_IRQHandler()
 Board init
 --------------------------------------------------------------------- */
 
-void board_init()
+uint8_t board_init()
 {
 	/* RCC --------------------------------------------------------*/
 
@@ -501,9 +491,11 @@ void board_init()
 	// SPI config
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
 	SPI1->CR1 = SPI_CR1_MSTR | (5 << SPI_CR1_BR_Pos) | SPI_CR1_CPOL | SPI_CR1_CPHA; // SPI clock = clock APB2/64 = 48MHz/64 = 750 kHz
-	SPI1->CR2 = SPI_CR2_SSOE | SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN | SPI_CR2_ERRIE;
-	NVIC_EnableIRQ(SPI1_IRQn);
-	NVIC_SetPriority(SPI1_IRQn,0);
+	SPI1->CR2 = SPI_CR2_SSOE | SPI_CR2_TXDMAEN | SPI_CR2_RXDMAEN;
+	// NB: SPI_CR2_ERRIE and SPI1_IRQn are not enabled because:
+	// - There are only 2 errors: MODF and OVR
+	// - MODF (mode fault) should happen only in multi-master scenario
+	// - OVR can be handled in DMA transfer complete interrupt
 
 	// A1: Gyro (MPU6000) interrupt
 	SYSCFG->EXTICR[0] = SYSCFG_EXTICR1_EXTI1_PA; 
@@ -513,14 +505,12 @@ void board_init()
 
 	// DMA2 stream 0 chan 3: SPI1_RX
 	DMA2_Stream0->CR = (3 << DMA_SxCR_CHSEL_Pos) | (1 << DMA_SxCR_PL_Pos) | DMA_SxCR_MINC | DMA_SxCR_TCIE;
-	DMA2_Stream0->M0AR = (uint32_t)&sensor_raw;
 	DMA2_Stream0->PAR = (uint32_t)&(SPI1->DR);
 	NVIC_EnableIRQ(DMA2_Stream0_IRQn);
 	NVIC_SetPriority(DMA2_Stream0_IRQn,0);
 
 	// DMA2 stream 3 chan 3: SPI1_TX
 	DMA2_Stream3->CR = (3 << DMA_SxCR_CHSEL_Pos) | (3 << DMA_SxCR_PL_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
-	DMA2_Stream3->M0AR = (uint32_t)spi1_tx_buffer;
 	DMA2_Stream3->PAR = (uint32_t)&(SPI1->DR);
 
 	/* Radio UART ---------------------------------------------------*/
@@ -718,14 +708,12 @@ void board_init()
 
 	// DMA1 stream 3 chan 0: SPI2_RX
 	DMA1_Stream3->CR = (0 << DMA_SxCR_CHSEL_Pos) | (1 << DMA_SxCR_PL_Pos) | DMA_SxCR_MINC | DMA_SxCR_TCIE;
-	DMA1_Stream3->M0AR = (uint32_t)spi2_rx_buffer;
 	DMA1_Stream3->PAR = (uint32_t)&(SPI2->DR);
 	NVIC_EnableIRQ(DMA1_Stream3_IRQn);
 	NVIC_SetPriority(DMA1_Stream3_IRQn,0);
 
 	// DMA1 stream 4 chan 0: SPI2_TX
 	DMA1_Stream4->CR = (0 << DMA_SxCR_CHSEL_Pos) | (3 << DMA_SxCR_PL_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
-	DMA1_Stream4->M0AR = (uint32_t)spi2_tx_buffer;
 	DMA1_Stream4->PAR = (uint32_t)&(SPI2->DR);
 
 	/* Smart Audio ---------------------------------------*/
@@ -752,5 +740,9 @@ void board_init()
 	DMA1_Stream6->PAR = (uint32_t)&(USART2->DR);
 
 #endif
+
+	/* Settle time (in seconds) --------------------------------------------*/
+
+	return 1; // Regulators
 
 }

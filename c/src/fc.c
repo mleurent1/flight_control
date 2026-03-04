@@ -66,6 +66,8 @@ int main(void)
 	uint8_t i;
 	int8_t status;
 
+	uint8_t settle_time;
+
 	bool flag_radio_connected = false;
 	bool flag_armed = false;
 	bool flag_acro = false;
@@ -82,8 +84,6 @@ int main(void)
 
 	struct sensor_s sensor;
 	struct angle_s angle;
-
-	uint8_t arm_test_z = 0;
 
 	float error_pitch = 0;
 	float error_roll = 0;
@@ -156,7 +156,7 @@ int main(void)
 	angle.pitch = 0;
 	angle.roll = 0;
 
-	board_init();
+	settle_time = board_init();
 
 	usb_init();
 
@@ -168,7 +168,7 @@ int main(void)
 	i_roll  = REG_I_ROLL;
 	d_roll  = REG_D_ROLL;
 
-	wait_ms(1000); // Wait for regulators to settle
+	wait(settle_time); // Wait for regulators to settle
 
 	mpu_init();
 
@@ -260,18 +260,6 @@ int main(void)
 
 			// Estimate angle
 			angle_estimate(&sensor, &angle);
-
-			// Override armed and acro flags for test without radio
-			if (REG_CTRL__ARM_TEST > 0) {
-				flag_armed = 1;
-				flag_acro = (REG_CTRL__ARM_TEST == 1);
-				radio.throttle = 0; // Disable throttle
-			}
-			else if (arm_test_z > 0) {
-				flag_armed = 0;
-				flag_acro = 1;
-			}
-			arm_test_z = REG_CTRL__ARM_TEST;
 
 			// Smooth pitch and roll commands in angle mode
 			if (!flag_acro) {
@@ -460,11 +448,11 @@ int main(void)
 
 				status_cnt++;
 
-				// disarm when timeout on radio samples
+				// Disarm when timeout on radio samples
 				if (flag_radio_timeout)
 					flag_armed = 0;
 
-				// shut down motors when timeout on sensor samples
+				// Shut down motors when timeout on sensor samples
 				if (flag_sensor_timeout) {
 					for (i=0; i<4; i++) {
 						motor_raw[i] = 0;
@@ -482,7 +470,7 @@ int main(void)
 				if ((vbat_cell < REG_VBAT_MIN) && (nb_cells > 0))
 					REG_STATUS |= 0x04;
 
-				// LED double blinks when timeout on sensor or radio samples, or vbat too low
+				// LED double blinks when timeout on sensor/radio samples, or vbat too low
 				warning = flag_sensor_timeout || flag_radio_timeout || ((vbat_cell < REG_VBAT_MIN) && (nb_cells > 0));
 			#ifdef DUAL_LED_STATUS
 				if (warning) {
@@ -503,10 +491,11 @@ int main(void)
 			#endif
 				
 
-				// beep when requested by user or, timeout on sensor or radio samples, or vbat too low
-				if ((radio.aux[2] > 0.5f) || (REG_CTRL__BEEP_TEST == 1) || warning) {
+				// Beep when requested by user, or timeout on sensor/radio samples, or vbat too low
+				if ((radio.aux[2] > 0.5f) || warning) {
 					if ((status_cnt & 0x03) == 0) toggle_beeper(true);
-				} else {
+				}
+				else {
 					toggle_beeper(false);
 				}
 

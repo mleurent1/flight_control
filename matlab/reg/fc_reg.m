@@ -52,17 +52,27 @@ classdef fc_reg
 				obj.write(2, uint32(w));
 			end
 		end
-		function y = CTRL__ARM_TEST(obj,x)
+		function y = CTRL__OSD_HOST_CTRL(obj,x)
 			r = double(obj.read(2));
 			if nargin < 2
-				z = typecast(uint32(bitshift(bitand(r, 6), -1)),'uint8');
+				z = typecast(uint32(bitshift(bitand(r, 2), -1)),'uint8');
 				y = z(1);
 			else
-				w = bitand(bitshift(double(x), 1), 6) + bitand(r, 4294967289);
+				w = bitand(bitshift(double(x), 1), 2) + bitand(r, 4294967293);
 				obj.write(2, uint32(w));
 			end
 		end
-		function y = CTRL__BEEP_TEST(obj,x)
+		function y = CTRL__SMA_HOST_CTRL(obj,x)
+			r = double(obj.read(2));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 4), -2)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 2), 4) + bitand(r, 4294967291);
+				obj.write(2, uint32(w));
+			end
+		end
+		function y = CTRL__DEBUG_RADIO(obj,x)
 			r = double(obj.read(2));
 			if nargin < 2
 				z = typecast(uint32(bitshift(bitand(r, 8), -3)),'uint8');
@@ -99,36 +109,6 @@ classdef fc_reg
 				y = z(1);
 			else
 				w = bitand(bitshift(double(x), 6), 64) + bitand(r, 4294967231);
-				obj.write(2, uint32(w));
-			end
-		end
-		function y = CTRL__DEBUG_RADIO(obj,x)
-			r = double(obj.read(2));
-			if nargin < 2
-				z = typecast(uint32(bitshift(bitand(r, 128), -7)),'uint8');
-				y = z(1);
-			else
-				w = bitand(bitshift(double(x), 7), 128) + bitand(r, 4294967167);
-				obj.write(2, uint32(w));
-			end
-		end
-		function y = CTRL__OSD_HOST_CTRL(obj,x)
-			r = double(obj.read(2));
-			if nargin < 2
-				z = typecast(uint32(bitshift(bitand(r, 256), -8)),'uint8');
-				y = z(1);
-			else
-				w = bitand(bitshift(double(x), 8), 256) + bitand(r, 4294967039);
-				obj.write(2, uint32(w));
-			end
-		end
-		function y = CTRL__SMA_HOST_CTRL(obj,x)
-			r = double(obj.read(2));
-			if nargin < 2
-				z = typecast(uint32(bitshift(bitand(r, 512), -9)),'uint8');
-				y = z(1);
-			else
-				w = bitand(bitshift(double(x), 9), 512) + bitand(r, 4294966783);
 				obj.write(2, uint32(w));
 			end
 		end
@@ -748,18 +728,112 @@ classdef fc_reg
 				obj.write(40, typecast(single(x), 'uint32'));
 			end
 		end
-		function y = DEBUG_INT(obj,x)
+		function y = RADIO_TEST(obj,x)
 			if nargin < 2
 				y = obj.read(41);
 			else
 				obj.write(41, uint32(x));
 			end
 		end
+		function y = RADIO_TEST__THROTTLE(obj,x)
+			r = double(obj.read(41));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 255), 0)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 0), 255) + bitand(r, 4294967040);
+				obj.write(41, uint32(w));
+			end
+		end
+		function y = RADIO_TEST__AILERON(obj,x)
+			r = double(obj.read(41));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 65280), -8)),'int8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(typecast(int32(x),'uint32')), 8), 65280) + bitand(r, 4294902015);
+				obj.write(41, uint32(w));
+			end
+		end
+		function y = RADIO_TEST__ELEVATOR(obj,x)
+			r = double(obj.read(41));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 16711680), -16)),'int8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(typecast(int32(x),'uint32')), 16), 16711680) + bitand(r, 4278255615);
+				obj.write(41, uint32(w));
+			end
+		end
+		function y = RADIO_TEST__RUDDER(obj,x)
+			r = double(obj.read(41));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 4278190080), -24)),'int8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(typecast(int32(x),'uint32')), 24), 4278190080) + bitand(r, 16777215);
+				obj.write(41, uint32(w));
+			end
+		end
+		function y = RADIO_TEST_2(obj,x)
+			if nargin < 2
+				y = obj.read(42);
+			else
+				obj.write(42, uint32(x));
+			end
+		end
+		function y = RADIO_TEST_2__AUX_0(obj,x)
+			r = double(obj.read(42));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 255), 0)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 0), 255) + bitand(r, 4294967040);
+				obj.write(42, uint32(w));
+			end
+		end
+		function y = RADIO_TEST_2__AUX_1(obj,x)
+			r = double(obj.read(42));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 65280), -8)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 8), 65280) + bitand(r, 4294902015);
+				obj.write(42, uint32(w));
+			end
+		end
+		function y = RADIO_TEST_2__AUX_2(obj,x)
+			r = double(obj.read(42));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 16711680), -16)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 16), 16711680) + bitand(r, 4278255615);
+				obj.write(42, uint32(w));
+			end
+		end
+		function y = RADIO_TEST_2__AUX_3(obj,x)
+			r = double(obj.read(42));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 4278190080), -24)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 24), 4278190080) + bitand(r, 16777215);
+				obj.write(42, uint32(w));
+			end
+		end
+		function y = DEBUG_INT(obj,x)
+			if nargin < 2
+				y = obj.read(43);
+			else
+				obj.write(43, uint32(x));
+			end
+		end
 		function y = DEBUG_FLOAT(obj,x)
 			if nargin < 2
-				y = typecast(obj.read(42), 'single');
+				y = typecast(obj.read(44), 'single');
 			else
-				obj.write(42, typecast(single(x), 'uint32'));
+				obj.write(44, typecast(single(x), 'uint32'));
 			end
 		end
 	end
@@ -771,14 +845,12 @@ classdef fc_reg
 			'STATUS', [1,0,0,0],...
 			'CTRL', [2,0,0,1],...
 			'CTRL__SENSOR_HOST_CTRL', [2,0,0,2],...
-			'CTRL__ARM_TEST', [2,0,0,2],...
-			'CTRL__BEEP_TEST', [2,0,0,2],...
+			'CTRL__OSD_HOST_CTRL', [2,0,0,2],...
+			'CTRL__SMA_HOST_CTRL', [2,0,0,2],...
+			'CTRL__DEBUG_RADIO', [2,0,0,2],...
 			'CTRL__SENSOR_CAL', [2,0,0,2],...
 			'CTRL__DEBUG', [2,0,0,2],...
 			'CTRL__RF_HOST_CTRL', [2,0,0,2],...
-			'CTRL__DEBUG_RADIO', [2,0,0,2],...
-			'CTRL__OSD_HOST_CTRL', [2,0,0,2],...
-			'CTRL__SMA_HOST_CTRL', [2,0,0,2],...
 			'MOTOR_TEST', [3,0,0,1],...
 			'MOTOR_TEST__VALUE', [3,0,0,2],...
 			'MOTOR_TEST__SELECT', [3,0,0,2],...
@@ -852,7 +924,17 @@ classdef fc_reg
 			'VTX__PWR', [38,0,0,2],...
 			'VBAT_SCALE', [39,1,1,0],...
 			'IBAT_SCALE', [40,1,1,0],...
-			'DEBUG_INT', [41,0,0,0],...
-			'DEBUG_FLOAT', [42,0,1,0] );
+			'RADIO_TEST', [41,0,0,1],...
+			'RADIO_TEST__THROTTLE', [41,0,0,2],...
+			'RADIO_TEST__AILERON', [41,0,0,2],...
+			'RADIO_TEST__ELEVATOR', [41,0,0,2],...
+			'RADIO_TEST__RUDDER', [41,0,0,2],...
+			'RADIO_TEST_2', [42,0,0,1],...
+			'RADIO_TEST_2__AUX_0', [42,0,0,2],...
+			'RADIO_TEST_2__AUX_1', [42,0,0,2],...
+			'RADIO_TEST_2__AUX_2', [42,0,0,2],...
+			'RADIO_TEST_2__AUX_3', [42,0,0,2],...
+			'DEBUG_INT', [43,0,0,0],...
+			'DEBUG_FLOAT', [44,0,1,0] );
 	end
 end

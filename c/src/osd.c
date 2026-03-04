@@ -18,7 +18,8 @@
 /* Private defines --------------------------------------*/
 
 #define DISP_ADDR_MENU (9*30+5)
-#define DISP_ADDR_TELEMETRY (13*30)
+#define DISP_ADDR_TELEMETRY_NTSC (10*30+1) // Last row index is 12
+#define DISP_ADDR_TELEMETRY_PAL (13*30+1) // Last row index is 15
 
 /* Private macros ------------------------------------------*/
 
@@ -37,144 +38,140 @@ enum runcam_cmd_e {LEFT, RIGHT, UP, DOWN, ENTER, RELEASE, OPEN, CLOSE};
 
 /* Private variables -----------------------*/
 
-const uint8_t menu_str[16][16] = {
-	{0xFF, 0x00, 0x00, 0x00, 0x16, 0x16, 0x19, 0x1C, 0x00, 0x12, 0x0D, 0x1E, 0x13, 0x1A, 0x00, 0x1A}, // P PITCH ROLL
-	{0xFF, 0x00, 0x00, 0x00, 0x16, 0x16, 0x19, 0x1C, 0x00, 0x12, 0x0D, 0x1E, 0x13, 0x1A, 0x00, 0x13}, // I PITCH ROLL
-	{0xFF, 0x00, 0x00, 0x00, 0x16, 0x16, 0x19, 0x1C, 0x00, 0x12, 0x0D, 0x1E, 0x13, 0x1A, 0x00, 0x0E}, // D PITCH ROLL
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21, 0x0B, 0x23, 0x00, 0x1A}, // P YAW
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x21, 0x0B, 0x23, 0x00, 0x13}, // I YAW
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1E, 0x0B, 0x1C}, // RATE
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x19, 0x1A, 0x22, 0x0F}, // EXPO
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x1E, 0x1C, 0x0B, 0x1E, 0x1D, 0x00, 0x1C, 0x19, 0x1E, 0x19, 0x17}, // MOTOR START
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x0E, 0x0F, 0x17, 0x1C, 0x0B, 0x00, 0x1C, 0x19, 0x1E, 0x19, 0x17}, // MOTOR ARMED
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x11, 0x18, 0x0B, 0x1C, 0x00, 0x1C, 0x19, 0x1E, 0x19, 0x17}, // MOTOR RANGE
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x16, 0x0F, 0x18, 0x18, 0x0B, 0x12, 0x0D, 0x00, 0x22, 0x1E, 0x20}, // VTX CHANNEL
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1C, 0x0F, 0x21, 0x19, 0x1A, 0x00, 0x22, 0x1E, 0x20}, // VTX POWER
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x0F, 0x1C, 0x00, 0x0F, 0x20, 0x0B, 0x1D}, // SAVE REG
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x22, 0x1E, 0x20, 0x00, 0x0F, 0x20, 0x0B, 0x1D}, // SAVE VTX
-	{0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x17, 0x0B, 0x0D, 0x18, 0x1F, 0x1C}  // RUNCAM
+#ifdef IBAT
+	uint16_t telem_str[43] = {10, 10, 65, 10, 10, 32,  0, 10, 10, 10, 65, 10, 11,  0, 10, 10, 10, 10, 49, 11, 44,  0, 10, 10, 68, 10, 10,  0,  0, 73, 10, 10, 10, 40, 12, 49,  0, 73, 10, 10, 40, 12, 255}; // 00.00V 000.0A 0000mAh 00:00  -000dBm -00dB
+#else
+	uint16_t telem_str[27] = {10, 10, 65, 10, 10, 32,  0, 10, 10, 68, 10, 10,  0, 73, 10, 10, 10, 40, 12, 49,  0, 73, 10, 10, 40, 12, 255}; // 00.00V 00:00 -000dBm -00dB
+#endif
+uint16_t menu_str[15][16] = {
+	{26,  0, 26, 19, 30, 13, 18,  0, 28, 25, 22, 22,  0,  0,  0, 255}, // P PITCH ROLL
+	{19,  0, 26, 19, 30, 13, 18,  0, 28, 25, 22, 22,  0,  0,  0, 255}, // I PITCH ROLL
+	{14,  0, 26, 19, 30, 13, 18,  0, 28, 25, 22, 22,  0,  0,  0, 255}, // D PITCH ROLL
+	{26,  0, 35, 11, 33,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}, // P YAW
+	{19,  0, 35, 11, 33,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}, // I YAW
+	{28, 11, 30, 15,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}, // RATE
+	{15, 34, 26, 25,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}, // EXPO
+	{23, 25, 30, 25, 28,  0, 29, 30, 11, 28, 30,  0,  0,  0,  0, 255}, // MOTOR START
+	{23, 25, 30, 25, 28,  0, 11, 28, 23, 15, 14,  0,  0,  0,  0, 255}, // MOTOR ARMED
+	{23, 25, 30, 25, 28,  0, 28, 11, 24, 17, 15,  0,  0,  0,  0, 255}, // MOTOR RANGE
+	{32, 30, 34,  0, 13, 18, 11, 24, 24, 15, 22,  0,  0,  0,  0, 255}, // VTX CHANNEL
+	{32, 30, 34,  0, 26, 25, 33, 15, 28,  0,  0,  0,  0,  0,  0, 255}, // VTX POWER
+	{29, 11, 32, 15,  0, 28, 15, 17,  0,  0,  0,  0,  0,  0,  0, 255}, // SAVE REG
+	{29, 11, 32, 15,  0, 32, 30, 34,  0,  0,  0,  0,  0,  0,  0, 255}, // SAVE VTX
+	{28, 31, 24, 13, 11, 23,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}  // RUNCAM
 };
-const uint8_t vtx_str[48][16] = {
-	{0xFF, 0x05, 0x06, 0x08, 0x05, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND A   1 5865
-	{0xFF, 0x05, 0x04, 0x08, 0x05, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND A   2 5845
-	{0xFF, 0x05, 0x02, 0x08, 0x05, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND A   3 5825
-	{0xFF, 0x05, 0x0A, 0x08, 0x05, 0x00, 0x04, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND A   4 5805
-	{0xFF, 0x05, 0x08, 0x07, 0x05, 0x00, 0x05, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND A   5 5785
-	{0xFF, 0x05, 0x06, 0x07, 0x05, 0x00, 0x06, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND A   6 5765
-	{0xFF, 0x05, 0x04, 0x07, 0x05, 0x00, 0x07, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND A   7 5745
-	{0xFF, 0x05, 0x02, 0x07, 0x05, 0x00, 0x08, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND A   8 5725
-	{0xFF, 0x03, 0x03, 0x07, 0x05, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND B   1 5733
-	{0xFF, 0x02, 0x05, 0x07, 0x05, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND B   2 5752
-	{0xFF, 0x01, 0x07, 0x07, 0x05, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND B   3 5771
-	{0xFF, 0x0A, 0x09, 0x07, 0x05, 0x00, 0x04, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND B   4 5790
-	{0xFF, 0x09, 0x0A, 0x08, 0x05, 0x00, 0x05, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND B   5 5809
-	{0xFF, 0x08, 0x02, 0x08, 0x05, 0x00, 0x06, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND B   6 5828
-	{0xFF, 0x07, 0x04, 0x08, 0x05, 0x00, 0x07, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND B   7 5847
-	{0xFF, 0x06, 0x06, 0x08, 0x05, 0x00, 0x08, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND B   8 5866
-	{0xFF, 0x05, 0x0A, 0x07, 0x05, 0x00, 0x01, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND E   1 5705
-	{0xFF, 0x05, 0x08, 0x06, 0x05, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND E   2 5685
-	{0xFF, 0x05, 0x06, 0x06, 0x05, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND E   3 5665
-	{0xFF, 0x05, 0x04, 0x06, 0x05, 0x00, 0x04, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND E   4 5645
-	{0xFF, 0x05, 0x08, 0x08, 0x05, 0x00, 0x05, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND E   5 5885
-	{0xFF, 0x05, 0x0A, 0x09, 0x05, 0x00, 0x06, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND E   6 5905
-	{0xFF, 0x05, 0x02, 0x09, 0x05, 0x00, 0x07, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND E   7 5925
-	{0xFF, 0x05, 0x04, 0x09, 0x05, 0x00, 0x08, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x0E, 0x18, 0x0B, 0x0C}, // BAND E   8 5945
-	{0xFF, 0x0A, 0x04, 0x07, 0x05, 0x00, 0x01, 0x00, 0x00, 0x0F, 0x20, 0x0B, 0x21, 0x1C, 0x13, 0x0B}, // AIRWAVE  1 5740
-	{0xFF, 0x0A, 0x06, 0x07, 0x05, 0x00, 0x02, 0x00, 0x00, 0x0F, 0x20, 0x0B, 0x21, 0x1C, 0x13, 0x0B}, // AIRWAVE  2 5760
-	{0xFF, 0x0A, 0x08, 0x07, 0x05, 0x00, 0x03, 0x00, 0x00, 0x0F, 0x20, 0x0B, 0x21, 0x1C, 0x13, 0x0B}, // AIRWAVE  3 5780
-	{0xFF, 0x0A, 0x0A, 0x08, 0x05, 0x00, 0x04, 0x00, 0x00, 0x0F, 0x20, 0x0B, 0x21, 0x1C, 0x13, 0x0B}, // AIRWAVE  4 5800
-	{0xFF, 0x0A, 0x02, 0x08, 0x05, 0x00, 0x05, 0x00, 0x00, 0x0F, 0x20, 0x0B, 0x21, 0x1C, 0x13, 0x0B}, // AIRWAVE  5 5820
-	{0xFF, 0x0A, 0x04, 0x08, 0x05, 0x00, 0x06, 0x00, 0x00, 0x0F, 0x20, 0x0B, 0x21, 0x1C, 0x13, 0x0B}, // AIRWAVE  6 5840
-	{0xFF, 0x0A, 0x06, 0x08, 0x05, 0x00, 0x07, 0x00, 0x00, 0x0F, 0x20, 0x0B, 0x21, 0x1C, 0x13, 0x0B}, // AIRWAVE  7 5860
-	{0xFF, 0x0A, 0x08, 0x08, 0x05, 0x00, 0x08, 0x00, 0x00, 0x0F, 0x20, 0x0B, 0x21, 0x1C, 0x13, 0x0B}, // AIRWAVE  8 5880
-	{0xFF, 0x08, 0x05, 0x06, 0x05, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0D, 0x0B, 0x1C}, // RACE     1 5658
-	{0xFF, 0x05, 0x09, 0x06, 0x05, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0D, 0x0B, 0x1C}, // RACE     2 5695
-	{0xFF, 0x02, 0x03, 0x07, 0x05, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0D, 0x0B, 0x1C}, // RACE     3 5732
-	{0xFF, 0x09, 0x06, 0x07, 0x05, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0D, 0x0B, 0x1C}, // RACE     4 5769
-	{0xFF, 0x06, 0x0A, 0x08, 0x05, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0D, 0x0B, 0x1C}, // RACE     5 5806
-	{0xFF, 0x03, 0x04, 0x08, 0x05, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0D, 0x0B, 0x1C}, // RACE     6 5843
-	{0xFF, 0x0A, 0x08, 0x08, 0x05, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0D, 0x0B, 0x1C}, // RACE     7 5880
-	{0xFF, 0x07, 0x01, 0x09, 0x05, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0D, 0x0B, 0x1C}, // RACE     8 5917
-	{0xFF, 0x01, 0x02, 0x06, 0x05, 0x00, 0x01, 0x00, 0x0F, 0x0D, 0x0B, 0x1C, 0x00, 0x21, 0x19, 0x16}, // LOW RACE 1 5621
-	{0xFF, 0x04, 0x08, 0x05, 0x05, 0x00, 0x02, 0x00, 0x0F, 0x0D, 0x0B, 0x1C, 0x00, 0x21, 0x19, 0x16}, // LOW RACE 2 5584
-	{0xFF, 0x07, 0x04, 0x05, 0x05, 0x00, 0x03, 0x00, 0x0F, 0x0D, 0x0B, 0x1C, 0x00, 0x21, 0x19, 0x16}, // LOW RACE 3 5547
-	{0xFF, 0x0A, 0x01, 0x05, 0x05, 0x00, 0x04, 0x00, 0x0F, 0x0D, 0x0B, 0x1C, 0x00, 0x21, 0x19, 0x16}, // LOW RACE 4 5510
-	{0xFF, 0x03, 0x07, 0x04, 0x05, 0x00, 0x05, 0x00, 0x0F, 0x0D, 0x0B, 0x1C, 0x00, 0x21, 0x19, 0x16}, // LOW RACE 5 5473
-	{0xFF, 0x06, 0x03, 0x04, 0x05, 0x00, 0x06, 0x00, 0x0F, 0x0D, 0x0B, 0x1C, 0x00, 0x21, 0x19, 0x16}, // LOW RACE 6 5436
-	{0xFF, 0x09, 0x09, 0x03, 0x05, 0x00, 0x07, 0x00, 0x0F, 0x0D, 0x0B, 0x1C, 0x00, 0x21, 0x19, 0x16}, // LOW RACE 7 5399
-	{0xFF, 0x02, 0x06, 0x03, 0x05, 0x00, 0x08, 0x00, 0x0F, 0x0D, 0x0B, 0x1C, 0x00, 0x21, 0x19, 0x16}  // LOW RACE 8 5362
+uint16_t vtx_str[48][16] = {
+	{12, 11, 24, 14,  0, 11,  0,  0,  0,  1,  0,  5,  8,  6,  5, 255}, // BAND A   1 5865
+	{12, 11, 24, 14,  0, 11,  0,  0,  0,  2,  0,  5,  8,  4,  5, 255}, // BAND A   2 5845
+	{12, 11, 24, 14,  0, 11,  0,  0,  0,  3,  0,  5,  8,  2,  5, 255}, // BAND A   3 5825
+	{12, 11, 24, 14,  0, 11,  0,  0,  0,  4,  0,  5,  8, 10,  5, 255}, // BAND A   4 5805
+	{12, 11, 24, 14,  0, 11,  0,  0,  0,  5,  0,  5,  7,  8,  5, 255}, // BAND A   5 5785
+	{12, 11, 24, 14,  0, 11,  0,  0,  0,  6,  0,  5,  7,  6,  5, 255}, // BAND A   6 5765
+	{12, 11, 24, 14,  0, 11,  0,  0,  0,  7,  0,  5,  7,  4,  5, 255}, // BAND A   7 5745
+	{12, 11, 24, 14,  0, 11,  0,  0,  0,  8,  0,  5,  7,  2,  5, 255}, // BAND A   8 5725
+	{12, 11, 24, 14,  0, 12,  0,  0,  0,  1,  0,  5,  7,  3,  3, 255}, // BAND B   1 5733
+	{12, 11, 24, 14,  0, 12,  0,  0,  0,  2,  0,  5,  7,  5,  2, 255}, // BAND B   2 5752
+	{12, 11, 24, 14,  0, 12,  0,  0,  0,  3,  0,  5,  7,  7,  1, 255}, // BAND B   3 5771
+	{12, 11, 24, 14,  0, 12,  0,  0,  0,  4,  0,  5,  7,  9, 10, 255}, // BAND B   4 5790
+	{12, 11, 24, 14,  0, 12,  0,  0,  0,  5,  0,  5,  8, 10,  9, 255}, // BAND B   5 5809
+	{12, 11, 24, 14,  0, 12,  0,  0,  0,  6,  0,  5,  8,  2,  8, 255}, // BAND B   6 5828
+	{12, 11, 24, 14,  0, 12,  0,  0,  0,  7,  0,  5,  8,  4,  7, 255}, // BAND B   7 5847
+	{12, 11, 24, 14,  0, 12,  0,  0,  0,  8,  0,  5,  8,  6,  6, 255}, // BAND B   8 5866
+	{12, 11, 24, 14,  0, 15,  0,  0,  0,  1,  0,  5,  7, 10,  5, 255}, // BAND E   1 5705
+	{12, 11, 24, 14,  0, 15,  0,  0,  0,  2,  0,  5,  6,  8,  5, 255}, // BAND E   2 5685
+	{12, 11, 24, 14,  0, 15,  0,  0,  0,  3,  0,  5,  6,  6,  5, 255}, // BAND E   3 5665
+	{12, 11, 24, 14,  0, 15,  0,  0,  0,  4,  0,  5,  6,  4,  5, 255}, // BAND E   4 5645
+	{12, 11, 24, 14,  0, 15,  0,  0,  0,  5,  0,  5,  8,  8,  5, 255}, // BAND E   5 5885
+	{12, 11, 24, 14,  0, 15,  0,  0,  0,  6,  0,  5,  9, 10,  5, 255}, // BAND E   6 5905
+	{12, 11, 24, 14,  0, 15,  0,  0,  0,  7,  0,  5,  9,  2,  5, 255}, // BAND E   7 5925
+	{12, 11, 24, 14,  0, 15,  0,  0,  0,  8,  0,  5,  9,  4,  5, 255}, // BAND E   8 5945
+	{11, 19, 28, 33, 11, 32, 15,  0,  0,  1,  0,  5,  7,  4, 10, 255}, // AIRWAVE  1 5740
+	{11, 19, 28, 33, 11, 32, 15,  0,  0,  2,  0,  5,  7,  6, 10, 255}, // AIRWAVE  2 5760
+	{11, 19, 28, 33, 11, 32, 15,  0,  0,  3,  0,  5,  7,  8, 10, 255}, // AIRWAVE  3 5780
+	{11, 19, 28, 33, 11, 32, 15,  0,  0,  4,  0,  5,  8, 10, 10, 255}, // AIRWAVE  4 5800
+	{11, 19, 28, 33, 11, 32, 15,  0,  0,  5,  0,  5,  8,  2, 10, 255}, // AIRWAVE  5 5820
+	{11, 19, 28, 33, 11, 32, 15,  0,  0,  6,  0,  5,  8,  4, 10, 255}, // AIRWAVE  6 5840
+	{11, 19, 28, 33, 11, 32, 15,  0,  0,  7,  0,  5,  8,  6, 10, 255}, // AIRWAVE  7 5860
+	{11, 19, 28, 33, 11, 32, 15,  0,  0,  8,  0,  5,  8,  8, 10, 255}, // AIRWAVE  8 5880
+	{28, 11, 13, 15,  0,  0,  0,  0,  0,  1,  0,  5,  6,  5,  8, 255}, // RACE     1 5658
+	{28, 11, 13, 15,  0,  0,  0,  0,  0,  2,  0,  5,  6,  9,  5, 255}, // RACE     2 5695
+	{28, 11, 13, 15,  0,  0,  0,  0,  0,  3,  0,  5,  7,  3,  2, 255}, // RACE     3 5732
+	{28, 11, 13, 15,  0,  0,  0,  0,  0,  4,  0,  5,  7,  6,  9, 255}, // RACE     4 5769
+	{28, 11, 13, 15,  0,  0,  0,  0,  0,  5,  0,  5,  8, 10,  6, 255}, // RACE     5 5806
+	{28, 11, 13, 15,  0,  0,  0,  0,  0,  6,  0,  5,  8,  4,  3, 255}, // RACE     6 5843
+	{28, 11, 13, 15,  0,  0,  0,  0,  0,  7,  0,  5,  8,  8, 10, 255}, // RACE     7 5880
+	{28, 11, 13, 15,  0,  0,  0,  0,  0,  8,  0,  5,  9,  1,  7, 255}, // RACE     8 5917
+	{22, 25, 33,  0, 28, 11, 13, 15,  0,  1,  0,  5,  6,  2,  1, 255}, // LOW RACE 1 5621
+	{22, 25, 33,  0, 28, 11, 13, 15,  0,  2,  0,  5,  5,  8,  4, 255}, // LOW RACE 2 5584
+	{22, 25, 33,  0, 28, 11, 13, 15,  0,  3,  0,  5,  5,  4,  7, 255}, // LOW RACE 3 5547
+	{22, 25, 33,  0, 28, 11, 13, 15,  0,  4,  0,  5,  5,  1, 10, 255}, // LOW RACE 4 5510
+	{22, 25, 33,  0, 28, 11, 13, 15,  0,  5,  0,  5,  4,  7,  3, 255}, // LOW RACE 5 5473
+	{22, 25, 33,  0, 28, 11, 13, 15,  0,  6,  0,  5,  4,  3,  6, 255}, // LOW RACE 6 5436
+	{22, 25, 33,  0, 28, 11, 13, 15,  0,  7,  0,  5,  3,  9,  9, 255}, // LOW RACE 7 5399
+	{22, 25, 33,  0, 28, 11, 13, 15,  0,  8,  0,  5,  3,  6,  2, 255}  // LOW RACE 8 5362
 };
-const uint8_t saved_str[16] = {0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,0x0E, 0x0F, 0x20, 0x0B, 0x1D}; // SAVED
+uint16_t saved_str[16] = {29, 11, 32, 15, 14,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}; // SAVED
+uint16_t reg_val_str[16] = {10, 10, 10, 10, 65, 10, 10, 10,  0,  0,  0,  0,  0,  0,  0, 255}; // 0000.000
 
-/* Global variables -----------------------*/
-
-volatile uint8_t osd_data_to_send[30*2]; // 30 = nb of char in 1 line
-volatile uint8_t osd_nbytes_to_send = 0;
-volatile uint8_t osd_data_received[2];
-volatile uint8_t osd_nbytes_to_receive = 0;
-volatile enum state_e state = TELEMETRY;
-volatile enum state_e state_prev = TELEMETRY;
-volatile uint8_t menu_idx = 0;
+uint8_t osd_data_to_send[2];
+uint8_t osd_data_received[sizeof(telem_str)];
+uint8_t* osd_next_data_to_send;
+uint8_t osd_next_nbytes_to_send = 0;
+uint16_t disp_addr_telem;
+enum state_e state = TELEMETRY;
+enum state_e state_prev = TELEMETRY;
+uint8_t menu_idx = 0;
 
 /* Private Functions -----------------------*/
 
-// Wait for end of OSD transaction
-void wait_osd(void)
-{
-	while ((osd_nbytes_to_send > 0) || (osd_nbytes_to_receive > 0))
-		__WFI();
-}
-
 void osd_write(uint8_t addr, uint8_t data)
 {
-	uint8_t buf[2];
-	buf[0] = addr & 0x7F;
-	buf[1] = data;
-	osd_send(buf,2);
-	while (osd_nbytes_to_receive > 0)
-		__WFI();
+	osd_data_to_send[0] = addr & 0x7F;
+	osd_data_to_send[1] = data;
+	osd_transfer(osd_data_to_send, osd_data_received, 2);
+	while (osd_busy) {}
 }
 
 uint8_t osd_read(uint8_t addr)
 {
-	uint8_t buf[2];
-	buf[0] = 0x80 | (addr & 0x7F);
-	osd_send(buf,2);
-	while (osd_nbytes_to_receive > 0)
-		__WFI();
-	return osd_data_received[0];
+	osd_data_to_send[0] = 0x80 | (addr & 0x7F);
+	osd_transfer(osd_data_to_send, osd_data_received, 2);
+	while (osd_busy) {}
+	return osd_data_received[1];
 }
 
-void osd_write_str(uint8_t * str, uint8_t size)
+void osd_write_str(uint8_t* str, uint8_t size)
 {
-	uint8_t buf[2];
-	memcpy((uint8_t*)osd_data_to_send, str, size);
-	osd_nbytes_to_send = size;
+	osd_next_data_to_send = str;
+	osd_next_nbytes_to_send = size;
 	// Enable auto-increment
-	buf[0] = MAX7456_DMM;
-	buf[1] = MAX7456_DMM__AUTO_INCR_EN;
-	osd_send(buf,2);
+	osd_data_to_send[0] = MAX7456_DMM;
+	osd_data_to_send[1] = MAX7456_DMM__AUTO_INCR_EN;
+	osd_transfer(osd_data_to_send, osd_data_received, 2);
 }
 
-void float_to_str(float num, uint8_t * str_int, uint8_t * str_frac, uint8_t int_size, uint8_t frac_size)
+void float_to_str(float num, uint16_t* str_int, uint16_t* str_frac, uint8_t int_size, uint8_t frac_size)
 {
-	uint8_t dec_frac[3];
+	uint8_t dec_int[4], dec_frac[3];
 	bool nonzero = false;
-	int i;
+	uint8_t i,j;
 
-	float_to_dec(num, str_int, dec_frac, int_size, frac_size);
+	float_to_dec(num, dec_int, dec_frac);
 
-	for (i=int_size-1; i>=0; i--) {
-		if (str_int[i] > 0)
+	for (i=0; i<int_size; i++) {
+		j = 4-int_size+i; // Take LSBs
+		if (dec_int[j] > 0)
 			nonzero = true;
-		if ((str_int[i] == 0) && (nonzero || (i == 0)))
+		if ((dec_int[j] == 0) && (nonzero || (i == int_size-1)))
 			str_int[i] = 10;
+		else
+			str_int[i] = dec_int[j];
 	}
 	for (i=0; i<frac_size; i++) {
 		if (dec_frac[i] == 0)
-			str_frac[frac_size-i-1] = 10;
+			str_frac[i] = 10;
 		else
-			str_frac[frac_size-i-1] = dec_frac[i];
+			str_frac[i] = dec_frac[i];
 	}
 }
 
@@ -245,40 +242,48 @@ void osd_init(void)
 	r = osd_read(MAX7456_OSDBL);
 	osd_write(MAX7456_OSDBL, r & ~MAX7456_OSDBL__AUTO_OSDBL_DISABLE);
 	r = osd_read(MAX7456_STAT);
-	if (r & MAX7456_STAT__PAL_DETECTED)
+	if (r & MAX7456_STAT__PAL_DETECTED) {
 		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN | MAX7456_VM0__PAL_NOT_NTSC);
-	else
+		disp_addr_telem = DISP_ADDR_TELEMETRY_PAL;
+	}
+	else {
 		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN);
+		disp_addr_telem = DISP_ADDR_TELEMETRY_NTSC;
+	}
 	osd_write(MAX7456_HOS, 40);
 	osd_write(MAX7456_VOS, 22);
-	osd_write(MAX7456_DMAH, DISP_ADDR_TELEMETRY >> 8);
-	osd_write(MAX7456_DMAL, DISP_ADDR_TELEMETRY & 0xFF);
+	osd_write(MAX7456_DMAH, disp_addr_telem >> 8);
+	osd_write(MAX7456_DMAL, disp_addr_telem & 0xFF);
 }
 
 void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_min, uint8_t rssi, int8_t snr)
 {
-#ifdef IBAT
-	uint8_t telem_str[44] = {0xFF, 0x0C, 0x28, 0x00, 0x00, 0x49, 0x00, 0x31, 0x0C, 0x28, 0x00, 0x00, 0x00, 0x49, 0x00, 0x00, 0x00, 0x00, 0x44, 0x00, 0x00, 0x00, 0x2C, 0x0B, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x00, 0x41, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x41, 0x00, 0x00, 0x00}; //  00.00V 000.0A 0000mAh 00:00  -000dBm -00dB
-#else
-	uint8_t telem_str[44] = {0xFF, 0x0C, 0x28, 0x00, 0x00, 0x49, 0x00, 0x31, 0x0C, 0x28, 0x00, 0x00, 0x00, 0x49, 0x00, 0x00, 0x00, 0x00, 0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x41, 0x00, 0x00, 0x00}; //  00.00V                00:00  -000dBm -00dB
-#endif
-
-	if ((state == TELEMETRY) && (osd_nbytes_to_send == 0) && (osd_nbytes_to_receive == 0)) {
-		float_to_str(vbat, &telem_str[41], &telem_str[38], 2, 2);
+		if ((state == TELEMETRY) && (!osd_busy)) {
+		float_to_str(vbat, &telem_str[0], &telem_str[3], 2, 2);
 	#ifdef IBAT
-		float_to_str(ibat, &telem_str[33], &telem_str[31], 3, 1);
-		float_to_str(imah, &telem_str[25], &telem_str[25], 4, 0);
-	#endif
-		float_to_str((float)t_min, &telem_str[19], &telem_str[19], 2, 0);
-		float_to_str((float)t_s, &telem_str[16], &telem_str[16], 2, 0);
-		float_to_str((float)rssi, &telem_str[10], &telem_str[10], 3, 0);
-		if (snr > 0) {
-			float_to_str((float)snr, &telem_str[3], &telem_str[3], 2, 0);
-			telem_str[5] = 0;
+		float_to_str(ibat, &telem_str[7], &telem_str[11], 3, 1);
+		float_to_str(imah, &telem_str[14], &telem_str[14], 4, 0);
+		float_to_str((float)t_min, &telem_str[22], &telem_str[22], 2, 0);
+		float_to_str((float)t_s, &telem_str[25], &telem_str[25], 2, 0);
+		float_to_str((float)rssi, &telem_str[30], &telem_str[30], 3, 0);
+		if (snr >= 0) {
+			float_to_str((float)snr, &telem_str[38], &telem_str[38], 2, 0);
+			telem_str[37] = 0;
 		} else {
-			float_to_str(-(float)snr, &telem_str[3], &telem_str[3], 2, 0);
+			float_to_str(-(float)snr, &telem_str[38], &telem_str[38], 2, 0);
 		}
-		osd_write_str(telem_str, sizeof(telem_str));
+	#else
+		float_to_str((float)t_min, &telem_str[7], &telem_str[7], 2, 0);
+		float_to_str((float)t_s, &telem_str[10], &telem_str[10], 2, 0);
+		float_to_str((float)rssi, &telem_str[14], &telem_str[14], 3, 0);
+		if (snr >= 0) {
+			float_to_str((float)snr, &telem_str[22], &telem_str[22], 2, 0);
+			telem_str[21] = 0;
+		} else {
+			float_to_str(-(float)snr, &telem_str[22], &telem_str[22], 2, 0);
+		}
+	#endif
+		osd_write_str((uint8_t*)telem_str, sizeof(telem_str)-1); // -1: avoid 0 after last byte 255
 	}
 }
 
@@ -290,7 +295,6 @@ void osd_menu(struct radio_s * radio)
 	int32_t motor_start, motor_armed, motor_range;
 	int32_t vtx_chan, vtx_pwr;
 	float vtx_pwr_mw;
-	uint8_t reg_val_str[16] = {0xFF,0,0,0,0,0,0,0,0,0,0,65,0,0,0,0};
 
 	// State machine
 	switch (state_prev) {
@@ -443,19 +447,20 @@ void osd_menu(struct radio_s * radio)
 
 	// Display menu
 	if ((state_prev == TELEMETRY) && (state == MENU_ENTER)) {
-		wait_osd();
+		while (osd_busy) {}
 		osd_write(MAX7456_DMAH, DISP_ADDR_MENU >> 8);
 		osd_write(MAX7456_DMAL, DISP_ADDR_MENU & 0xFF);
 		osd_write(MAX7456_DMM, MAX7456_DMM__CLR_DISPLAY_MEM);
-		osd_write_str((uint8_t*)menu_str[menu_idx], sizeof(menu_str[0]));
+		osd_write_str((uint8_t*)menu_str[menu_idx], sizeof(menu_str[0])-1); // -1: avoid 0 after last byte 255
 	} else if ( ((state_prev == MENU) && ((state == MENU_UP) || (state == MENU_DOWN)))
 		|| ((state_prev == REG) && (state == REG_EXIT))
 		|| ((state_prev == SAVED) && (state == SAVED_EXIT))
 		|| ((state_prev == RUNCAM_MENU) && (state == RUNCAM_EXIT)) ) {
-		osd_write_str((uint8_t*)menu_str[menu_idx], sizeof(menu_str[0]));
+		osd_write_str((uint8_t*)menu_str[menu_idx], sizeof(menu_str[0])-1); // -1: avoid 0 after last byte 255
 	} else if ((state_prev == MENU) && (state == MENU_EXIT)) {
-		osd_write(MAX7456_DMAH, DISP_ADDR_TELEMETRY >> 8);
-		osd_write(MAX7456_DMAL, DISP_ADDR_TELEMETRY & 0xFF);
+		while (osd_busy) {}
+		osd_write(MAX7456_DMAH, disp_addr_telem >> 8);
+		osd_write(MAX7456_DMAL, disp_addr_telem & 0xFF);
 		osd_write(MAX7456_DMM, MAX7456_DMM__CLR_DISPLAY_MEM);
 	}
 
@@ -565,43 +570,43 @@ void osd_menu(struct radio_s * radio)
 		|| ((state_prev == MENU) && (state == MENU_RIGHT) && (menu_idx < SAVE_REG)) ) {
 		switch (menu_idx) {
 			case P_PITCH_ROLL : {
-				float_to_str(REG_P_PITCH, &reg_val_str[12], &reg_val_str[8], 4, 3);
+				float_to_str(REG_P_PITCH, &reg_val_str[0], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case I_PITCH_ROLL : {
-				float_to_str(REG_I_PITCH, &reg_val_str[12], &reg_val_str[8], 4, 3);
+				float_to_str(REG_I_PITCH, &reg_val_str[0], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case D_PITCH_ROLL : {
-				float_to_str(REG_D_PITCH, &reg_val_str[12], &reg_val_str[8], 4, 3);
+				float_to_str(REG_D_PITCH, &reg_val_str[0], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case P_YAW : {
-				float_to_str(REG_P_YAW, &reg_val_str[12], &reg_val_str[8], 4, 3);
+				float_to_str(REG_P_YAW, &reg_val_str[0], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case I_YAW : {
-				float_to_str(REG_I_YAW, &reg_val_str[12], &reg_val_str[8], 4, 3);
+				float_to_str(REG_I_YAW, &reg_val_str[0], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case RATE : {
-				float_to_str((float)REG_RATE__PITCH_ROLL, &reg_val_str[12], &reg_val_str[8], 4, 3);
+				float_to_str((float)REG_RATE__PITCH_ROLL, &reg_val_str[0], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case EXPO : {
-				float_to_str(REG_EXPO_PITCH_ROLL, &reg_val_str[12], &reg_val_str[8], 4, 3);
+				float_to_str(REG_EXPO_PITCH_ROLL, &reg_val_str[0], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case MOTOR_START : {
-				float_to_str((float)REG_MOTOR__START, &reg_val_str[12], &reg_val_str[8], 4, 3);
+				float_to_str((float)REG_MOTOR__START, &reg_val_str[0], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case MOTOR_ARMED : {
-				float_to_str((float)REG_MOTOR__ARMED, &reg_val_str[12], &reg_val_str[8], 4, 3);
+				float_to_str((float)REG_MOTOR__ARMED, &reg_val_str[0], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case MOTOR_RANGE : {
-				float_to_str((float)REG_MOTOR__RANGE, &reg_val_str[12], &reg_val_str[8], 4, 3);
+				float_to_str((float)REG_MOTOR__RANGE, &reg_val_str[0], &reg_val_str[5], 4, 3);
 				break;
 			}
 			case VTX_POWER : {
@@ -620,15 +625,15 @@ void osd_menu(struct radio_s * radio)
 			}
 		}
 		if (menu_idx == VTX_CHANNEL)
-			osd_write_str((uint8_t*)vtx_str[REG_VTX__CHAN], sizeof(vtx_str[0]));
+			osd_write_str((uint8_t*)vtx_str[REG_VTX__CHAN], sizeof(vtx_str[0])-1); // -1: avoid 0 after last byte 255
 		else
-			osd_write_str(reg_val_str, sizeof(reg_val_str));
+			osd_write_str((uint8_t*)reg_val_str, sizeof(reg_val_str)-1); // -1: avoid 0 after last byte 255
 	}
 
 	// Save register
 	if ((state_prev == MENU) && (menu_idx == SAVE_REG) && (state == MENU_RIGHT)) {
 		reg_save();
-		osd_write_str((uint8_t*)saved_str, sizeof(saved_str));
+		osd_write_str((uint8_t*)saved_str, sizeof(saved_str)-1); // -1: avoid 0 after last byte 255
 	}
 
 #ifdef SMART_AUDIO
@@ -640,7 +645,7 @@ void osd_menu(struct radio_s * radio)
 		wait_sma();
 		vtx_current_chan = REG_VTX__CHAN;
 		vtx_current_pwr = REG_VTX__PWR;
-		osd_write_str((uint8_t*)saved_str, sizeof(saved_str));
+		osd_write_str((uint8_t*)saved_str, sizeof(saved_str)-1); // -1: avoid 0 after last byte 255
 	}
 #endif
 

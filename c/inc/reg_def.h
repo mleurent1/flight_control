@@ -1,4 +1,4 @@
-#define NB_REG 43
+#define NB_REG 45
 
 #define REG_VERSION reg[0]
 #define REG_VERSION_Addr 0
@@ -8,12 +8,15 @@
 #define REG_CTRL__SENSOR_HOST_CTRL (uint8_t)((reg[2] & 1U) >> 0)
 #define REG_CTRL__SENSOR_HOST_CTRL_Msk 1U
 #define REG_CTRL__SENSOR_HOST_CTRL_Pos 0U
-#define REG_CTRL__ARM_TEST (uint8_t)((reg[2] & 6U) >> 1)
-#define REG_CTRL__ARM_TEST_Msk 6U
-#define REG_CTRL__ARM_TEST_Pos 1U
-#define REG_CTRL__BEEP_TEST (uint8_t)((reg[2] & 8U) >> 3)
-#define REG_CTRL__BEEP_TEST_Msk 8U
-#define REG_CTRL__BEEP_TEST_Pos 3U
+#define REG_CTRL__OSD_HOST_CTRL (uint8_t)((reg[2] & 2U) >> 1)
+#define REG_CTRL__OSD_HOST_CTRL_Msk 2U
+#define REG_CTRL__OSD_HOST_CTRL_Pos 1U
+#define REG_CTRL__SMA_HOST_CTRL (uint8_t)((reg[2] & 4U) >> 2)
+#define REG_CTRL__SMA_HOST_CTRL_Msk 4U
+#define REG_CTRL__SMA_HOST_CTRL_Pos 2U
+#define REG_CTRL__DEBUG_RADIO (uint8_t)((reg[2] & 8U) >> 3)
+#define REG_CTRL__DEBUG_RADIO_Msk 8U
+#define REG_CTRL__DEBUG_RADIO_Pos 3U
 #define REG_CTRL__SENSOR_CAL (uint8_t)((reg[2] & 16U) >> 4)
 #define REG_CTRL__SENSOR_CAL_Msk 16U
 #define REG_CTRL__SENSOR_CAL_Pos 4U
@@ -23,15 +26,6 @@
 #define REG_CTRL__RF_HOST_CTRL (uint8_t)((reg[2] & 64U) >> 6)
 #define REG_CTRL__RF_HOST_CTRL_Msk 64U
 #define REG_CTRL__RF_HOST_CTRL_Pos 6U
-#define REG_CTRL__DEBUG_RADIO (uint8_t)((reg[2] & 128U) >> 7)
-#define REG_CTRL__DEBUG_RADIO_Msk 128U
-#define REG_CTRL__DEBUG_RADIO_Pos 7U
-#define REG_CTRL__OSD_HOST_CTRL (uint8_t)((reg[2] & 256U) >> 8)
-#define REG_CTRL__OSD_HOST_CTRL_Msk 256U
-#define REG_CTRL__OSD_HOST_CTRL_Pos 8U
-#define REG_CTRL__SMA_HOST_CTRL (uint8_t)((reg[2] & 512U) >> 9)
-#define REG_CTRL__SMA_HOST_CTRL_Msk 512U
-#define REG_CTRL__SMA_HOST_CTRL_Pos 9U
 #define REG_CTRL_Addr 2
 #define REG_MOTOR_TEST reg[3]
 #define REG_MOTOR_TEST__VALUE (uint16_t)((reg[3] & 65535U) >> 0)
@@ -214,7 +208,35 @@
 #define REG_VBAT_SCALE_Addr 39
 #define REG_IBAT_SCALE regf[40]
 #define REG_IBAT_SCALE_Addr 40
-#define REG_DEBUG_INT reg[41]
-#define REG_DEBUG_INT_Addr 41
-#define REG_DEBUG_FLOAT regf[42]
-#define REG_DEBUG_FLOAT_Addr 42
+#define REG_RADIO_TEST reg[41]
+#define REG_RADIO_TEST__THROTTLE (uint8_t)((reg[41] & 255U) >> 0)
+#define REG_RADIO_TEST__THROTTLE_Msk 255U
+#define REG_RADIO_TEST__THROTTLE_Pos 0U
+#define REG_RADIO_TEST__AILERON (int8_t)((reg[41] & 65280U) >> 8)
+#define REG_RADIO_TEST__AILERON_Msk 65280U
+#define REG_RADIO_TEST__AILERON_Pos 8U
+#define REG_RADIO_TEST__ELEVATOR (int8_t)((reg[41] & 16711680U) >> 16)
+#define REG_RADIO_TEST__ELEVATOR_Msk 16711680U
+#define REG_RADIO_TEST__ELEVATOR_Pos 16U
+#define REG_RADIO_TEST__RUDDER (int8_t)((reg[41] & 4278190080U) >> 24)
+#define REG_RADIO_TEST__RUDDER_Msk 4278190080U
+#define REG_RADIO_TEST__RUDDER_Pos 24U
+#define REG_RADIO_TEST_Addr 41
+#define REG_RADIO_TEST_2 reg[42]
+#define REG_RADIO_TEST_2__AUX_0 (uint8_t)((reg[42] & 255U) >> 0)
+#define REG_RADIO_TEST_2__AUX_0_Msk 255U
+#define REG_RADIO_TEST_2__AUX_0_Pos 0U
+#define REG_RADIO_TEST_2__AUX_1 (uint8_t)((reg[42] & 65280U) >> 8)
+#define REG_RADIO_TEST_2__AUX_1_Msk 65280U
+#define REG_RADIO_TEST_2__AUX_1_Pos 8U
+#define REG_RADIO_TEST_2__AUX_2 (uint8_t)((reg[42] & 16711680U) >> 16)
+#define REG_RADIO_TEST_2__AUX_2_Msk 16711680U
+#define REG_RADIO_TEST_2__AUX_2_Pos 16U
+#define REG_RADIO_TEST_2__AUX_3 (uint8_t)((reg[42] & 4278190080U) >> 24)
+#define REG_RADIO_TEST_2__AUX_3_Msk 4278190080U
+#define REG_RADIO_TEST_2__AUX_3_Pos 24U
+#define REG_RADIO_TEST_2_Addr 42
+#define REG_DEBUG_INT reg[43]
+#define REG_DEBUG_INT_Addr 43
+#define REG_DEBUG_FLOAT regf[44]
+#define REG_DEBUG_FLOAT_Addr 44

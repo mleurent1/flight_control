@@ -12,10 +12,11 @@
 /* Exported variables -----------------*/
 
 extern volatile bool sensor_busy;
+extern volatile bool osd_busy;
 
 /* Public functions -----------------*/
 
-void board_init(void);
+uint8_t board_init(void);
 void host_send(uint8_t * data, uint8_t size);
 void sensor_write(uint8_t addr, uint8_t data);
 void sensor_read(uint8_t addr, uint8_t size);
@@ -30,7 +31,7 @@ void toggle_led2(bool en);
 void toggle_beeper(bool en);
 uint16_t get_t_us(void);
 void trig_vbat_meas(void);
-void osd_send(uint8_t * data, uint8_t size);
+void osd_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size);
 void runcam_send(uint8_t * data, uint8_t size);
 void sma_send(uint8_t * data, uint8_t size);
 void set_leds(uint8_t * grb);

@@ -3,6 +3,7 @@
 
 #include "reg.h"
 #include "fc.h" // flags, sensor_raw, radio_raw
+#include "board.h" // host_send()
 #include "sensor.h" // mpu_cal()
 #include "mpu_reg.h"
 #include "utils.h" // uint32_to_float()
@@ -11,13 +12,14 @@
 #else
 	#include "stm32f3xx.h" // FLASH->
 #endif
+#include "osd.h" // osd_data_received
 #include "smart_audio.h" // sma_nbytes_to_receive
 
 uint32_t reg[NB_REG];
 float regf[NB_REG];
-const reg_properties_t reg_properties[NB_REG] =
+const reg_properties_t reg_properties[NB_REG] = 
 {
-	{1, 1, 0, 39}, // VERSION
+	{1, 1, 0, 40}, // VERSION
 	{1, 0, 0, 0}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
@@ -58,6 +60,8 @@ const reg_properties_t reg_properties[NB_REG] =
 	{0, 0, 0, 0}, // VTX
 	{0, 1, 1, 1006895490}, // VBAT_SCALE
 	{0, 1, 1, 1022363278}, // IBAT_SCALE
+	{0, 0, 0, 0}, // RADIO_TEST
+	{0, 0, 0, 0}, // RADIO_TEST_2
 	{0, 0, 0, 0}, // DEBUG_INT
 	{0, 0, 1, 0} // DEBUG_FLOAT
 };
@@ -162,6 +166,7 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 {
 	uint8_t addr = host_buffer_rx->addr;
 	uint32_t old_data;
+	struct crsf_rc_chan_s *rc_chan = (struct crsf_rc_chan_s *)radio_frame.frame.payload;
 	
 	switch (host_buffer_rx->instr) {
 		case 0: { // REG read
@@ -231,6 +236,22 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 						sma_send_cmd(SMA_SET_POWER, REG_VTX__PWR);
 					}
 				#endif
+					else if ((addr == REG_RADIO_TEST_Addr) || (addr == REG_RADIO_TEST_2_Addr)) {
+						// Emulate radio frame
+						radio_frame.frame.sync_byte = 0xC8;
+						radio_frame.frame.frame_length = 24;
+						radio_frame.frame.type = 0x16;
+						rc_chan->ch2 = REG_RADIO_TEST__THROTTLE * (820/128) + (992-820);
+						rc_chan->ch1 = (int8_t)REG_RADIO_TEST__ELEVATOR * (820/128) + 992;
+						rc_chan->ch0 = (int8_t)REG_RADIO_TEST__AILERON  * (820/128) + 992;
+						rc_chan->ch3 = (int8_t)REG_RADIO_TEST__RUDDER   * (820/128) + 992;
+						rc_chan->ch4 = REG_RADIO_TEST_2__AUX_0 * (820/128) + (992-820);
+						rc_chan->ch5 = REG_RADIO_TEST_2__AUX_1 * (820/128) + (992-820);
+						rc_chan->ch6 = REG_RADIO_TEST_2__AUX_2 * (820/128) + (992-820);
+						rc_chan->ch7 = REG_RADIO_TEST_2__AUX_3 * (820/128) + (992-820);
+						radio_frame.frame.crc = crc8(&radio_frame.bytes[2], 24-1);
+						flag_radio = true;
+					}
 					else if (addr == REG_DEBUG_INT_Addr) {
 						/* Put your debug command here */
 					}
@@ -271,7 +292,7 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			break;
 		}
 		case 9: { // UART send to OSD
-			osd_send(&host_buffer_rx->data.u8[0], host_buffer_rx->addr);
+			osd_transfer(host_buffer_rx->data.u8, (uint8_t*)osd_data_received, host_buffer_rx->addr);
 			break;
 		}
 		case 10: { // UART send to Smart Audio

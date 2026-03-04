@@ -8,12 +8,26 @@
 	#include "stm32f3xx.h" // __WFI()
 #endif
 #include "fc.h" // t_ms
+#include "board.h" // toggle_led()
 
 void wait_ms(uint32_t t)
 {
 	uint32_t next_t_ms = t_ms + t;
 	while (t_ms != next_t_ms)
 		__WFI();
+}
+
+void wait(uint8_t t)
+{
+	for (uint16_t i=t; i>0; i--) {
+		for (uint16_t j=0; j<i; j++) {
+			toggle_led(true);
+			wait_ms(50);
+			toggle_led(true);
+			wait_ms(50);
+		}
+		wait_ms(1000-i*100);
+	}
 }
 
 float uint32_to_float(uint32_t x)
@@ -104,25 +118,24 @@ uint8_t crc8(uint8_t * data, uint8_t size)
 	return crc;
 }
 
-void float_to_dec(float x, uint8_t * dec_int, uint8_t * dec_frac, uint8_t int_size, uint8_t frac_size)
+void float_to_dec(float x, uint8_t* dec_int, uint8_t* dec_frac)
 {
-	float b10_mult[4] = {1000.0,100.0,10.0,1.0};
-	float b10_div[4] = {0.001,0.01,0.1,1.0};
+	float b10_mult[4] = {1000.0f,100.0f,10.0f,1.0f};
+	float b10_div[4] = {0.001f,0.01f,0.1f,1.0f};
 	float q;
-	int i;
+	uint8_t i;
 
-	for (i=0; i<int_size; i++) {
-		q = floor(x * b10_div[i+4-int_size]);
+	for (i=0; i<4; i++) {
+		q = floorf(x * b10_div[i]);
 		if (q > 9.0f)
-			q = 9.0;
-		dec_int[int_size-i-1] = (uint8_t)q;
-		x = x - q * b10_mult[i+4-int_size];
+			dec_int[i] = 9;
+		else
+			dec_int[i] = (uint8_t)q;
+		x = x - q * b10_mult[i];
 	}
 
-	for (i=0; i<frac_size; i++) {
-		q = floor(x * b10_mult[2-i]);
-		if (q > 9.0f)
-			q = 9.0;
+	for (i=0; i<3; i++) {
+		q = floorf(x * b10_mult[2-i]);
 		dec_frac[i] = (uint8_t)q;
 		x = x - q * b10_div[2-i];
 	}

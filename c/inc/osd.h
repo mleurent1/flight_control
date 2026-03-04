@@ -2,6 +2,7 @@
 #define __OSD_H
 
 #include <stdint.h>
+
 #include "radio.h" // struct radio_s
 
 /* Public defines -----------------*/
@@ -10,10 +11,9 @@
 
 /* Exported variables -----------------*/
 
-extern volatile uint8_t osd_data_to_send[30*2];
-extern volatile uint8_t osd_nbytes_to_send;
-extern volatile uint8_t osd_data_received[2];
-extern volatile uint8_t osd_nbytes_to_receive;
+extern uint8_t* osd_next_data_to_send;
+extern uint8_t osd_next_nbytes_to_send;
+extern uint8_t osd_data_received[];
 
 /* Public functions -----------------*/
 

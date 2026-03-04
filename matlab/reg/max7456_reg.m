@@ -9,11 +9,7 @@ classdef max7456_reg
 			end
          fwrite(ser,[cmd,2,128+addr,0]);
 			r = fread(ser,2);
-			if obj.method % direct UART connection to OSD module
-				data = r(2);
-			else
-				data = r(1); % Bytes order inverted
-			end
+			data = r(2);
 		end
 		function write(obj,addr,data)
 			global ser

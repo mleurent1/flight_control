@@ -1,22 +1,14 @@
-% telem = ' 00.00V                00:00  -000dBm -00dB';
-telem = ' 00.00V 000.0A 0000mAh 00:00  -000dBm -00dB';
+% telem = '00.00V 00:00 -000dBm -00dB';
+telem = '00.00V 000.0A 0000mAh 00:00  -000dBm -00dB';
 
-t = telem - ' ' + 32; % ASCII conversion
-telem_str = t;
-telem_str((t>=65)&(t<=90)) = telem_str((t>=65)&(t<=90)) - 65 + 11; % A-Z
-telem_str((t>=97)&(t<=122)) = telem_str((t>=97)&(t<=122)) - 97 + 2*16+5; % a-z
-telem_str((t==32)) = 0; % ' '
-telem_str((t==45)) = 4*16+9; % '-'
-telem_str((t==46)) = 4*16+1; % '.'
-telem_str((t==48)) = 0; % '0'
-telem_str((t==58)) = 4*16+4; % ':'
-telem_str = [telem_str, 255];
+telem_str = [osd_encode(telem), 255];
 
-fprintf('uint8_t telem_str[%d] = {',length(telem_str));
-% fprintf('0x%02X, ',telem_str)
-fprintf('0x%02X, ',fliplr(telem_str))
+fprintf('uint16_t telem_str[%d] = {',length(telem_str));
+fprintf('%2d, ',telem_str)
+% fprintf('%2d, ',fliplr(telem_str))
 fprintf('\b\b}; // %s\n', strtrim(telem))
 
+%%
 menu = [
    'P PITCH ROLL   '
    'I PITCH ROLL   '
@@ -28,20 +20,18 @@ menu = [
    'MOTOR START    '
    'MOTOR ARMED    '
    'MOTOR RANGE    '
-   'I TRANSFER     '
    'VTX CHANNEL    '
    'VTX POWER      '
    'SAVE REG       '
    'SAVE VTX       '
    'RUNCAM         '];
 
-menu_str = [menu - 'A' + 11, 255*ones(size(menu,1),1)];
-menu_str(menu_str<0) = 0;
+menu_str = [osd_encode(menu), 255*ones(size(menu,1),1)];
 
-fprintf('const uint8_t menu_str[%d][%d] = {\n\t{',size(menu_str,1),size(menu_str,2));
+fprintf('uint16_t menu_str[%d][%d] = {\n\t{',size(menu_str,1),size(menu_str,2));
 for n = 1:size(menu_str,1)
-   % fprintf('0x%02X, ',menu_str(n,:))
-   fprintf('0x%02X, ',fliplr(menu_str(n,:)))
+   fprintf('%2d, ',menu_str(n,:))
+   % fprintf('0x%2d, ',fliplr(menu_str(n,:)))
    if n == size(menu_str,1)
       fprintf('\b\b}  // %s\n};\n', strtrim(menu(n,:)))
    else
@@ -49,6 +39,7 @@ for n = 1:size(menu_str,1)
    end
 end
 
+%%
 vtx_band = [
    'BAND A  '
    'BAND B  '
@@ -66,15 +57,13 @@ vtx_freq = [
 
 vtx = sprintf('%s %d %4d', vtx_band(1,:), 0, vtx_freq(1,1));
 
-fprintf('const uint8_t vtx_str[%d][%d] = {\n\t{', numel(vtx_freq),length(vtx)+1);
+fprintf('uint16_t vtx_str[%d][%d] = {\n\t{', numel(vtx_freq),length(vtx)+1);
 for n = 1:6
    for m = 1:8
       vtx = sprintf('%s %d %4d', vtx_band(n,:), m, vtx_freq(n,m));
-      str = [vtx - 'A' + 11, 255];
-      str(str==-6) = 10;
-      str((str>=-5) & (str<=3)) = str((str>=-5) & (str<=3)) + 6;
-      str(str<0) = 0;
-      fprintf('0x%02X, ',fliplr(str))
+		vtx_str = [osd_encode(vtx), 255];
+		fprintf('%2d, ',vtx_str)
+      % fprintf('%2d, ',fliplr(vtx_str))
       if (m == 8) && (n == 6)
          fprintf('\b\b}  // %s\n};\n', vtx)
       else
@@ -82,3 +71,23 @@ for n = 1:6
       end
    end
 end
+
+%%
+saved = 'SAVED          ';
+
+saved_str = [osd_encode(saved), 255];
+
+fprintf('uint16_t saved_str[%d] = {',length(saved_str));
+fprintf('%2d, ',saved_str)
+% fprintf('%2d, ',fliplr(saved_str))
+fprintf('\b\b}; // %s\n', strtrim(saved))
+
+%%
+reg_val = '0000.000       ';
+
+reg_val_str = [osd_encode(reg_val), 255];
+
+fprintf('uint16_t reg_val_str[%d] = {',length(reg_val_str));
+fprintf('%2d, ',reg_val_str)
+% fprintf('%2d, ',fliplr(reg_val_str))
+fprintf('\b\b}; // %s\n', strtrim(reg_val))

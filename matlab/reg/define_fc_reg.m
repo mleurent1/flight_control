@@ -5,7 +5,7 @@ n = n + 1;
 reg(n).name = 'VERSION';
 reg(n).read_only = 1;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VERSION',7,0,'uint8',39};
+reg(n).subf{1} = {'VERSION',7,0,'uint8',40};
 
 n = n + 1;
 reg(n).name = 'STATUS';
@@ -18,14 +18,12 @@ reg(n).name = 'CTRL';
 reg(n).read_only = 0;
 reg(n).flash = 0;
 reg(n).subf{1} = {'SENSOR_HOST_CTRL',0,0,'uint8',0};
-reg(n).subf{2} = {'ARM_TEST',2,1,'uint8',0};
-reg(n).subf{3} = {'BEEP_TEST',3,3,'uint8',0};
-reg(n).subf{4} = {'SENSOR_CAL',4,4,'uint8',0};
-reg(n).subf{5} = {'DEBUG',5,5,'uint8',0};
-reg(n).subf{6} = {'RF_HOST_CTRL',6,6,'uint8',0};
-reg(n).subf{7} = {'DEBUG_RADIO',7,7,'uint8',0};
-reg(n).subf{8} = {'OSD_HOST_CTRL',8,8,'uint8',0};
-reg(n).subf{9} = {'SMA_HOST_CTRL',9,9,'uint8',0};
+reg(n).subf{2} = {'OSD_HOST_CTRL',1,1,'uint8',0};
+reg(n).subf{3} = {'SMA_HOST_CTRL',2,2,'uint8',0};
+reg(n).subf{4} = {'DEBUG_RADIO',3,3,'uint8',0};
+reg(n).subf{5} = {'SENSOR_CAL',4,4,'uint8',0};
+reg(n).subf{6} = {'DEBUG',5,5,'uint8',0};
+reg(n).subf{7} = {'RF_HOST_CTRL',6,6,'uint8',0};
 
 n = n + 1;
 reg(n).name = 'MOTOR_TEST';
@@ -274,6 +272,24 @@ reg(n).name = 'IBAT_SCALE';
 reg(n).read_only = 0;
 reg(n).flash = 1;
 reg(n).subf{1} = {'IBAT_SCALE',31,0,'single',0.0293};
+
+n = n + 1;
+reg(n).name = 'RADIO_TEST';
+reg(n).read_only = 0;
+reg(n).flash = 0;
+reg(n).subf{1} = {'THROTTLE',7,0,'uint8',0};
+reg(n).subf{2} = {'AILERON',15,8,'int8',0};
+reg(n).subf{3} = {'ELEVATOR',23,16,'int8',0};
+reg(n).subf{4} = {'RUDDER',31,24,'int8',0};
+
+n = n + 1;
+reg(n).name = 'RADIO_TEST_2';
+reg(n).read_only = 0;
+reg(n).flash = 0;
+reg(n).subf{1} = {'AUX_0',7,0,'uint8',0};
+reg(n).subf{2} = {'AUX_1',15,8,'uint8',0};
+reg(n).subf{3} = {'AUX_2',23,16,'uint8',0};
+reg(n).subf{4} = {'AUX_3',31,24,'uint8',0};
 
 n = n + 1;
 reg(n).name = 'DEBUG_INT';
