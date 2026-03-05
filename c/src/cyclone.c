@@ -19,7 +19,7 @@
 
 /* Private variables --------------------------------------*/
 
-volatile uint8_t spi2_tx_buffer[15];
+volatile uint8_t spi2_rx_nbytes;
 #if (ESC == DSHOT)
 	volatile uint8_t dshot[17*4];
 #endif
@@ -53,8 +53,10 @@ inline __attribute__((always_inline)) void radio_uart_dma_disable()
 
 /* Public functions ---------------------------------------*/
 
-void sensor_transfer(uint8_t* data_in, uint8_t* data_out, uint8_t size)
+void sensor_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size)
 {
+	spi2_rx_nbytes = size;
+
 	// Disable DMA channels in order to configure them
 	DMA1_Channel4->CCR &= ~DMA_CCR_EN;
 	DMA1_Channel5->CCR &= ~DMA_CCR_EN;
@@ -70,20 +72,6 @@ void sensor_transfer(uint8_t* data_in, uint8_t* data_out, uint8_t size)
 	SPI2->CR1 |= SPI_CR1_SPE;
 
 	sensor_busy = true;
-}
-
-void sensor_write(uint8_t addr, uint8_t data)
-{
-	spi2_tx_buffer[0] = addr & 0x7F;
-	spi2_tx_buffer[1] = data;
-	sensor_transfer((uint8_t*)&sensor_raw, (uint8_t*)spi2_tx_buffer, 2);
-	while (sensor_busy) {} // Wait for end of transaction
-}
-
-void sensor_read(uint8_t addr, uint8_t size)
-{
-	spi2_tx_buffer[0] = 0x80 | (addr & 0x7F);
-	sensor_transfer((uint8_t*)&sensor_raw, (uint8_t*)spi2_tx_buffer, size+1);
 }
 
 void en_sensor_irq(void)
@@ -271,7 +259,7 @@ __attribute__((section(".RamFunc"))) void EXTI15_10_IRQHandler()
 {
 	EXTI->PR = EXTI_PR_PIF15; // Clear pending request
 	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && (!sensor_busy)) {
-		sensor_read(59,14);
+		sensor_read_samples();
 	}
 }
 
@@ -284,7 +272,7 @@ __attribute__((section(".RamFunc"))) void DMA1_Channel4_IRQHandler()
 	sensor_busy = false;
 
 	if (REG_CTRL__SENSOR_HOST_CTRL == 1) {
-		host_send((uint8_t*)&sensor_raw.bytes[1], 1);
+		host_send((uint8_t*)DMA1_Channel4->CMAR, spi2_rx_nbytes);
 	}
 	else {
 		if (SPI2->SR & SPI_SR_OVR) { // Overrun error

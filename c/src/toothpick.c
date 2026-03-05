@@ -28,7 +28,7 @@
 
 /* Global variables --------------------------------------*/
 
-volatile uint8_t spi1_tx_buffer[15];
+volatile uint8_t spi1_rx_nbytes;
 #if (ESC == DSHOT)
 	// Bit size must be the same as timer register, because MSIZE = PSIZE = register bit size
 	volatile uint16_t dshot[17*4];
@@ -63,8 +63,10 @@ uint32_t HAL_RCC_GetHCLKFreq(void)
   return SystemCoreClock;
 }
 
-void sensor_transfer(uint8_t* data_in, uint8_t* data_out, uint8_t size)
+void sensor_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size)
 {
+	spi1_rx_nbytes = size;
+
 	// Disable DMA channels in order to configure them
 	DMA2_Stream0->CR &= ~DMA_SxCR_EN;
 	DMA2_Stream3->CR &= ~DMA_SxCR_EN;
@@ -81,20 +83,6 @@ void sensor_transfer(uint8_t* data_in, uint8_t* data_out, uint8_t size)
 	SPI1->CR1 |= SPI_CR1_SPE;
 
 	sensor_busy = true;
-}
-
-void sensor_write(uint8_t addr, uint8_t data)
-{
-	spi1_tx_buffer[0] = addr & 0x7F;
-	spi1_tx_buffer[1] = data;
-	sensor_transfer((uint8_t*)&sensor_raw, (uint8_t*)spi1_tx_buffer, 2);
-	while (sensor_busy) {} // Wait for end of transaction
-}
-
-void sensor_read(uint8_t addr, uint8_t size)
-{
-	spi1_tx_buffer[0] = 0x80 | (addr & 0x7F);
-	sensor_transfer((uint8_t*)&sensor_raw, (uint8_t*)spi1_tx_buffer, size+1);
 }
 
 void en_sensor_irq(void)
@@ -249,7 +237,7 @@ __attribute__((section(".RamFunc"))) void EXTI1_IRQHandler()
 {
 	EXTI->PR = EXTI_PR_PR1; // Clear pending request
 	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && (!sensor_busy)) {
-		sensor_read(59,14);
+		sensor_read_samples();
 	}
 }
 
@@ -262,7 +250,7 @@ __attribute__((section(".RamFunc"))) void DMA2_Stream0_IRQHandler()
 	sensor_busy = false;
 
 	if (REG_CTRL__SENSOR_HOST_CTRL == 1) {
-		host_send(&sensor_raw.bytes[1], 1);
+		host_send((uint8_t*)DMA2_Stream0->M0AR, spi2_rx_nbytes);
 	} else {
 		if (SPI1->SR & SPI_SR_OVR) { // Overrun error
 			// Specific procedure to clear flag

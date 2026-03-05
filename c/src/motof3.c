@@ -19,10 +19,8 @@
 
 /* Private variables --------------------------------------*/
 
-volatile uint8_t i2c2_rx_buffer[15];
-volatile uint8_t i2c2_tx_buffer[2];
-volatile uint8_t i2c2_rx_bytes_to_read;
-volatile uint8_t i2c2_tx_bytes_written;
+volatile uint8_t i2c2_tx_data;
+volatile uint8_t i2c2_rx_nbytes;
 #if (ESC == DSHOT)
 	volatile uint8_t dshot[17*4];
 #endif
@@ -56,27 +54,28 @@ inline __attribute__((always_inline)) void radio_uart_dma_disable()
 
 /* Public functions ---------------------------------------*/
 
-void sensor_write(uint8_t addr, uint8_t data)
+void sensor_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size)
 {
-	i2c2_tx_buffer[0] = addr;
-	i2c2_tx_buffer[1] = data;
-	i2c2_rx_bytes_to_read = 0;
-	i2c2_tx_bytes_written = 0;
-	I2C2->CR2 &= ~(I2C_CR2_RD_WRN | I2C_CR2_NBYTES);
-	I2C2->CR2 |= (2 << I2C_CR2_NBYTES_Pos) | I2C_CR2_START;
-	sensor_busy = 1;
-	// Wait for end of transaction
-	while (sensor_busy) {} // Wait for end of transaction
-}
+	if (data_out[0] & 0x80) { // Read
+		I2C2->TXDR = data_out[0] & 0x7F;
+		i2c2_rx_nbytes = size;
 
-void sensor_read(uint8_t addr, uint8_t size)
-{
-	i2c2_tx_buffer[0] = addr;
-	i2c2_rx_bytes_to_read = size;
-	i2c2_tx_bytes_written = 0;
-	I2C2->CR2 &= ~(I2C_CR2_RD_WRN | I2C_CR2_NBYTES);
-	I2C2->CR2 |= (1 << I2C_CR2_NBYTES_Pos) | I2C_CR2_START;
-	sensor_busy = 1;
+		DMA1_Channel5->CCR &= ~DMA_CCR_EN;
+		DMA1_Channel5->CMAR = (uint32_t)data_in;
+		DMA1_Channel5->CNDTR = size;
+
+		I2C2->CR2 &= ~(I2C_CR2_RD_WRN | I2C_CR2_NBYTES);
+		I2C2->CR2 |= (1 << I2C_CR2_NBYTES_Pos) | I2C_CR2_START;
+	}
+	else {
+		I2C2->TXDR = data_out[0];
+		i2c2_tx_data = data_out[1];
+		i2c2_rx_nbytes = 0;
+		I2C2->CR2 &= ~(I2C_CR2_RD_WRN | I2C_CR2_NBYTES);
+		I2C2->CR2 |= (2 << I2C_CR2_NBYTES_Pos) | I2C_CR2_START;
+	}
+
+	sensor_busy = true;
 }
 
 void en_sensor_irq(void)
@@ -264,7 +263,7 @@ __attribute__((section(".RamFunc"))) void EXTI15_10_IRQHandler()
 {
 	EXTI->PR = EXTI_PR_PIF15; // Clear pending request
 	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && (!sensor_busy)) {
-		sensor_read(59,14);
+		sensor_read_samples();
 	}
 }
 
@@ -287,17 +286,14 @@ __attribute__((section(".RamFunc"))) void I2C2_ER_IRQHandler()
 __attribute__((section(".RamFunc"))) void I2C2_EV_IRQHandler()
 {
 	if (I2C2->ISR & I2C_ISR_TXIS) { // Tx buffer empty
-		I2C2->TXDR = i2c2_tx_buffer[i2c2_tx_bytes_written]; // write will clear TXE flag
-		i2c2_tx_bytes_written++;
+		I2C2->TXDR = i2c2_tx_data; // write will clear TXE flag
 	}
 	else if (I2C2->ISR & I2C_ISR_TC) { // Transfer completed
-		if (i2c2_rx_bytes_to_read > 0) {
-			DMA1_Channel5->CNDTR = i2c2_rx_bytes_to_read;
+		if (DMA1_Channel5->CNDTR > 0) {
 			DMA1_Channel5->CCR |= DMA_CCR_EN; // Enable DMA for Rx
 			// Restart I2C transfer for read
 			I2C2->CR2 &= ~I2C_CR2_NBYTES;
-			I2C2->CR2 |= (i2c2_rx_bytes_to_read << I2C_CR2_NBYTES_Pos) | I2C_CR2_RD_WRN | I2C_CR2_START;
-			i2c2_rx_bytes_to_read = 0;
+			I2C2->CR2 |= (i2c2_rx_nbytes << I2C_CR2_NBYTES_Pos) | I2C_CR2_RD_WRN | I2C_CR2_START;
 		}
 		else {
 			// End I2C transfer
@@ -314,14 +310,12 @@ __attribute__((section(".RamFunc"))) void I2C2_EV_IRQHandler()
 
 __attribute__((section(".RamFunc"))) void DMA1_Channel5_IRQHandler()
 {
-	DMA1->IFCR = DMA_IFCR_CGIF5; // Clear all flags
-	DMA1_Channel5->CCR &= ~DMA_CCR_EN; // Disable DMA
+	DMA1->IFCR = DMA_IFCR_CTCIF5; // Clear transfer complete flag
 
 	if (REG_CTRL__SENSOR_HOST_CTRL == 1) // Send I2C read data to host
-		host_send((uint8_t*)&sensor_raw.bytes[1], 1);
-	else {
+		host_send((uint8_t*)DMA1_Channel5->CMAR, i2c2_rx_nbytes);
+	else
 		flag_sensor = true; // Raise flag for sample ready
-	}
 }
 
 /* Radio UART IRQ ------------------------------*/
@@ -542,7 +536,6 @@ uint8_t board_init()
 
 	// DMA1 channel 5: I2C2_RX
 	DMA1_Channel5->CCR = (1 << DMA_CCR_PL_Pos) | DMA_CCR_MINC | DMA_CCR_TCIE;// | DMA_CCR_TEIE; // TODO: see if error handling is needed
-	DMA1_Channel5->CMAR = (uint32_t)&sensor_raw + 1;
 	DMA1_Channel5->CPAR = (uint32_t)&(I2C2->RXDR);
 	NVIC_EnableIRQ(DMA1_Channel5_IRQn);
 	NVIC_SetPriority(DMA1_Channel5_IRQn,0);

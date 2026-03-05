@@ -165,7 +165,6 @@ void reg_init(void)
 void reg_access(host_buffer_rx_t * host_buffer_rx)
 {
 	uint8_t addr = host_buffer_rx->addr;
-	uint32_t old_data;
 	struct crsf_rc_chan_s *rc_chan = (struct crsf_rc_chan_s *)radio_frame.frame.payload;
 	
 	switch (host_buffer_rx->instr) {
@@ -191,23 +190,15 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 				if (reg_properties[addr].is_float)
 					regf[addr] = host_buffer_rx->data.f[0];
 				else {
-					old_data = reg[addr];
 					reg[addr] = host_buffer_rx->data.u32[0];
 					if (addr == REG_CTRL_Addr) {
 						if (REG_CTRL__SENSOR_CAL) {
-							mpu_cal(&sensor_raw);
+							mpu_cal();
 							REG_CTRL &= ~REG_CTRL__SENSOR_CAL_Msk;
 						}
 					}
 					else if (addr == REG_MPU_CFG_Addr) {
-						if (REG_MPU_CFG != old_data) {
-							// Wait for end of current SPI transaction
-							while (sensor_busy)
-								__WFI();
-							sensor_write(MPU_CFG, MPU_CFG__DLPF_CFG(REG_MPU_CFG__FILT));
-							sensor_write(MPU_SMPLRT_DIV, REG_MPU_CFG__RATE);
-							sensor_rate = 1000.0f / (float)(REG_MPU_CFG__RATE+1);
-						}
+						sensor_rate = mpu_update();
 					}
 					else if (addr == REG_TIME_CONSTANT_Addr) {
 						if (REG_TIME_CONSTANT__VBAT == 0)
@@ -262,12 +253,11 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			}
 			break;
 		}
-		case 2: { // SPI read to MPU
-			sensor_read(addr,1);
+		case 2: { // Sensor transaction
+			sensor_transfer(host_buffer_rx->data.u8, host_buffer_tx.u8, host_buffer_rx->addr);
 			break;
 		}
-		case 3: { // SPI write to MPU
-			sensor_write(addr, host_buffer_rx->data.u8[3]);
+		case 3: { // RFU
 			break;
 		}
 		case 4: { // Flash read
@@ -291,8 +281,8 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			rf_write(addr, &host_buffer_rx->data.u8[3], 1);
 			break;
 		}
-		case 9: { // UART send to OSD
-			osd_transfer(host_buffer_rx->data.u8, (uint8_t*)osd_data_received, host_buffer_rx->addr);
+		case 9: { // OSD transaction
+			osd_transfer(host_buffer_rx->data.u8, host_buffer_tx.u8, host_buffer_rx->addr);
 			break;
 		}
 		case 10: { // UART send to Smart Audio

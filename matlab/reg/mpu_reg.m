@@ -2,13 +2,14 @@ classdef mpu_reg
 	methods
 		function data = read(obj,addr)
 			global ser
-			fwrite(ser,[2,addr]);
-			data = fread(ser,1);
+			fwrite(ser,[2,2,128+addr,0]);
+			r = fread(ser,2);
+			data = r(2);
 		end
 		function write(obj,addr,data)
 			global ser
-			fwrite(ser,[3,addr,0,0,0,data]);
-			fread(ser,1);
+			fwrite(ser,[2,length(data)+1,addr,data]);
+			fread(ser,length(data)+1);
 		end
 		function y = SELF_TST_X(obj,x)
 			if nargin < 2

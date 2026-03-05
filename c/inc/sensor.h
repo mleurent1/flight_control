@@ -9,8 +9,7 @@
 
 /* Public types -----------------*/
 
-struct sensor_raw_s {
-	uint8_t dummy;
+typedef struct sensor_raw_s {
 	int16_t accel_x;
 	int16_t accel_y;
 	int16_t accel_z;
@@ -18,12 +17,7 @@ struct sensor_raw_s {
 	int16_t gyro_x;
 	int16_t gyro_y;
 	int16_t gyro_z;
-} __attribute__((packed));
-
-typedef union {
-	uint8_t bytes[15];
-	struct sensor_raw_s sensor;
-} sensor_raw_t;
+} __attribute__((packed)) sensor_raw_t;
 
 struct sensor_s {
 	float gyro_x;
@@ -46,9 +40,11 @@ struct angle_s {
 
 /* Public functions -----------------*/
 
-void mpu_init(void);
-void mpu_process_samples(sensor_raw_t * sensor_raw, struct sensor_s * sensor);
-void mpu_cal(sensor_raw_t * sensor_raw);
-void angle_estimate(struct sensor_s * sensor, struct angle_s * angle);
+sensor_raw_t* sensor_read_samples();
+void mpu_init();
+float mpu_update();
+void mpu_process_samples(struct sensor_s* sensor);
+void mpu_cal();
+void angle_estimate(struct sensor_s* sensor, struct angle_s* angle);
 
 #endif

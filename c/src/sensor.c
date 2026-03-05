@@ -1,14 +1,12 @@
+#include <stdint.h>
+#include <stdbool.h>
+
 #include "sensor.h"
 #include "mpu_reg.h"
 #include "fc.h" // flags
-#include "board.h" // toggle_led_sensor
+#include "board.h" // sensor_transfer()
 #include "reg.h" // alpha coeff
 #include "utils.h" // wait_ms()
-#ifdef STM32F4
-	#include "stm32f4xx.h" // __WFI()
-#else
-	#include "stm32f3xx.h" // __WFI()
-#endif
 
 /* Private defines --------------------------------------*/
 
@@ -17,15 +15,61 @@
 
 /* Private macros --------------------------------------*/
 
-/* Global variables ----------------------------------*/
+/* Private types --------------------------------------*/
 
-/* Function definitions ----------------------------------*/
+/* Private variables ----------------------------------*/
 
-void mpu_init(void)
+#if (SENSOR == 6000)
+	uint8_t sensor_data_to_send[sizeof(sensor_raw_t)+1]; // +1: SPI address
+	uint16_t sensor_data_received[sizeof(sensor_raw_t)+1]; // +1: SPI dummy byte
+	sensor_raw_t* sensor_raw = (sensor_raw_t*)&sensor_data_received[1];
+#else
+	uint8_t sensor_data_to_send[2];
+	uint16_t sensor_data_received[sizeof(sensor_raw_t)];
+	sensor_raw_t* sensor_raw = (sensor_raw_t*)sensor_data_received;
+#endif
+
+/* Private functions ----------------------------------*/
+
+void sensor_write(uint8_t addr, uint8_t data)
+{
+	sensor_data_to_send[0] = addr & 0x7F;
+	sensor_data_to_send[1] = data;
+	sensor_transfer(sensor_data_to_send, (uint8_t*)sensor_data_received, 2);
+	while (sensor_busy) {} // Wait for end of transaction
+}
+
+void sensor_read(uint8_t addr, uint8_t* data, uint8_t size)
+{
+	sensor_data_to_send[0] = 0x80 | (addr & 0x7F);
+	sensor_transfer(sensor_data_to_send, data, size+1);
+}
+
+/* Public functions ----------------------------------*/
+
+sensor_raw_t* sensor_read_samples()
+{
+#if (SENSOR == 6000)
+	sensor_read(MPU_ACCEL_X_H, (uint8_t*)sensor_data_received+1, sizeof(sensor_raw_t));
+#else
+	sensor_read(MPU_ACCEL_X_H, (uint8_t*)sensor_data_received, sizeof(sensor_raw_t));
+#endif
+	return sensor_raw;
+}
+
+float mpu_update()
+{
+	while (sensor_busy) {} // Wait for end of current transaction
+	sensor_write(MPU_CFG, MPU_CFG__DLPF_CFG(REG_MPU_CFG__FILT));
+	sensor_write(MPU_SMPLRT_DIV, REG_MPU_CFG__RATE);
+	return 1000.0f / (float)(REG_MPU_CFG__RATE+1);
+}
+
+void mpu_init()
 {
 	sensor_write(MPU_PWR_MGMT_1, MPU_PWR_MGMT_1__DEVICE_RST);
 	wait_ms(100);
-#if (SENSOR != 6050)
+#if (SENSOR == 6000)
 	sensor_write(MPU_SIGNAL_PATH_RST, MPU_SIGNAL_PATH_RST__ACCEL_RST | MPU_SIGNAL_PATH_RST__GYRO_RST | MPU_SIGNAL_PATH_RST__TEMP_RST);
 	wait_ms(100);
 	sensor_write(MPU_USER_CTRL, MPU_USER_CTRL__I2C_IF_DIS);
@@ -37,48 +81,48 @@ void mpu_init(void)
 	sensor_write(MPU_CFG, MPU_CFG__DLPF_CFG(REG_MPU_CFG__FILT)); // Filter ON => Fs=1kHz, else 8kHz
 	sensor_write(MPU_GYRO_CFG, MPU_GYRO_CFG__FS_SEL(3)); // Full scale = +/-2000 deg/s
 	sensor_write(MPU_ACCEL_CFG, MPU_ACCEL_CFG__AFS_SEL(3)); // Full scale = +/- 16g
-	//wait_ms(100); // wait for filter to settle
 	sensor_write(MPU_INT_EN, MPU_INT_EN__DATA_RDY_EN);
 }
 
-void mpu_process_samples(sensor_raw_t * sensor_raw, struct sensor_s * sensor)
+void mpu_process_samples(struct sensor_s* sensor)
 {
-	int i;
-	uint8_t x;
+	uint8_t i;
 
-	for (i=1; i<15; i=i+2){
-		x = sensor_raw->bytes[i+1];
-		sensor_raw->bytes[i+1] = sensor_raw->bytes[i];
-		sensor_raw->bytes[i] = x;
+	// Change endianness
+	for (i=0; i<sizeof(sensor_raw_t)/2; i=i+1) {
+		#if (SENSOR == 6000)	
+			sensor_data_received[i+1] = __builtin_bswap16(sensor_data_received[i+1]);
+		#else
+			sensor_data_received[i] = __builtin_bswap16(sensor_data_received[i]);
+		#endif
 	}
 
+	// Remove DC and scale
 	#if (SENSOR_ORIENTATION == 90)
-		sensor->gyro_y = -(float)(sensor_raw->sensor.gyro_x - REG_GYRO_DC_XY__X) * MPU_GYRO_SCALE;
-		sensor->gyro_x = -(float)(sensor_raw->sensor.gyro_y - REG_GYRO_DC_XY__Y) * MPU_GYRO_SCALE;
-		sensor->accel_x =  (float)(sensor_raw->sensor.accel_x - REG_ACCEL_DC_XY__X) * MPU_ACCEL_SCALE;
-		sensor->accel_y = -(float)(sensor_raw->sensor.accel_y - REG_ACCEL_DC_XY__Y) * MPU_ACCEL_SCALE;
+		sensor->gyro_y = -(float)(sensor_raw->gyro_x - REG_GYRO_DC_XY__X) * MPU_GYRO_SCALE;
+		sensor->gyro_x = -(float)(sensor_raw->gyro_y - REG_GYRO_DC_XY__Y) * MPU_GYRO_SCALE;
+		sensor->accel_x =  (float)(sensor_raw->accel_x - REG_ACCEL_DC_XY__X) * MPU_ACCEL_SCALE;
+		sensor->accel_y = -(float)(sensor_raw->accel_y - REG_ACCEL_DC_XY__Y) * MPU_ACCEL_SCALE;
 	#elif (SENSOR_ORIENTATION == 180)
-		sensor->gyro_x =  (float)(sensor_raw->sensor.gyro_x - REG_GYRO_DC_XY__X) * MPU_GYRO_SCALE;
-		sensor->gyro_y = -(float)(sensor_raw->sensor.gyro_y - REG_GYRO_DC_XY__Y) * MPU_GYRO_SCALE;
-		sensor->accel_y = (float)(sensor_raw->sensor.accel_x - REG_ACCEL_DC_XY__X) * MPU_ACCEL_SCALE;
-		sensor->accel_x = (float)(sensor_raw->sensor.accel_y - REG_ACCEL_DC_XY__Y) * MPU_ACCEL_SCALE;
+		sensor->gyro_x =  (float)(sensor_raw->gyro_x - REG_GYRO_DC_XY__X) * MPU_GYRO_SCALE;
+		sensor->gyro_y = -(float)(sensor_raw->gyro_y - REG_GYRO_DC_XY__Y) * MPU_GYRO_SCALE;
+		sensor->accel_y = (float)(sensor_raw->accel_x - REG_ACCEL_DC_XY__X) * MPU_ACCEL_SCALE;
+		sensor->accel_x = (float)(sensor_raw->accel_y - REG_ACCEL_DC_XY__Y) * MPU_ACCEL_SCALE;
 	#else
-		sensor->gyro_x = -(float)(sensor_raw->sensor.gyro_x - REG_GYRO_DC_XY__X) * MPU_GYRO_SCALE;
-		sensor->gyro_y =  (float)(sensor_raw->sensor.gyro_y - REG_GYRO_DC_XY__Y) * MPU_GYRO_SCALE;
-		sensor->accel_y = -(float)(sensor_raw->sensor.accel_x - REG_ACCEL_DC_XY__X) * MPU_ACCEL_SCALE;
-		sensor->accel_x = -(float)(sensor_raw->sensor.accel_y - REG_ACCEL_DC_XY__Y) * MPU_ACCEL_SCALE;
+		sensor->gyro_x = -(float)(sensor_raw->gyro_x - REG_GYRO_DC_XY__X) * MPU_GYRO_SCALE;
+		sensor->gyro_y =  (float)(sensor_raw->gyro_y - REG_GYRO_DC_XY__Y) * MPU_GYRO_SCALE;
+		sensor->accel_y = -(float)(sensor_raw->accel_x - REG_ACCEL_DC_XY__X) * MPU_ACCEL_SCALE;
+		sensor->accel_x = -(float)(sensor_raw->accel_y - REG_ACCEL_DC_XY__Y) * MPU_ACCEL_SCALE;
 	#endif
-	sensor->gyro_z = -(float)(sensor_raw->sensor.gyro_z - (int16_t)REG_GYRO_DC_Z) * MPU_GYRO_SCALE;
-	sensor->accel_z = (float)(sensor_raw->sensor.accel_z - (int16_t)REG_ACCEL_DC_Z) * MPU_ACCEL_SCALE;
-	sensor->temperature = (float)sensor_raw->sensor.temperature / 340.0f + 36.53f;
+	sensor->gyro_z = -(float)(sensor_raw->gyro_z - (int16_t)REG_GYRO_DC_Z) * MPU_GYRO_SCALE;
+	sensor->accel_z = (float)(sensor_raw->accel_z - (int16_t)REG_ACCEL_DC_Z) * MPU_ACCEL_SCALE;
+	sensor->temperature = (float)sensor_raw->temperature / 340.0f + 36.53f;
 }
 
-void mpu_cal(sensor_raw_t * sensor_raw)
+void mpu_cal()
 {
-	uint16_t sensor_sample_count = 0;
-	int i;
-	uint8_t x;
-
+	uint8_t i;
+	uint16_t j;
 	float gyro_x_dc = 0;
 	float gyro_y_dc = 0;
 	float gyro_z_dc = 0;
@@ -86,45 +130,45 @@ void mpu_cal(sensor_raw_t * sensor_raw)
 	float accel_y_dc = 0;
 	float accel_z_dc = 0;
 
-	while (sensor_sample_count < 1000)
-	{
-		if (flag_sensor)
-		{
-			flag_sensor = 0;
+	for (j=0 ; j<1000; j++) {
+		// Wait for sensor sample
+		while (!flag_sensor) {}
+		flag_sensor = false;
 
-			for (i=1; i<15; i=i+2){
-				x = sensor_raw->bytes[i+1];
-				sensor_raw->bytes[i+1] = sensor_raw->bytes[i];
-				sensor_raw->bytes[i] = x;
-			}
-
-			gyro_x_dc += (float)sensor_raw->sensor.gyro_x;
-			gyro_y_dc += (float)sensor_raw->sensor.gyro_y;
-			gyro_z_dc += (float)sensor_raw->sensor.gyro_z;
-			accel_x_dc += (float)sensor_raw->sensor.accel_x;
-			accel_y_dc += (float)sensor_raw->sensor.accel_y;
-			accel_z_dc += (float)sensor_raw->sensor.accel_z;
-
-			if ((sensor_sample_count & 0x3F) == 0) {
-				#ifdef DUAL_LED_STATUS
-					toggle_led2(1);
-				#else
-					toggle_led(1);
-				#endif
-			}
-
-			sensor_sample_count++;
+		// Change endianness
+		for (i=0; i<sizeof(sensor_raw_t)/2; i=i+1) {
+			#if (SENSOR == 6000)	
+				sensor_data_received[i+1] = __builtin_bswap16(sensor_data_received[i+1]);
+			#else
+				sensor_data_received[i] = __builtin_bswap16(sensor_data_received[i]);
+			#endif
 		}
-		__WFI();
+
+		// Accumulate
+		gyro_x_dc += (float)sensor_raw->gyro_x;
+		gyro_y_dc += (float)sensor_raw->gyro_y;
+		gyro_z_dc += (float)sensor_raw->gyro_z;
+		accel_x_dc += (float)sensor_raw->accel_x;
+		accel_y_dc += (float)sensor_raw->accel_y;
+		accel_z_dc += (float)sensor_raw->accel_z;
+
+		if ((j & 0x3F) == 0) {
+			#ifdef DUAL_LED_STATUS
+				toggle_led2(true);
+			#else
+				toggle_led(true);
+			#endif
+		}
 	}
 
+	// Compute average
 	REG_GYRO_DC_XY = (int32_t)(gyro_x_dc / 1000.0f) + ((int32_t)(gyro_y_dc / 1000.0f) << 16);
 	REG_GYRO_DC_Z = (int32_t)(gyro_z_dc / 1000.0f);
 	REG_ACCEL_DC_XY = (int32_t)(accel_x_dc / 1000.0f) + ((int32_t)(accel_y_dc / 1000.0f) << 16);
 	REG_ACCEL_DC_Z = (int32_t)(accel_z_dc / 1000.0f - 1.0f/MPU_ACCEL_SCALE);
 }
 
-void angle_estimate(struct sensor_s * sensor, struct angle_s * angle)
+void angle_estimate(struct sensor_s* sensor, struct angle_s* angle)
 {
 	float vector_magnitude;
 	float angle_transfer;

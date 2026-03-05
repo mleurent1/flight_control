@@ -14,9 +14,8 @@
 
 /* Exported variables -----------------*/
 
-extern sensor_raw_t sensor_raw;
 extern radio_frame_t radio_frame;
-extern volatile float vbat, vbat_smoothed;
+extern volatile float vbat;
 extern volatile float ibat;
 
 extern volatile uint8_t sensor_error_count;
@@ -33,6 +32,7 @@ extern volatile bool flag_rf_host_read;
 extern volatile bool flag_rf_rxtx_done;
 
 extern host_buffer_rx_t host_buffer_rx;
+extern host_buffer_tx_t host_buffer_tx;
 
 extern volatile uint32_t t_ms;
 

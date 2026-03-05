@@ -34,7 +34,6 @@
 
 /* Global variables --------------------------------------*/
 
-sensor_raw_t sensor_raw;
 radio_frame_t radio_frame;
 volatile float vbat = 0;
 volatile float ibat = 0;
@@ -53,6 +52,7 @@ volatile bool flag_rf_host_read = false;
 volatile bool flag_rf_rxtx_done = false;
 
 host_buffer_rx_t host_buffer_rx;
+host_buffer_tx_t host_buffer_tx;
 
 volatile uint32_t t_ms;
 
@@ -130,8 +130,6 @@ int main(void)
 	uint8_t t_min = 0;
 	uint32_t t_status_prev = 0;
 	uint8_t status_cnt = 0;
-
-	host_buffer_tx_t host_buffer_tx;
 
 	uint16_t t_proc_0;
 	uint16_t t_proc;
@@ -256,7 +254,7 @@ int main(void)
 			flag_sensor_timeout = 0; // reset timeout flag
 
 			// Process sensor data
-			mpu_process_samples(&sensor_raw, &sensor);
+			mpu_process_samples(&sensor);
 
 			// Estimate angle
 			angle_estimate(&sensor, &angle);
