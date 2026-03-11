@@ -1,101 +1,95 @@
 #include <stdint.h>
 #include <stdbool.h>
-#include "board.h" // sma_send()
-#ifdef STM32F4
-	#include "stm32f4xx.h" // __WFI()
-#else
-	#include "stm32f3xx.h" // __WFI()
-#endif
+
+#include "board.h" // sma_transfer()
 #include "smart_audio.h" // sma_cmd_e()
-#include <string.h> // memcpy()
 #include "utils.h" // crc8()
+#include "reg.h" // REG_VTX
 
 /* Global variables -----------------------*/
 
-volatile uint8_t sma_data_received[16];
-volatile uint8_t sma_nbytes_to_receive = 0;
-volatile uint8_t vtx_current_chan = 0;
-volatile uint8_t vtx_current_pwr = 0;
+uint8_t sma_data_to_send[6];
+uint8_t sma_data_received[11];
 
 /* Public Functions -----------------------*/
 
-// Wait for end of Smart Audio transaction
-void wait_sma(void)
-{
-	while (sma_nbytes_to_receive > 0)
-		__WFI();
-}
-
 void sma_send_cmd(enum sma_cmd_e sma_cmd, uint8_t data)
 {
-	uint8_t buf[5];
-	uint8_t len = 0;
+	uint8_t sma_nbytes_to_send = 0;
+	uint8_t sma_nbytes_to_receive = 0;
 
-	buf[0] = 0x00; // line must be low before the frame
-	buf[1] = 0xAA; // sync
-	buf[2] = 0x55; // header
+	sma_data_to_send[0] = 0xAA; // sync
+	sma_data_to_send[1] = 0x55; // header
 
 	switch (sma_cmd) {
 		case SMA_GET_SETTINGS : {
-			buf[3] = 0x03;
-			buf[4] = 0x00;
-			len = 5;
+			sma_data_to_send[2] = 0x03;
+			sma_data_to_send[3] = 0x00;
+			sma_nbytes_to_send = 4;
 			sma_nbytes_to_receive = 11;
 			break;
 		}
 		case SMA_SET_POWER : {
-			buf[3] = 0x05;
-			buf[4] = 0x01;
-			buf[5] = data;
-			len = 6;
+			sma_data_to_send[2] = 0x05;
+			sma_data_to_send[3] = 0x01;
+			sma_data_to_send[4] = data;
+			sma_nbytes_to_send = 5;
 			sma_nbytes_to_receive = 8;
 			break;
 		}
 		case SMA_SET_CHANNEL : {
-			buf[3] = 0x07;
-			buf[4] = 0x01;
-			buf[5] = data;;
-			len = 6;
+			sma_data_to_send[2] = 0x07;
+			sma_data_to_send[3] = 0x01;
+			sma_data_to_send[4] = data;
+			sma_nbytes_to_send = 5;
 			sma_nbytes_to_receive = 8;
 			break;
 		}
 	}
 
-	buf[len] = crc8(buf, len);
+	// Append CRC
+	sma_data_to_send[sma_nbytes_to_send] = crc8(sma_data_to_send, sma_nbytes_to_send);
+	sma_nbytes_to_send++;
 
-	sma_send(buf, len + 1);
+	sma_transfer(sma_data_to_send, sma_data_received, sma_nbytes_to_send, sma_nbytes_to_receive);
 }
 
 bool sma_process_resp(void)
 {
 	uint8_t cmd, len, crc_calc;
 
-	cmd = sma_data_received[3];
-	len = sma_data_received[4] + 5;
+	// Check sync + header
+	if ((sma_data_received[0] != 0xAA) || (sma_data_received[1] != 0x55))
+		return false;
+
+	// Check command
+	cmd = sma_data_received[2] & 0x07;
+	if ((cmd == 0) || (cmd > 4))
+		return false;
 
 	// Check length
-	if ((len > 11) || (len < 8)) {
+	len = sma_data_received[3]; // length + payload
+	if ((len != 6) && (len != 3))
 		return false;
-	}
 	
 	// Check CRC
-	crc_calc = crc8((uint8_t *)&sma_data_received[3], len-4);
-	if (sma_data_received[len-1] != crc_calc) {
+	crc_calc = crc8(&sma_data_received[2], len + 1); // CRC computation does not include sync and header, but includes command
+	if (sma_data_received[2+len+1] != crc_calc)
 		return false;
-	}
 
 	switch (cmd) {
-		case 0x09 : {
-			vtx_current_chan = sma_data_received[5];
-			vtx_current_pwr = sma_data_received[6];
+		case 0x01 : {
+			REG_VTX = ((uint32_t)sma_data_received[4] << REG_VTX__CHAN_Pos) | ((uint32_t)sma_data_received[5] << REG_VTX__PWR_Pos);
 			break;
 		}
 		case 0x02 : {
-			vtx_current_pwr = sma_data_received[5];
+			REG_VTX &= ~REG_VTX__PWR_Msk;
+			REG_VTX |= (uint32_t)sma_data_received[4] << REG_VTX__PWR_Pos;
 			break;
 		}
 		case 0x03 : {
-			vtx_current_chan = sma_data_received[5];
+			REG_VTX &= ~REG_VTX__CHAN_Msk;
+			REG_VTX |= (uint32_t)sma_data_received[4] << REG_VTX__CHAN_Pos;
 			break;
 		}
 	}

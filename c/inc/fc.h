@@ -21,6 +21,7 @@ extern volatile float ibat;
 extern volatile uint8_t sensor_error_count;
 extern volatile uint8_t radio_error_count;
 extern volatile uint8_t rf_error_count;
+extern volatile uint8_t sma_error_count;
 
 extern volatile bool flag_sensor;
 extern volatile bool flag_radio;

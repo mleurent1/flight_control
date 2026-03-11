@@ -4,12 +4,9 @@
 #include "board.h"
 #include "stm32f4xx.h" // CMSIS
 #include "fc.h" // flags
-#include "sensor.h" // sensor_raw
 #include "utils.h" // wait_ms()
 #include "usb.h" // USBD_device_handler
-#include "osd.h" // osd_data_to_send
-#include "smart_audio.h" // sma_data_received
-#include <string.h> // memcpy()
+#include "osd.h" // osd_next_nbytes_to_send
 
 /* Private defines ------------------------------------*/
 
@@ -35,8 +32,12 @@ volatile uint8_t spi1_rx_nbytes;
 	volatile uint16_t dshot2[17*4];
 #endif
 volatile uint8_t spi2_rx_nbytes;
-volatile uint8_t uart2_tx_buffer[16];
-volatile uint8_t uart2_rx_nbytes;
+volatile uint8_t* uart2_tx_data;
+volatile uint8_t* uart2_rx_data;
+// Initialize uart2 variables to 0 to avoid unwanted transfer at startup 
+volatile uint8_t uart2_tx_nbytes = 0; 
+volatile uint8_t uart2_rx_nbytes = 0; 
+volatile uint8_t uart2_byte_cnt = 0;
 
 /* Private functions ------------------------------------------------*/
 
@@ -213,12 +214,15 @@ __attribute__((section(".RamFunc"))) void osd_transfer(uint8_t* data_out, uint8_
 	osd_busy = true;
 }
 
-void sma_send(uint8_t * data, uint8_t size)
+void sma_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
 {
-	memcpy((uint8_t*)uart2_tx_buffer, data, size);
-	DMA1_Stream6->NDTR = size;
-	DMA1_Stream6->CR |= DMA_SxCR_EN;
-	USART2->CR1 |= USART_CR1_TE;
+	uart2_tx_data = data_out;
+	uart2_rx_data = data_in;
+	uart2_tx_nbytes = size_out;
+	uart2_rx_nbytes = size_in;
+	USART2->CR1 &= ~(USART_CR1_RE | USART_CR1_RXNEIE); // Disable any pending Rx
+	USART2->CR1 |= USART_CR1_TE | USART_CR1_TXEIE; // Enable UART Tx and Tx empty IRQ
+	sma_busy = true;
 }
 
 /* --------------------------------------------------------------------------------
@@ -332,29 +336,36 @@ __attribute__((section(".RamFunc"))) void DMA1_Stream3_IRQHandler()
 
 __attribute__((section(".RamFunc"))) void USART2_IRQHandler()
 {
-	if (USART2->SR & USART_SR_TC) { // transfer complete
-		USART2->SR = 0; // Clear status flags
+	// Transfer complete
+	if (USART2->SR & USART_SR_TC) {
+		USART2->DR = 0; // Will clear Transfer complete flag, and also remaining Tx empty flag
 
-		DMA1_Stream6->CR &= ~DMA_SxCR_EN;
-		while (DMA1_Stream6->CR & DMA_SxCR_EN) {} // Wait for end of current transfer
-		DMA1->HIFCR = DMA_CLEAR_ALL_FLAGS_6;
-		USART2->CR1 &= ~USART_CR1_TE;
+		USART2->CR1 &= ~USART_CR1_TE; // Disable Tx
+		uart2_byte_cnt = 0;
+		
+		if (uart2_rx_nbytes > 0) 
+			USART2->CR1 |= USART_CR1_RE | USART_CR1_RXNEIE; // Enable Rx and Rx not empty IRQ
+		else
+			sma_busy = false;
+	}
+	// Tx empty
+	else if (USART2->SR & USART_SR_TXE) {
+		if (uart2_byte_cnt < uart2_tx_nbytes)
+			USART2->DR = uart2_tx_data[uart2_byte_cnt++]; // A write to data register will clear Tx empty flag
+		else
+			USART2->CR1 &= ~USART_CR1_TXEIE; // Disable Tx empty IRQ to avoid constant IRQ triggering until transfer complete
+	}
 
-		if (sma_nbytes_to_receive > 0) {
-			uart2_rx_nbytes = 0;
-			USART2->CR1 |= USART_CR1_RE; // Enable Rx
-		}
+	// Rx not empty
+	if (USART2->SR & USART_SR_RXNE) {
+		uart2_rx_data[uart2_byte_cnt++] = USART2->DR; // A read from data register will clear Rx not empty flag
 
-	} else if (USART2->SR & USART_SR_RXNE) { // Rx not empty
-		USART2->SR = 0; // Clear status flags
-
-		sma_data_received[uart2_rx_nbytes++] = USART2->DR;
-		sma_nbytes_to_receive--;
-
-		if (sma_nbytes_to_receive == 0) {
-			USART2->CR1 &= ~USART_CR1_RE;
+		if (uart2_byte_cnt == uart2_rx_nbytes) {
+			USART2->CR1 &= ~(USART_CR1_RE | USART_CR1_RXNEIE); // Disable Rx and Rx not empty IRQ
+			uart2_byte_cnt = 0;
+			sma_busy = false;
 			if (REG_CTRL__SMA_HOST_CTRL == 1)
-				host_send((uint8_t*)sma_data_received, uart2_rx_nbytes);
+				host_send((uint8_t*)uart2_rx_data, uart2_rx_nbytes);
 		}
 	}
 }
@@ -717,20 +728,15 @@ uint8_t board_init()
 	RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
 	USART2->BRR = 9800; // 48MHz/4800bps = 10000 => 48MHz/4900bps = 9800 in order to match TBS unify board Xtal
 	USART2->CR2 = 2 << USART_CR2_STOP_Pos; // 2 stop bits
-	USART2->CR3 = USART_CR3_DMAT | USART_CR3_HDSEL; // HDSEL: single-wire half-duplex
-	USART2->CR1 = USART_CR1_UE | USART_CR1_TCIE | USART_CR1_RXNEIE;
+	USART2->CR3 = USART_CR3_HDSEL; // HDSEL: single-wire half-duplex
+	USART2->CR1 = USART_CR1_UE | USART_CR1_TCIE;
 	NVIC_EnableIRQ(USART2_IRQn);
 	NVIC_SetPriority(USART2_IRQn,0);
-
-	// DMA1 stream 6 chan 4: USART2_TX
-	DMA1_Stream6->CR = (4 << DMA_SxCR_CHSEL_Pos) | (3 << DMA_SxCR_PL_Pos) | DMA_SxCR_MINC | (1 << DMA_SxCR_DIR_Pos);
-	DMA1_Stream6->M0AR = (uint32_t)uart2_tx_buffer;
-	DMA1_Stream6->PAR = (uint32_t)&(USART2->DR);
 
 #endif
 
 	/* Settle time (in seconds) --------------------------------------------*/
 
-	return 1; // Regulators
+	return 1; // Regulators settlement and components startup
 
 }

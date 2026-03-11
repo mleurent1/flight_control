@@ -13,6 +13,7 @@
 
 extern volatile bool sensor_busy;
 extern volatile bool osd_busy;
+extern volatile bool sma_busy;
 
 /* Public functions -----------------*/
 
@@ -31,8 +32,8 @@ void toggle_beeper(bool en);
 uint16_t get_t_us(void);
 void trig_vbat_meas(void);
 void osd_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size);
+void sma_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in);
 void runcam_send(uint8_t * data, uint8_t size);
-void sma_send(uint8_t * data, uint8_t size);
 void set_leds(uint8_t * grb);
 
 #endif

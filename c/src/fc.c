@@ -41,6 +41,7 @@ volatile float ibat = 0;
 volatile uint8_t sensor_error_count = 0;
 volatile uint8_t radio_error_count = 0;
 volatile uint8_t rf_error_count = 0;
+volatile uint8_t sma_error_count = 0;
 
 volatile bool flag_sensor = false;
 volatile bool flag_radio = false;
@@ -175,7 +176,7 @@ int main(void)
 #ifdef VBAT
 	// Get first vbat value
 	trig_vbat_meas();
-	while (!flag_vbat) __WFI();
+	while (!flag_vbat) {}
 	flag_vbat = 0;
 #endif
 
@@ -189,11 +190,13 @@ int main(void)
 #endif
 
 #ifdef SMART_AUDIO
+	// Repeat the first command because the first response has wrong sync+header
 	sma_send_cmd(SMA_GET_SETTINGS, 0);
-	//wait_sma();
-	wait_ms(1); // In case VTX is not powered by USB
-	sma_process_resp();
-	REG_VTX = (vtx_current_chan << REG_VTX__CHAN_Pos) | (vtx_current_pwr << REG_VTX__PWR_Pos);
+	wait_ms(150); // Minimum time between 2 commands
+	sma_send_cmd(SMA_GET_SETTINGS, 0);
+	// while (sma_busy) {} // Commented: use waiting time in case VTX is not powered on USB
+	wait_ms(100); // Maximum response time
+	if (!sma_process_resp()) sma_error_count++;
 #endif
 
 	en_sensor_irq();

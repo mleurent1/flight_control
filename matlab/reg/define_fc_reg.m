@@ -40,7 +40,7 @@ reg(n).flash = 0;
 reg(n).subf{1} = {'SENSOR',7,0,'uint8',0};
 reg(n).subf{2} = {'RADIO',15,8,'uint8',0};
 reg(n).subf{3} = {'RF',23,16,'uint8',0};
-reg(n).subf{4} = {'CRC',31,24,'uint8',0};
+reg(n).subf{4} = {'SMA',31,24,'uint8',0};
 
 n = n + 1;
 reg(n).name = 'VBAT_MIN';

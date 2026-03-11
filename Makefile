@@ -2,7 +2,7 @@
 CC = /tools/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-gcc
 OBJCOPY = /tools/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-objcopy
 SIZE = /tools/gcc-arm-none-eabi-10.3-2021.10/bin/arm-none-eabi-size
-LDFLAGS = *.o -lm -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs --specs=nosys.specs
+LDFLAGS = -lm -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs --specs=nosys.specs
 #KEIL:-mthumb-interwork -nostartfiles
 CFLAGS = -c -Wall -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nano.specs -Wdouble-promotion -O #--fsingle-precision-constant
 #KEIL:-gdwarf-2 -MD -O -mapcs-frame -mthumb-interwork -D__GCC -D__GCC_VERSION="821"
@@ -14,10 +14,10 @@ DSHOT = 1
 PWM = 2
 ifeq ($(DRONE),warpquad)
    BOARD = motof3
-   FC_FLAGS = -DM1_CCW -DESC=$(ONESHOT) -DVBAT -DBEEPER
+   FC_FLAGS = -DM1_CCW -DESC=$(ONESHOT) -DVBAT -DOSD -DSMART_AUDIO -DBEEPER
 else ifeq ($(DRONE),alien6)
    BOARD = cyclone
-   FC_FLAGS = -DM1_CCW -DESC=$(DSHOT) -DDSHOT_RATE=600 -DVBAT -DIBAT -DVBAT_USE_PPM -DOSD #-DSMART_AUDIO -DRUNCAM -DBEEPER -DLED=4
+   FC_FLAGS = -DM1_CCW -DESC=$(DSHOT) -DDSHOT_RATE=600 -DVBAT -DIBAT -DVBAT_USE_PPM -DOSD -DSMART_AUDIO #-DRUNCAM -DBEEPER -DLED=4
 else ifeq ($(DRONE),micro)
    BOARD = toothpick
    FC_FLAGS = -DDUAL_LED_STATUS -DESC=$(DSHOT) -DDSHOT_RATE=300 -DVBAT -DIBAT -DOSD -DSMART_AUDIO
@@ -89,7 +89,7 @@ dfu:
 	dfu-util -a 0 -s 0x08000000$(DFU_OPT):leave -R -D fc.bin
 
 $(DRONE).elf: $(FC_OBJ)
-	$(CC) -o $(DRONE).elf -T $(LD_SCRIPT) $(LDFLAGS)
+	$(CC) -o $(DRONE).elf -T $(LD_SCRIPT) *.o $(LDFLAGS)
 	$(SIZE) $(DRONE).elf
 
 %.o: c/src/%.c c/inc/*.h

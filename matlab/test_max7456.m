@@ -1,5 +1,7 @@
 global osd
 
+fc.CTRL__OSD_HOST_CTRL(1);
+
 osd.VM0__SOFT_RST(1);
 while osd.STAT__RST_BUSY
    sleep(1);

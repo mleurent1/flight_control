@@ -48,9 +48,9 @@
 #define REG_ERROR__RF (uint8_t)((reg[4] & 16711680U) >> 16)
 #define REG_ERROR__RF_Msk 16711680U
 #define REG_ERROR__RF_Pos 16U
-#define REG_ERROR__CRC (uint8_t)((reg[4] & 4278190080U) >> 24)
-#define REG_ERROR__CRC_Msk 4278190080U
-#define REG_ERROR__CRC_Pos 24U
+#define REG_ERROR__SMA (uint8_t)((reg[4] & 4278190080U) >> 24)
+#define REG_ERROR__SMA_Msk 4278190080U
+#define REG_ERROR__SMA_Pos 24U
 #define REG_ERROR_Addr 4
 #define REG_VBAT_MIN regf[5]
 #define REG_VBAT_MIN_Addr 5

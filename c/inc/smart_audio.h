@@ -6,18 +6,12 @@
 
 /* Public types --------------------------------------*/
 
-enum sma_cmd_e {SMA_GET_SETTINGS=1, SMA_SET_POWER, SMA_SET_CHANNEL};
+enum sma_cmd_e {SMA_GET_SETTINGS, SMA_SET_POWER, SMA_SET_CHANNEL};
 
 /* Exported variables -----------------*/
 
-extern volatile uint8_t sma_data_received[16];
-extern volatile uint8_t sma_nbytes_to_receive;
-extern volatile uint8_t vtx_current_chan;
-extern volatile uint8_t vtx_current_pwr;
-
 /* Public functions -----------------*/
 
-void wait_sma(void);
 void sma_send_cmd(enum sma_cmd_e sma_cmd, uint8_t data);
 bool sma_process_resp(void);
 

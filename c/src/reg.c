@@ -13,7 +13,7 @@
 	#include "stm32f3xx.h" // FLASH->
 #endif
 #include "osd.h" // osd_data_received
-#include "smart_audio.h" // sma_nbytes_to_receive
+#include "smart_audio.h" // SMA_SET_CHANNEL
 
 uint32_t reg[NB_REG];
 float regf[NB_REG];
@@ -173,7 +173,7 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 				host_send((uint8_t*)&regf[addr], 4);
 			else {
 				if (addr == REG_ERROR_Addr)
-					REG_ERROR = ((uint32_t)rf_error_count << 16) | ((uint32_t)radio_error_count << 8) | (uint32_t)sensor_error_count;
+					REG_ERROR = ((uint32_t)sma_error_count << 24) | ((uint32_t)rf_error_count << 16) | ((uint32_t)radio_error_count << 8) | (uint32_t)sensor_error_count;
 				else if (addr == REG_DEBUG_INT_Addr) {
 					/* REG_DEBUG_INT = Put your debug value here */
 				}
@@ -223,8 +223,12 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 				#ifdef SMART_AUDIO
 					else if (addr == REG_VTX_Addr) {
 						sma_send_cmd(SMA_SET_CHANNEL, REG_VTX__CHAN);
-						wait_sma();
+						wait_ms(150); // Minimum time between 2 commands (empiric)
+						if (!sma_process_resp()) sma_error_count++;
 						sma_send_cmd(SMA_SET_POWER, REG_VTX__PWR);
+						// while (sma_busy) {} // Commented: use waiting time in case VTX is not powered on USB
+						wait_ms(100); // Maximum response time
+						if (!sma_process_resp()) sma_error_count++;
 					}
 				#endif
 					else if ((addr == REG_RADIO_TEST_Addr) || (addr == REG_RADIO_TEST_2_Addr)) {
@@ -285,9 +289,8 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			osd_transfer(host_buffer_rx->data.u8, host_buffer_tx.u8, host_buffer_rx->addr);
 			break;
 		}
-		case 10: { // UART send to Smart Audio
-			sma_nbytes_to_receive = host_buffer_rx->data.u8[0];
-			sma_send(&host_buffer_rx->data.u8[1], host_buffer_rx->addr);
+		case 10: { // Smart Audio transaction
+			sma_transfer(&host_buffer_rx->data.u8[1], host_buffer_tx.u8, host_buffer_rx->addr, host_buffer_rx->data.u8[0]);
 			break;
 		}
 	}

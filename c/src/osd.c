@@ -32,7 +32,7 @@ enum state_e {TELEMETRY,
 	RUNCAM_MENU, RUNCAM_LEFT, RUNCAM_RIGHT, RUNCAM_UP, RUNCAM_DOWN, RUNCAM_ENTER, RUNCAM_EXIT};
 
 enum menu_e {P_PITCH_ROLL=0, I_PITCH_ROLL, D_PITCH_ROLL, P_YAW, I_YAW, RATE, EXPO, MOTOR_START, MOTOR_ARMED, MOTOR_RANGE,
-	VTX_CHANNEL, VTX_POWER, SAVE_REG, SAVE_VTX, RUNCAM};
+	VTX_CHANNEL, VTX_POWER, SAVE_REG, RUNCAM};
 
 enum runcam_cmd_e {LEFT, RIGHT, UP, DOWN, ENTER, RELEASE, OPEN, CLOSE};
 
@@ -618,7 +618,7 @@ void osd_menu(struct radio_s * radio)
 					vtx_pwr_mw = 500.0f;
 				else
 					vtx_pwr_mw = 800.0f;
-				float_to_str(vtx_pwr_mw, &reg_val_str[12], &reg_val_str[8], 4, 3);
+				float_to_str(vtx_pwr_mw, &reg_val_str[0], &reg_val_str[5], 4, 3);
 			}
 			default : {
 				break;
@@ -638,14 +638,13 @@ void osd_menu(struct radio_s * radio)
 
 #ifdef SMART_AUDIO
 	// Apply VTX settings
-	if ((state_prev == MENU) && (menu_idx == SAVE_VTX) && (state == MENU_RIGHT)) {
+	if ((state_prev == REG) && (menu_idx == VTX_CHANNEL) && (state == REG_EXIT)) {
 		sma_send_cmd(SMA_SET_CHANNEL, REG_VTX__CHAN);
-		wait_sma();
+		while (sma_busy) {}
+	}
+	if ((state_prev == REG) && (menu_idx == VTX_POWER) && (state == REG_EXIT)) {
 		sma_send_cmd(SMA_SET_POWER, REG_VTX__PWR);
-		wait_sma();
-		vtx_current_chan = REG_VTX__CHAN;
-		vtx_current_pwr = REG_VTX__PWR;
-		osd_write_str((uint8_t*)saved_str, sizeof(saved_str)-1); // -1: avoid 0 after last byte 255
+		while (sma_busy) {}
 	}
 #endif
 
