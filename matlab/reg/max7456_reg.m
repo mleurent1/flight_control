@@ -3,28 +3,32 @@ classdef max7456_reg
 		function data = read(obj,addr)
 			global ser
 			if obj.method % direct UART connection to OSD module
-				cmd = [];
+				fwrite(ser,[2,128+addr,0]);
 			else
-				cmd = 9;
+				fwrite(ser,[9,2,2,128+addr,0]);
 			end
-         fwrite(ser,[cmd,2,128+addr,0]);
 			r = fread(ser,2);
 			data = r(2);
 		end
 		function write(obj,addr,data)
 			global ser
 			if obj.method % direct UART connection to OSD module
-				cmd = [];
+				if isempty(addr)
+					fwrite(ser,[length(data),data]);
+					fread(ser,length(data));
+				else
+					fwrite(ser,[length(data)+1,addr,data]);
+					fread(ser,length(data)+1);
+				end
 			else
-				cmd = 9;
+				if isempty(addr)
+					fwrite(ser,[9,length(data),length(data),data]);
+					fread(ser,length(data));
+				else
+					fwrite(ser,[9,length(data)+1,length(data)+1,addr,data]);
+					fread(ser,length(data)+1);
+				end
 			end
-			if isempty(addr)
-				fwrite(ser,[cmd,length(data),data]);
-				fread(ser,length(data));
-			else
-				fwrite(ser,[cmd,length(data)+1,addr,data]);
-				fread(ser,length(data)+1);
-			end	
 		end
 		function y = VM0(obj,x)
 			if nargin < 2

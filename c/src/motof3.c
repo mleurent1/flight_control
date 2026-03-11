@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>
+#include <string.h> // memcpy()
 
 #include "board.h"
 #include "stm32f3xx.h" // CMSIS
@@ -19,8 +19,9 @@
 
 /* Private variables --------------------------------------*/
 
-volatile uint8_t i2c2_tx_data;
+volatile uint8_t* i2c2_tx_data;
 volatile uint8_t i2c2_rx_nbytes;
+volatile uint8_t i2c2_byte_cnt = 0;
 #if (ESC == DSHOT)
 	volatile uint8_t dshot[17*4];
 #endif
@@ -57,26 +58,19 @@ inline __attribute__((always_inline)) void radio_uart_dma_disable()
 
 /* Public functions ---------------------------------------*/
 
-void sensor_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size)
+void sensor_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
 {
-	if (data_out[0] & 0x80) { // Read
-		I2C2->TXDR = data_out[0] & 0x7F;
-		i2c2_rx_nbytes = size;
+	i2c2_tx_data = data_out;
+	i2c2_rx_nbytes = size_in;
 
-		DMA1_Channel5->CCR &= ~DMA_CCR_EN;
+	DMA1_Channel5->CCR &= ~DMA_CCR_EN;
+	if (size_in > 0) {
 		DMA1_Channel5->CMAR = (uint32_t)data_in;
-		DMA1_Channel5->CNDTR = size;
+		DMA1_Channel5->CNDTR = size_in;
+	}
 
-		I2C2->CR2 &= ~(I2C_CR2_RD_WRN | I2C_CR2_NBYTES);
-		I2C2->CR2 |= (1 << I2C_CR2_NBYTES_Pos) | I2C_CR2_START;
-	}
-	else {
-		I2C2->TXDR = data_out[0];
-		i2c2_tx_data = data_out[1];
-		i2c2_rx_nbytes = 0;
-		I2C2->CR2 &= ~(I2C_CR2_RD_WRN | I2C_CR2_NBYTES);
-		I2C2->CR2 |= (2 << I2C_CR2_NBYTES_Pos) | I2C_CR2_START;
-	}
+	I2C2->CR2 &= ~(I2C_CR2_RD_WRN | I2C_CR2_NBYTES);
+	I2C2->CR2 |= (size_out << I2C_CR2_NBYTES_Pos) | I2C_CR2_START;
 
 	sensor_busy = true;
 }
@@ -173,19 +167,19 @@ void trig_vbat_meas(void)
 	ADC2->CR |= ADC_CR_JADSTART;
 }
 
-__attribute__((section(".RamFunc"))) void osd_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size)
+__attribute__((section(".RamFunc"))) void osd_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
 {
-	uart3_tx_buffer[0] = size;
-	memcpy((uint8_t*)&uart3_tx_buffer[1], data_out, size);
-	uart3_rx_nbytes = size;
+	uart3_tx_buffer[0] = size_out;
+	memcpy((uint8_t*)&uart3_tx_buffer[1], data_out, size_out);
+	uart3_rx_nbytes = size_in; // Record transfer size
 
 	DMA1_Channel2->CCR &= ~DMA_CCR_EN;
 	DMA1_Channel2->CMAR = (uint32_t)uart3_tx_buffer;
-	DMA1_Channel2->CNDTR = size + 1;
+	DMA1_Channel2->CNDTR = size_out + 1;
 	DMA1_Channel2->CCR |= DMA_CCR_EN;
 
 	dma_cfg_osd.CMAR = (uint32_t)data_in;
-	dma_cfg_osd.CNDTR = size;
+	dma_cfg_osd.CNDTR = size_in;
 
 	if (!dshot_busy) {
 		TIM3->DIER = 0; // Disable concurrent timer update DMA requests for DSHOT
@@ -288,9 +282,10 @@ __attribute__((section(".RamFunc"))) void I2C2_ER_IRQHandler()
 __attribute__((section(".RamFunc"))) void I2C2_EV_IRQHandler()
 {
 	if (I2C2->ISR & I2C_ISR_TXIS) { // Tx buffer empty
-		I2C2->TXDR = i2c2_tx_data; // write will clear TXE flag
+		I2C2->TXDR = i2c2_tx_data[i2c2_byte_cnt++]; // write will clear TXE flag
 	}
 	else if (I2C2->ISR & I2C_ISR_TC) { // Transfer completed
+		i2c2_byte_cnt = 0;
 		if (DMA1_Channel5->CNDTR > 0) {
 			DMA1_Channel5->CCR |= DMA_CCR_EN; // Enable DMA for Rx
 			// Restart I2C transfer for read
@@ -373,7 +368,7 @@ __attribute__((section(".RamFunc"))) void DMA1_Channel3_IRQHandler()
 			host_send((uint8_t*)DMA1_Channel3->CMAR, uart3_rx_nbytes);
 		}
 		else if (osd_next_nbytes_to_send > 0) {
-			osd_transfer(osd_next_data_to_send, (uint8_t*)DMA1_Channel3->CMAR, osd_next_nbytes_to_send);
+			osd_transfer(osd_next_data_to_send, (uint8_t*)DMA1_Channel3->CMAR, osd_next_nbytes_to_send, osd_next_nbytes_to_send);
 			osd_next_nbytes_to_send = 0;
 		}
 	}

@@ -1,6 +1,5 @@
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h> // memcpy()
 
 #include "osd.h"
 #include "max7456_reg.h"
@@ -128,14 +127,14 @@ void osd_write(uint8_t addr, uint8_t data)
 {
 	osd_data_to_send[0] = addr & 0x7F;
 	osd_data_to_send[1] = data;
-	osd_transfer(osd_data_to_send, osd_data_received, 2);
+	osd_transfer(osd_data_to_send, osd_data_received, 2, 2);
 	while (osd_busy) {}
 }
 
 uint8_t osd_read(uint8_t addr)
 {
 	osd_data_to_send[0] = 0x80 | (addr & 0x7F);
-	osd_transfer(osd_data_to_send, osd_data_received, 2);
+	osd_transfer(osd_data_to_send, osd_data_received, 2, 2);
 	while (osd_busy) {}
 	return osd_data_received[1];
 }
@@ -147,7 +146,7 @@ void osd_write_str(uint8_t* str, uint8_t size)
 	// Enable auto-increment
 	osd_data_to_send[0] = MAX7456_DMM;
 	osd_data_to_send[1] = MAX7456_DMM__AUTO_INCR_EN;
-	osd_transfer(osd_data_to_send, osd_data_received, 2);
+	osd_transfer(osd_data_to_send, osd_data_received, 2, 2);
 }
 
 void float_to_str(float num, uint16_t* str_int, uint16_t* str_frac, uint8_t int_size, uint8_t frac_size)
@@ -258,7 +257,7 @@ void osd_init(void)
 
 void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_min, uint8_t rssi, int8_t snr)
 {
-		if ((state == TELEMETRY) && (!osd_busy)) {
+	if ((state == TELEMETRY) && (REG_CTRL__OSD_HOST_CTRL == 0) && (!osd_busy)) {
 		float_to_str(vbat, &telem_str[0], &telem_str[3], 2, 2);
 	#ifdef IBAT
 		float_to_str(ibat, &telem_str[7], &telem_str[11], 3, 1);

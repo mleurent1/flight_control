@@ -1,4 +1,5 @@
 global osd
+global fc
 
 fc.CTRL__OSD_HOST_CTRL(1);
 

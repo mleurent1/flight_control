@@ -258,7 +258,7 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			break;
 		}
 		case 2: { // Sensor transaction
-			sensor_transfer(host_buffer_rx->data.u8, host_buffer_tx.u8, host_buffer_rx->addr);
+			sensor_transfer(&host_buffer_rx->data.u8[1], host_buffer_tx.u8, host_buffer_rx->addr, host_buffer_rx->data.u8[0]);
 			break;
 		}
 		case 3: { // RFU
@@ -286,7 +286,7 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			break;
 		}
 		case 9: { // OSD transaction
-			osd_transfer(host_buffer_rx->data.u8, host_buffer_tx.u8, host_buffer_rx->addr);
+			osd_transfer(&host_buffer_rx->data.u8[1], host_buffer_tx.u8, host_buffer_rx->addr, host_buffer_rx->data.u8[0]);
 			break;
 		}
 		case 10: { // Smart Audio transaction

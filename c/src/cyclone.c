@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <stdbool.h>
-#include <string.h>
+#include <string.h> // memcpy()
 
 #include "board.h"
 #include "stm32f3xx.h" // CMSIS
@@ -56,9 +56,9 @@ inline __attribute__((always_inline)) void radio_uart_dma_disable()
 
 /* Public functions ---------------------------------------*/
 
-void sensor_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size)
+void sensor_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
 {
-	spi2_rx_nbytes = size;
+	spi2_rx_nbytes = size_in; // Record transfer size
 
 	// Disable DMA channels in order to configure them
 	DMA1_Channel4->CCR &= ~DMA_CCR_EN;
@@ -66,8 +66,8 @@ void sensor_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size)
 
 	DMA1_Channel4->CMAR = (uint32_t)data_in;
 	DMA1_Channel5->CMAR = (uint32_t)data_out;
-	DMA1_Channel4->CNDTR = size;
-	DMA1_Channel5->CNDTR = size;
+	DMA1_Channel4->CNDTR = size_in;
+	DMA1_Channel5->CNDTR = size_out;
 
 	// Enable DMA channels and start SPI transaction
 	DMA1_Channel4->CCR |= DMA_CCR_EN;
@@ -169,19 +169,19 @@ void trig_vbat_meas(void)
 	ADC2->CR |= ADC_CR_JADSTART;
 }
 
-__attribute__((section(".RamFunc"))) void osd_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size)
+__attribute__((section(".RamFunc"))) void osd_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
 {
-	uart3_tx_buffer[0] = size;
-	memcpy((uint8_t*)&uart3_tx_buffer[1], data_out, size);
-	uart3_rx_nbytes = size;
+	uart3_tx_buffer[0] = size_out;
+	memcpy((uint8_t*)&uart3_tx_buffer[1], data_out, size_out);
+	uart3_rx_nbytes = size_in; // Record transfer size
 
 	DMA1_Channel2->CCR &= ~DMA_CCR_EN;
 	DMA1_Channel2->CMAR = (uint32_t)uart3_tx_buffer;
-	DMA1_Channel2->CNDTR = size + 1;
+	DMA1_Channel2->CNDTR = size_out + 1;
 	DMA1_Channel2->CCR |= DMA_CCR_EN;
 
 	dma_cfg_osd.CMAR = (uint32_t)data_in;
-	dma_cfg_osd.CNDTR = size;
+	dma_cfg_osd.CNDTR = size_in;
 
 	if (!dshot_busy) {
 		TIM3->DIER = 0; // Disable concurrent timer update DMA requests for DSHOT
@@ -345,7 +345,7 @@ __attribute__((section(".RamFunc"))) void DMA1_Channel3_IRQHandler()
 			host_send((uint8_t*)DMA1_Channel3->CMAR, uart3_rx_nbytes);
 		}
 		else if (osd_next_nbytes_to_send > 0) {
-			osd_transfer(osd_next_data_to_send, (uint8_t*)DMA1_Channel3->CMAR, osd_next_nbytes_to_send);
+			osd_transfer(osd_next_data_to_send, (uint8_t*)DMA1_Channel3->CMAR, osd_next_nbytes_to_send, osd_next_nbytes_to_send);
 			osd_next_nbytes_to_send = 0;
 		}
 	}

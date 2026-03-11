@@ -64,9 +64,9 @@ uint32_t HAL_RCC_GetHCLKFreq(void)
   return SystemCoreClock;
 }
 
-void sensor_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size)
+void sensor_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
 {
-	spi1_rx_nbytes = size;
+	spi1_rx_nbytes = size_in; // Record transfer size
 
 	// Disable DMA channels in order to configure them
 	DMA2_Stream0->CR &= ~DMA_SxCR_EN;
@@ -74,8 +74,8 @@ void sensor_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size)
 
 	DMA2_Stream0->M0AR = (uint32_t)data_in;
 	DMA2_Stream3->M0AR = (uint32_t)data_out;
-	DMA2_Stream0->NDTR = size;
-	DMA2_Stream3->NDTR = size;
+	DMA2_Stream0->NDTR = size_in;
+	DMA2_Stream3->NDTR = size_out;
 
 	// Enable DMA channels and start SPI transaction
 	DMA2->LIFCR = DMA_LIFCR_CTCIF3; // Clear Transfer complete flag for Tx DMA (done for Rx DMA in IRQ handler), needed before re-enabling DMA
@@ -192,9 +192,9 @@ void trig_vbat_meas(void)
 	ADC1->CR2 |= ADC_CR2_JSWSTART;
 }
 
-__attribute__((section(".RamFunc"))) void osd_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size)
+__attribute__((section(".RamFunc"))) void osd_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
 {
-	spi2_rx_nbytes = size; // Record transfer size
+	spi2_rx_nbytes = size_in; // Record transfer size
 
 	// Disable DMA channels in order to configure them
 	DMA1_Stream3->CR &= ~DMA_SxCR_EN;
@@ -202,8 +202,8 @@ __attribute__((section(".RamFunc"))) void osd_transfer(uint8_t* data_out, uint8_
 	
 	DMA1_Stream3->M0AR = (uint32_t)data_in;
 	DMA1_Stream4->M0AR = (uint32_t)data_out;
-	DMA1_Stream3->NDTR = size;
-	DMA1_Stream4->NDTR = size;
+	DMA1_Stream3->NDTR = size_in;
+	DMA1_Stream4->NDTR = size_out;
 
 	// Enable DMA channels and start SPI transaction
 	DMA1->HIFCR = DMA_HIFCR_CTCIF4; // Clear Transfer complete flag for Tx DMA (done for Rx DMA in IRQ handler), needed before re-enabling DMA
@@ -254,7 +254,7 @@ __attribute__((section(".RamFunc"))) void DMA2_Stream0_IRQHandler()
 	sensor_busy = false;
 
 	if (REG_CTRL__SENSOR_HOST_CTRL == 1) {
-		host_send((uint8_t*)DMA2_Stream0->M0AR, spi2_rx_nbytes);
+		host_send((uint8_t*)DMA2_Stream0->M0AR, spi1_rx_nbytes);
 	} else {
 		if (SPI1->SR & SPI_SR_OVR) { // Overrun error
 			// Specific procedure to clear flag
@@ -327,7 +327,7 @@ __attribute__((section(".RamFunc"))) void DMA1_Stream3_IRQHandler()
 		host_send((uint8_t*)DMA1_Stream3->M0AR, spi2_rx_nbytes);
 	}
 	else if (osd_next_nbytes_to_send > 0) {
-		osd_transfer(osd_next_data_to_send, (uint8_t*)DMA1_Stream3->M0AR, osd_next_nbytes_to_send);
+		osd_transfer(osd_next_data_to_send, (uint8_t*)DMA1_Stream3->M0AR, osd_next_nbytes_to_send, osd_next_nbytes_to_send);
 		osd_next_nbytes_to_send = 0;
 	}
 }

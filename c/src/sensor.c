@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h> // memcpy
 
 #include "sensor.h"
 #include "mpu_reg.h"
@@ -21,38 +22,63 @@
 
 #if (SENSOR == 6000)
 	uint8_t sensor_data_to_send[sizeof(sensor_raw_t)+1]; // +1: SPI address
-	uint16_t sensor_data_received[sizeof(sensor_raw_t)+1]; // +1: SPI dummy byte
+	uint16_t sensor_data_received[sizeof(sensor_raw_t)/2+1]; // uint16_t: to be 16-bit aligned in order to use __builtin_bswap16, +1: SPI dummy byte
 	sensor_raw_t* sensor_raw = (sensor_raw_t*)&sensor_data_received[1];
 #else
 	uint8_t sensor_data_to_send[2];
-	uint16_t sensor_data_received[sizeof(sensor_raw_t)];
+	uint16_t sensor_data_received[sizeof(sensor_raw_t)/2]; // uint16_t: to be 16-bit aligned in order to use __builtin_bswap16
 	sensor_raw_t* sensor_raw = (sensor_raw_t*)sensor_data_received;
 #endif
 
 /* Private functions ----------------------------------*/
 
+#if (SENSOR == 6000)
+
 void sensor_write(uint8_t addr, uint8_t data)
 {
 	sensor_data_to_send[0] = addr & 0x7F;
 	sensor_data_to_send[1] = data;
-	sensor_transfer(sensor_data_to_send, (uint8_t*)sensor_data_received, 2);
+	sensor_transfer(sensor_data_to_send, (uint8_t*)sensor_data_received, 2, 2);
 	while (sensor_busy) {} // Wait for end of transaction
 }
 
 void sensor_read(uint8_t addr, uint8_t* data, uint8_t size)
 {
 	sensor_data_to_send[0] = 0x80 | (addr & 0x7F);
-	sensor_transfer(sensor_data_to_send, data, size+1);
+	sensor_transfer(sensor_data_to_send, (uint8_t*)sensor_data_received, size+1, size+1);
+	while (sensor_busy) {} // Wait for end of transaction
+	memcpy(data, (uint8_t*)sensor_data_received+1, size);
 }
+
+#else
+
+void sensor_write(uint8_t addr, uint8_t data)
+{
+	sensor_data_to_send[0] = addr & 0x7F;
+	sensor_data_to_send[1] = data;
+	sensor_transfer(sensor_data_to_send, (uint8_t*)sensor_data_received, 2, 0);
+	while (sensor_busy) {} // Wait for end of transaction
+}
+
+void sensor_read(uint8_t addr, uint8_t* data, uint8_t size)
+{
+	sensor_data_to_send[0] = addr & 0x7F;
+	sensor_transfer(sensor_data_to_send, data, 1, size);
+	while (sensor_busy) {} // Wait for end of transaction
+}
+
+#endif
 
 /* Public functions ----------------------------------*/
 
 sensor_raw_t* sensor_read_samples()
 {
 #if (SENSOR == 6000)
-	sensor_read(MPU_ACCEL_X_H, (uint8_t*)sensor_data_received+1, sizeof(sensor_raw_t));
+	sensor_data_to_send[0] = 0x80 | MPU_ACCEL_X_H;
+	sensor_transfer(sensor_data_to_send, (uint8_t*)sensor_data_received+1, sizeof(sensor_raw_t)+1, sizeof(sensor_raw_t)+1);
 #else
-	sensor_read(MPU_ACCEL_X_H, (uint8_t*)sensor_data_received, sizeof(sensor_raw_t));
+	sensor_data_to_send[0] = MPU_ACCEL_X_H;
+	sensor_transfer(sensor_data_to_send, (uint8_t*)sensor_data_received, 1, sizeof(sensor_raw_t));
 #endif
 	return sensor_raw;
 }
