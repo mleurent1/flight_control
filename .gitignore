@@ -6,3 +6,5 @@ CURRENT_DRONE
 old
 matlab/*.asv
 matlab/*.m~
+matlab/*/*.asv
+matlab/*/*.m~

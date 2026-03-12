@@ -35,6 +35,46 @@ classdef fc_reg
 				obj.write(1, uint32(x));
 			end
 		end
+		function y = STATUS__STATUS(obj,x)
+			r = double(obj.read(1));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 255), 0)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 0), 255) + bitand(r, 4294967040);
+				obj.write(1, uint32(w));
+			end
+		end
+		function y = STATUS__VERSION_MINOR(obj,x)
+			r = double(obj.read(1));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 65280), -8)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 8), 65280) + bitand(r, 4294902015);
+				obj.write(1, uint32(w));
+			end
+		end
+		function y = STATUS__RADIO_BUSY(obj,x)
+			r = double(obj.read(1));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 65536), -16)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 16), 65536) + bitand(r, 4294901759);
+				obj.write(1, uint32(w));
+			end
+		end
+		function y = STATUS__SMA_BUSY(obj,x)
+			r = double(obj.read(1));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 131072), -17)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 17), 131072) + bitand(r, 4294836223);
+				obj.write(1, uint32(w));
+			end
+		end
 		function y = CTRL(obj,x)
 			if nargin < 2
 				y = obj.read(2);
@@ -72,7 +112,7 @@ classdef fc_reg
 				obj.write(2, uint32(w));
 			end
 		end
-		function y = CTRL__DEBUG_RADIO(obj,x)
+		function y = CTRL__RADIO_HOST_CTRL(obj,x)
 			r = double(obj.read(2));
 			if nargin < 2
 				z = typecast(uint32(bitshift(bitand(r, 8), -3)),'uint8');
@@ -842,12 +882,16 @@ classdef fc_reg
 		target = 0;
 		info = struct(...
 			'VERSION', [0,1,0,0],...
-			'STATUS', [1,0,0,0],...
+			'STATUS', [1,0,0,1],...
+			'STATUS__STATUS', [1,0,0,2],...
+			'STATUS__VERSION_MINOR', [1,0,0,2],...
+			'STATUS__RADIO_BUSY', [1,0,0,2],...
+			'STATUS__SMA_BUSY', [1,0,0,2],...
 			'CTRL', [2,0,0,1],...
 			'CTRL__SENSOR_HOST_CTRL', [2,0,0,2],...
 			'CTRL__OSD_HOST_CTRL', [2,0,0,2],...
 			'CTRL__SMA_HOST_CTRL', [2,0,0,2],...
-			'CTRL__DEBUG_RADIO', [2,0,0,2],...
+			'CTRL__RADIO_HOST_CTRL', [2,0,0,2],...
 			'CTRL__SENSOR_CAL', [2,0,0,2],...
 			'CTRL__DEBUG', [2,0,0,2],...
 			'CTRL__RF_HOST_CTRL', [2,0,0,2],...

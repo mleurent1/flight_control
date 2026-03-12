@@ -12,15 +12,6 @@
 
 /* Private macros ------------------------------------------*/
 
-#define DMA_CLEAR_ALL_FLAGS_0 (DMA_LIFCR_CTCIF0 | DMA_LIFCR_CHTIF0 | DMA_LIFCR_CTEIF0 |DMA_LIFCR_CDMEIF0 |DMA_LIFCR_CFEIF0)
-#define DMA_CLEAR_ALL_FLAGS_1 (DMA_LIFCR_CTCIF1 | DMA_LIFCR_CHTIF1 | DMA_LIFCR_CTEIF1 |DMA_LIFCR_CDMEIF1 |DMA_LIFCR_CFEIF1)
-#define DMA_CLEAR_ALL_FLAGS_2 (DMA_LIFCR_CTCIF2 | DMA_LIFCR_CHTIF2 | DMA_LIFCR_CTEIF2 |DMA_LIFCR_CDMEIF2 |DMA_LIFCR_CFEIF2)
-#define DMA_CLEAR_ALL_FLAGS_3 (DMA_LIFCR_CTCIF3 | DMA_LIFCR_CHTIF3 | DMA_LIFCR_CTEIF3 |DMA_LIFCR_CDMEIF3 |DMA_LIFCR_CFEIF3)
-#define DMA_CLEAR_ALL_FLAGS_4 (DMA_HIFCR_CTCIF4 | DMA_HIFCR_CHTIF4 | DMA_HIFCR_CTEIF4 |DMA_HIFCR_CDMEIF4 |DMA_HIFCR_CFEIF4)
-#define DMA_CLEAR_ALL_FLAGS_5 (DMA_HIFCR_CTCIF5 | DMA_HIFCR_CHTIF5 | DMA_HIFCR_CTEIF5 |DMA_HIFCR_CDMEIF5 |DMA_HIFCR_CFEIF5)
-#define DMA_CLEAR_ALL_FLAGS_6 (DMA_HIFCR_CTCIF6 | DMA_HIFCR_CHTIF6 | DMA_HIFCR_CTEIF6 |DMA_HIFCR_CDMEIF6 |DMA_HIFCR_CFEIF6)
-#define DMA_CLEAR_ALL_FLAGS_7 (DMA_HIFCR_CTCIF7 | DMA_HIFCR_CHTIF7 | DMA_HIFCR_CTEIF7 |DMA_HIFCR_CDMEIF7 |DMA_HIFCR_CFEIF7)
-
 /* Private types --------------------------------------*/
 
 /* Global variables --------------------------------------*/
@@ -32,6 +23,7 @@ volatile uint8_t spi1_rx_nbytes;
 	volatile uint16_t dshot2[17*4];
 #endif
 volatile uint8_t spi2_rx_nbytes;
+volatile uint8_t uart1_rx_nbytes; 
 volatile uint8_t* uart2_tx_data;
 volatile uint8_t* uart2_rx_data;
 // Initialize uart2 variables to 0 to avoid unwanted transfer at startup 
@@ -40,22 +32,6 @@ volatile uint8_t uart2_rx_nbytes = 0;
 volatile uint8_t uart2_byte_cnt = 0;
 
 /* Private functions ------------------------------------------------*/
-
-inline __attribute__((always_inline)) void radio_uart_dma_enable(uint8_t size)
-{
-	DMA2_Stream5->NDTR = size;
-	DMA2_Stream5->CR |= DMA_SxCR_EN;
-	USART1->SR = 0;
-	USART1->CR1 |= USART_CR1_RE;
-}
-
-inline __attribute__((always_inline)) void radio_uart_dma_disable()
-{
-	DMA2_Stream5->CR &= ~DMA_SxCR_EN;
-	while (DMA2_Stream5->CR & DMA_SxCR_EN) {}; // Wait for end of current transfer
-	DMA2->HIFCR = DMA_CLEAR_ALL_FLAGS_5;
-	USART1->CR1 &= ~USART_CR1_RE;
-}
 
 /* Public functions ---------------------------------------*/
 
@@ -91,14 +67,19 @@ void en_sensor_irq(void)
 	EXTI->IMR = EXTI_IMR_MR1;
 }
 
-void trig_radio_rx(void)
+void radio_recv(uint8_t* data, uint8_t size)
 {
-	radio_uart_dma_enable(sizeof(radio_frame));
-}
+	uart1_rx_nbytes = size; // Record transfer size
 
-void trig_delayed_radio_rx(void)
-{
-	TIM10->CR1 |= TIM_CR1_CEN;
+	DMA2_Stream5->CR &= ~DMA_SxCR_EN; // Disable DMA channel in order to configure it
+	DMA2_Stream5->M0AR = (uint32_t)data;
+	DMA2_Stream5->NDTR = size;
+
+	// Enable DMA channel and UART Rx
+	DMA2_Stream5->CR |= DMA_SxCR_EN;
+	USART1->CR1 |= USART_CR1_RE;
+
+	radio_busy = true;
 }
 
 void set_motors(uint16_t * motor_raw, bool * motor_telemetry)
@@ -274,25 +255,23 @@ __attribute__((section(".RamFunc"))) void DMA2_Stream0_IRQHandler()
 __attribute__((section(".RamFunc"))) void USART1_IRQHandler()
 {
 	USART1->SR = 0; // Clear status flags
-	radio_uart_dma_disable();
+	USART1->CR1 &= ~USART_CR1_RE; // Disable Rx
+	radio_busy = false;
 	radio_error_count++;
-	radio_uart_dma_enable(sizeof(radio_frame));
 }
 
 /* DMA IRQ of radio Rx UART-----------------------*/
 
 __attribute__((section(".RamFunc"))) void DMA2_Stream5_IRQHandler()
 {
-	radio_uart_dma_disable();
-	flag_radio = 1; // Raise flag for radio commands ready
-}
+	DMA2->HIFCR = DMA_HIFCR_CTCIF5; // Clear transfer complete IRQ
+	USART1->CR1 &= ~USART_CR1_RE; // Disable Rx
+	radio_busy = false;
 
-/* Timer IRQ of radio sync -----------------------*/
-
-__attribute__((section(".RamFunc"))) void TIM1_UP_TIM10_IRQHandler()
-{
-	TIM10->SR = 0; // Clear IRQ
-	radio_uart_dma_enable(sizeof(radio_frame));
+	if (REG_CTRL__RADIO_HOST_CTRL == 1)
+		host_send((uint8_t*)DMA2_Stream5->M0AR, uart1_rx_nbytes);
+	else
+		flag_radio = 1; // Raise flag for radio commands ready
 }
 
 /* VBAT ADC conversion IRQ -----------------------------*/
@@ -530,21 +509,11 @@ uint8_t board_init()
 
 	// DMA2 stream 5 chan 4: USART1_RX
 	DMA2_Stream5->CR = (4 << DMA_SxCR_CHSEL_Pos) | DMA_SxCR_MINC | DMA_SxCR_TCIE;// | DMA_SxCR_TEIE; // TODO: see if error handling is needed
-	DMA2_Stream5->M0AR = (uint32_t)&radio_frame;
 	DMA2_Stream5->PAR = (uint32_t)&(USART1->DR);
 	NVIC_EnableIRQ(DMA2_Stream5_IRQn);
 	NVIC_SetPriority(DMA2_Stream5_IRQn,0);
 
 	// DMA2 stream 7 chan 4: USART1_TX
-
-	// Timer for radio sync
-	RCC->APB2ENR |= RCC_APB2ENR_TIM10EN;
-	TIM10->PSC = 96-1; // 1us
-	TIM10->ARR = 620; // 10bits*sizeof(radio_frame)/420000bps
-	TIM10->CR1 = TIM_CR1_OPM;
-	TIM10->DIER = TIM_DIER_UIE;
-	NVIC_EnableIRQ(TIM1_UP_TIM10_IRQn);
-	NVIC_SetPriority(TIM1_UP_TIM10_IRQn,0);
 
 	/* Motors -----------------------------------------*/
 

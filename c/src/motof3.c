@@ -34,6 +34,7 @@ volatile uint8_t* uart1_rx_data;
 volatile uint8_t uart1_tx_nbytes = 0; 
 volatile uint8_t uart1_rx_nbytes = 0; 
 volatile uint8_t uart1_byte_cnt = 0;
+volatile uint8_t uart2_rx_nbytes;
 volatile uint8_t uart3_tx_buffer[128]; // OSD telemetry is 2 lines of 30 x 16-bit characters + 0xFF terminator
 volatile uint8_t uart3_rx_nbytes;
 #ifdef LED
@@ -41,20 +42,6 @@ volatile uint8_t uart3_rx_nbytes;
 #endif
 
 /* Private functions ------------------------------------------------*/
-
-inline __attribute__((always_inline)) void radio_uart_dma_enable(uint8_t size)
-{
-	DMA1_Channel6->CNDTR = size;
-	DMA1_Channel6->CCR |= DMA_CCR_EN;
-	USART2->CR1 |= USART_CR1_RE;
-}
-
-inline __attribute__((always_inline)) void radio_uart_dma_disable()
-{
-	DMA1->IFCR = DMA_IFCR_CGIF6; // Clear all DMA flags
-	DMA1_Channel6->CCR &= ~DMA_CCR_EN;
-	USART2->CR1 &= ~USART_CR1_RE;
-}
 
 /* Public functions ---------------------------------------*/
 
@@ -80,14 +67,19 @@ void en_sensor_irq(void)
 	EXTI->IMR = EXTI_IMR_MR15;
 }
 
-void trig_radio_rx(void)
+void radio_recv(uint8_t* data, uint8_t size)
 {
-	radio_uart_dma_enable(sizeof(radio_frame));
-}
+	uart2_rx_nbytes = size; // Record transfer size
 
-void trig_delayed_radio_rx(void)
-{
-	TIM7->CR1 |= TIM_CR1_CEN;
+	DMA1_Channel6->CCR &= ~DMA_CCR_EN; // Disable DMA channel in order to configure it
+	DMA1_Channel6->CMAR = (uint32_t)data;
+	DMA1_Channel6->CNDTR = size;
+
+	// Enable DMA channel and UART Rx
+	DMA1_Channel6->CCR |= DMA_CCR_EN;
+	USART2->CR1 |= USART_CR1_RE;
+
+	radio_busy = true;
 }
 
 void set_motors(uint16_t * motor_raw, bool * motor_telemetry)
@@ -203,7 +195,7 @@ void sma_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t
 	sma_busy = true;
 }
 
-void runcam_send(uint8_t * data, uint8_t size)
+void runcam_send(uint8_t* data, uint8_t size)
 {
 	uart1_tx_data = data;
 	uart1_tx_nbytes = size;
@@ -320,17 +312,23 @@ __attribute__((section(".RamFunc"))) void DMA1_Channel5_IRQHandler()
 __attribute__((section(".RamFunc"))) void USART2_IRQHandler()
 {
 	USART2->ICR = USART_ICR_ORECF | USART_ICR_PECF | USART_ICR_FECF | USART_ICR_NCF; // Clear all flags
+	USART2->CR1 &= ~USART_CR1_RE; // Disable Rx
+	radio_busy = false;
 	radio_error_count++;
-	radio_uart_dma_enable(sizeof(radio_frame));
 }
 
 /* DMA IRQ of radio Rx UART-----------------------*/
 
 __attribute__((section(".RamFunc"))) void DMA1_Channel6_IRQHandler()
 {
-	radio_uart_dma_disable();
-	radio_uart_dma_enable(sizeof(radio_frame));
-	flag_radio = 1; // Raise flag for radio commands ready
+	DMA1->IFCR = DMA_IFCR_CTCIF6; // Clear transfer complete IRQ
+	USART2->CR1 &= ~USART_CR1_RE; // Disable Rx
+	radio_busy = false;
+
+	if (REG_CTRL__RADIO_HOST_CTRL == 1)
+		host_send((uint8_t*)DMA1_Channel6->CMAR, uart2_rx_nbytes);
+	else
+		flag_radio = 1; // Raise flag for radio commands ready
 }
 
 /* VBAT ADC conversion IRQ -----------------------------*/
@@ -547,10 +545,11 @@ uint8_t board_init()
 
 	/* Radio UART ---------------------------------------------------*/
 
-	// B4 : UART2 Rx, AF7, pull-up for IDLE
-	GPIOB->MODER |= GPIO_MODER_MODER4_1;
-	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR4_0;
-	GPIOB->AFR[0] |= 7 << GPIO_AFRL_AFRL4_Pos;
+	// B3 : USART2_TX (AF7), pull-up for IDLE
+	// B4 : USART2_RX (AF7), pull-up for IDLE
+	GPIOB->MODER |= GPIO_MODER_MODER3_1 | GPIO_MODER_MODER4_1;
+	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR3_0 | GPIO_PUPDR_PUPDR4_0;
+	GPIOB->AFR[0] |= (7 << GPIO_AFRL_AFRL3_Pos) | (7 << GPIO_AFRL_AFRL4_Pos);
 
 	// UART config
 	RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
@@ -560,21 +559,13 @@ uint8_t board_init()
 	NVIC_EnableIRQ(USART2_IRQn);
 	NVIC_SetPriority(USART2_IRQn,0);
 
-	// DMA UART2 Rx
+	// DMA1 channel 6: USART2_RX
 	DMA1_Channel6->CCR = (0 << DMA_CCR_PL_Pos) | DMA_CCR_MINC | DMA_CCR_TCIE;// | DMA_CCR_TEIE; // TODO: see if error handling is needed
-	DMA1_Channel6->CMAR = (uint32_t)&radio_frame;
 	DMA1_Channel6->CPAR = (uint32_t)&(USART2->RDR);
 	NVIC_EnableIRQ(DMA1_Channel6_IRQn);
 	NVIC_SetPriority(DMA1_Channel6_IRQn,0);
 
-	// Timer for radio sync
-	RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
-	TIM7->PSC = 48-1; // 1us
-	TIM7->ARR = 620; // 10bits*sizeof(radio_frame)/420000bps
-	TIM7->CR1 = TIM_CR1_OPM;
-	TIM7->DIER = TIM_DIER_UIE;
-	NVIC_EnableIRQ(TIM7_IRQn);
-	NVIC_SetPriority(TIM7_IRQn,0);
+	// DMA1 channel 7: USART2_TX
 
 	/* Motors -----------------------------------------*/
 

@@ -1,7 +1,7 @@
 const reg_properties_t reg_properties[NB_REG] = 
 {
 	{1, 1, 0, 40}, // VERSION
-	{1, 0, 0, 0}, // STATUS
+	{1, 0, 0, 256}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
 	{1, 0, 0, 0}, // ERROR

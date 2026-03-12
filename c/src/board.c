@@ -4,6 +4,7 @@
 #include "board.h"
 
 volatile bool sensor_busy = false;
+volatile bool radio_busy = false;
 volatile bool osd_busy = false;
 volatile bool sma_busy = false;
 

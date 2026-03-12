@@ -3,6 +3,18 @@
 #define REG_VERSION reg[0]
 #define REG_VERSION_Addr 0
 #define REG_STATUS reg[1]
+#define REG_STATUS__STATUS (uint8_t)((reg[1] & 255U) >> 0)
+#define REG_STATUS__STATUS_Msk 255U
+#define REG_STATUS__STATUS_Pos 0U
+#define REG_STATUS__VERSION_MINOR (uint8_t)((reg[1] & 65280U) >> 8)
+#define REG_STATUS__VERSION_MINOR_Msk 65280U
+#define REG_STATUS__VERSION_MINOR_Pos 8U
+#define REG_STATUS__RADIO_BUSY (uint8_t)((reg[1] & 65536U) >> 16)
+#define REG_STATUS__RADIO_BUSY_Msk 65536U
+#define REG_STATUS__RADIO_BUSY_Pos 16U
+#define REG_STATUS__SMA_BUSY (uint8_t)((reg[1] & 131072U) >> 17)
+#define REG_STATUS__SMA_BUSY_Msk 131072U
+#define REG_STATUS__SMA_BUSY_Pos 17U
 #define REG_STATUS_Addr 1
 #define REG_CTRL reg[2]
 #define REG_CTRL__SENSOR_HOST_CTRL (uint8_t)((reg[2] & 1U) >> 0)
@@ -14,9 +26,9 @@
 #define REG_CTRL__SMA_HOST_CTRL (uint8_t)((reg[2] & 4U) >> 2)
 #define REG_CTRL__SMA_HOST_CTRL_Msk 4U
 #define REG_CTRL__SMA_HOST_CTRL_Pos 2U
-#define REG_CTRL__DEBUG_RADIO (uint8_t)((reg[2] & 8U) >> 3)
-#define REG_CTRL__DEBUG_RADIO_Msk 8U
-#define REG_CTRL__DEBUG_RADIO_Pos 3U
+#define REG_CTRL__RADIO_HOST_CTRL (uint8_t)((reg[2] & 8U) >> 3)
+#define REG_CTRL__RADIO_HOST_CTRL_Msk 8U
+#define REG_CTRL__RADIO_HOST_CTRL_Pos 3U
 #define REG_CTRL__SENSOR_CAL (uint8_t)((reg[2] & 16U) >> 4)
 #define REG_CTRL__SENSOR_CAL_Msk 16U
 #define REG_CTRL__SENSOR_CAL_Pos 4U

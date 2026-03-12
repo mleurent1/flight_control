@@ -77,8 +77,10 @@ int main(void)
 	bool flag_radio_timeout = false;
 	bool warning;
 
-	radio_frame_t radio_frame1;
 	struct radio_s radio;
+	uint16_t t_radio;
+	uint16_t t_radio_0;
+	bool trig_radio_recv = false;
 
 	float radio_pitch_smooth = 0;
 	float radio_roll_smooth = 0;
@@ -171,7 +173,7 @@ int main(void)
 
 	mpu_init();
 
-	trig_radio_rx();
+	radio_recv((uint8_t*)&radio_frame, sizeof(radio_frame));
 
 #ifdef VBAT
 	// Get first vbat value
@@ -216,13 +218,12 @@ int main(void)
 
 			// Decode radio commands
 			status = radio_decode(&radio_frame, &radio);
-			radio_frame1 = radio_frame; // record buffer for debug
 
 			if (status == RADIO_FRAME_ERROR)
 				radio_error_count++;
 
 			if (status == RADIO_FRAME_RC_CHAN) {
-				trig_radio_rx(); // to get next frame
+				radio_recv((uint8_t*)&radio_frame, sizeof(radio_frame)); // to get next frame
 				flag_radio_timeout = 0; // reset timeout flag
 				flag_radio_connected = 1; // if we get here, there is a working radio receiver
 
@@ -245,7 +246,19 @@ int main(void)
 				// Exponential
 				radio_expo(&radio, flag_acro);
 			} else {
-				trig_delayed_radio_rx();
+				// Trigger delayed radio_recv() for frame synchronisation
+				t_radio_0 = get_t_us();
+				trig_radio_recv = true;
+			}
+		}
+
+		// Delayed radio_recv() for frame synchronisation
+		if (trig_radio_recv)
+		{
+			t_radio = get_t_us() - t_radio_0;
+			if (t_radio > 620) { // 10bits*sizeof(radio_frame)/420000bps
+				trig_radio_recv = false;
+				radio_recv((uint8_t*)&radio_frame, sizeof(radio_frame));
 			}
 		}
 
@@ -442,7 +455,6 @@ int main(void)
 			trig_vbat_meas();
 		#endif
 
-
 			if ((t_ms - t_status_prev) >= STATUS_PERIOD) {
 
 				t_status_prev = t_ms;
@@ -463,7 +475,7 @@ int main(void)
 				}
 
 				// Update status reg
-				REG_STATUS = 0;
+				REG_STATUS &= ~REG_STATUS__STATUS_Msk;
 				if (flag_sensor_timeout)
 					REG_STATUS |= 0x01;
 				if (flag_radio_timeout)
@@ -565,10 +577,6 @@ int main(void)
 					host_buffer_tx.u16[22*2+1] = motor_raw[3];
 					host_buffer_tx.u16[23*2]   = t_proc_max;
 					host_send(host_buffer_tx.u8, 21*4 + 5*2);
-				}
-				else if (REG_CTRL__DEBUG_RADIO) {
-					memcpy(host_buffer_tx.u8, radio_frame1.bytes, sizeof(radio_frame1));
-					host_send(host_buffer_tx.u8, sizeof(radio_frame1));
 				}
 
 				// Reset max processing time

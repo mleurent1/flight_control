@@ -639,11 +639,9 @@ void osd_menu(struct radio_s * radio)
 	// Apply VTX settings
 	if ((state_prev == REG) && (menu_idx == VTX_CHANNEL) && (state == REG_EXIT)) {
 		sma_send_cmd(SMA_SET_CHANNEL, REG_VTX__CHAN);
-		while (sma_busy) {}
 	}
 	if ((state_prev == REG) && (menu_idx == VTX_POWER) && (state == REG_EXIT)) {
 		sma_send_cmd(SMA_SET_POWER, REG_VTX__PWR);
-		while (sma_busy) {}
 	}
 #endif
 

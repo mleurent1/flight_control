@@ -20,7 +20,7 @@ float regf[NB_REG];
 const reg_properties_t reg_properties[NB_REG] = 
 {
 	{1, 1, 0, 40}, // VERSION
-	{1, 0, 0, 0}, // STATUS
+	{1, 0, 0, 256}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
 	{1, 0, 0, 0}, // ERROR
@@ -172,8 +172,17 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			if (reg_properties[addr].is_float)
 				host_send((uint8_t*)&regf[addr], 4);
 			else {
-				if (addr == REG_ERROR_Addr)
+				if (addr == REG_ERROR_Addr) {
 					REG_ERROR = ((uint32_t)sma_error_count << 24) | ((uint32_t)rf_error_count << 16) | ((uint32_t)radio_error_count << 8) | (uint32_t)sensor_error_count;
+				}
+				else if (addr == REG_STATUS_Addr) {
+					REG_STATUS &= ~REG_STATUS__RADIO_BUSY_Msk;
+					if (radio_busy)
+						REG_STATUS |= 1 << REG_STATUS__RADIO_BUSY_Pos;
+					REG_STATUS &= ~REG_STATUS__SMA_BUSY_Msk;
+					if (sma_busy)
+						REG_STATUS |= 1 << REG_STATUS__SMA_BUSY_Pos;
+				}
 				else if (addr == REG_DEBUG_INT_Addr) {
 					/* REG_DEBUG_INT = Put your debug value here */
 				}
@@ -261,7 +270,8 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			sensor_transfer(&host_buffer_rx->data.u8[1], host_buffer_tx.u8, host_buffer_rx->addr, host_buffer_rx->data.u8[0]);
 			break;
 		}
-		case 3: { // RFU
+		case 3: { // Radio receive
+			radio_recv(host_buffer_tx.u8, host_buffer_rx->addr);
 			break;
 		}
 		case 4: { // Flash read
