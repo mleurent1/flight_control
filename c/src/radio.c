@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h> // memcpy
 
 #include "radio.h"
 #include "sx1276_reg.h"
@@ -12,13 +13,28 @@
 
 /* Private macros --------------------------------------*/
 
-#define RF_WRITE(addr,data) rf_data_w[0] = data; rf_write(addr, rf_data_w, 1); wait_ms(1);
-
 /* Global variables -----------------------*/
 
-uint8_t rf_data_w[6];
+uint8_t rf_data_to_send[6+1]; // +1: SPI address
+uint8_t rf_data_received[6+1]; // +1: SPI dummy byte
 
 /* Private Functions -----------------------*/
+
+void rf_write(uint8_t addr, uint8_t data)
+{
+	rf_data_to_send[0] = 0x80 | (addr & 0x7F);
+	rf_data_to_send[1] = data;
+	sensor_transfer(rf_data_to_send, rf_data_received, 2, 2);
+	while (sensor_busy) {} // Wait for end of transaction
+}
+
+void rf_read(uint8_t addr, uint8_t* data, uint8_t size)
+{
+	rf_data_to_send[0] = addr & 0x7F;
+	sensor_transfer(rf_data_to_send, rf_data_received, size+1, size+1);
+	while (sensor_busy) {} // Wait for end of transaction
+	memcpy(data, &rf_data_received[1], size);
+}
 
 /* Public Functions -----------------------*/
 
@@ -82,18 +98,22 @@ void radio_expo(struct radio_s * radio, bool acro_mode)
 
 void sx1276_init(void)
 {
-	RF_WRITE(SX1276_OP_MODE, 0);
-	RF_WRITE(SX1276_OP_MODE, SX1276_OP_MODE__LONG_RANGE_MODE);
-	RF_WRITE(SX1276_OP_MODE, SX1276_OP_MODE__LONG_RANGE_MODE | SX1276_OP_MODE__MODE(1));
-	RF_WRITE(SX1276_FR_MSB, 216);
-	RF_WRITE(SX1276_FR_MID, 64);
-	RF_WRITE(SX1276_FR_LSB, 0);
-	RF_WRITE(SX1276_PA_CONFIG, SX1276_PA_CONFIG__OUTPUT_POWER(0) | SX1276_PA_CONFIG__PA_SELECT);
-	RF_WRITE(SX1276_PA_RAMP, 3);
-	RF_WRITE(SX1276_LNA, SX1276_LNA__LNA_BOOST_HF(2) | SX1276_LNA__LNA_GAIN(1));
-	RF_WRITE(SX1276_MODEM_CONFIG_1, SX1276_MODEM_CONFIG_1__IMPLICIT_HEADER_MODE_ON | SX1276_MODEM_CONFIG_1__CODING_RATE(1) | SX1276_MODEM_CONFIG_1__BW(7));
-	RF_WRITE(SX1276_MODEM_CONFIG_2, SX1276_MODEM_CONFIG_2__RX_PAYLOAD_CRC_ON | SX1276_MODEM_CONFIG_2__SPREADING_FACTOR(7));
-	RF_WRITE(SX1276_PAYLOAD_LENGTH, 6);
-	RF_WRITE(SX1276_MODEM_CONFIG_3, SX1276_MODEM_CONFIG_3__AGC_AUTO_ON);
-	RF_WRITE(SX1276_OP_MODE, SX1276_OP_MODE__LONG_RANGE_MODE | SX1276_OP_MODE__MODE(5));
+	rf_reset_pin(true);
+	wait_ms(1);
+	rf_reset_pin(false);
+
+	rf_write(SX1276_OP_MODE, 0);
+	rf_write(SX1276_OP_MODE, SX1276_OP_MODE__LONG_RANGE_MODE);
+	rf_write(SX1276_OP_MODE, SX1276_OP_MODE__LONG_RANGE_MODE | SX1276_OP_MODE__MODE(1));
+	rf_write(SX1276_FR_MSB, 216);
+	rf_write(SX1276_FR_MID, 64);
+	rf_write(SX1276_FR_LSB, 0);
+	rf_write(SX1276_PA_CONFIG, SX1276_PA_CONFIG__OUTPUT_POWER(0) | SX1276_PA_CONFIG__PA_SELECT);
+	rf_write(SX1276_PA_RAMP, 3);
+	rf_write(SX1276_LNA, SX1276_LNA__LNA_BOOST_HF(2) | SX1276_LNA__LNA_GAIN(1));
+	rf_write(SX1276_MODEM_CONFIG_1, SX1276_MODEM_CONFIG_1__IMPLICIT_HEADER_MODE_ON | SX1276_MODEM_CONFIG_1__CODING_RATE(1) | SX1276_MODEM_CONFIG_1__BW(7));
+	rf_write(SX1276_MODEM_CONFIG_2, SX1276_MODEM_CONFIG_2__RX_PAYLOAD_CRC_ON | SX1276_MODEM_CONFIG_2__SPREADING_FACTOR(7));
+	rf_write(SX1276_PAYLOAD_LENGTH, 6);
+	rf_write(SX1276_MODEM_CONFIG_3, SX1276_MODEM_CONFIG_3__AGC_AUTO_ON);
+	rf_write(SX1276_OP_MODE, SX1276_OP_MODE__LONG_RANGE_MODE | SX1276_OP_MODE__MODE(5));
 }

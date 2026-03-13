@@ -252,9 +252,8 @@ __attribute__((section(".RamFunc"))) void SysTick_Handler()
 __attribute__((section(".RamFunc"))) void EXTI15_10_IRQHandler()
 {
 	EXTI->PR = EXTI_PR_PIF15; // Clear pending request
-	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && (!sensor_busy)) {
+	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && (!sensor_busy))
 		sensor_read_samples();
-	}
 }
 
 /* DMA IRQ of sensor Rx SPI ----------------------*/
@@ -595,7 +594,7 @@ uint8_t board_init()
 	NVIC_EnableIRQ(DMA1_Channel3_IRQn);
 	NVIC_SetPriority(DMA1_Channel3_IRQn,0);
 
-#elif (ESC == ONESHOT) // One-pulse mode for OneShot125 or PWM
+#else // One-pulse mode for OneShot125 or PWM
 
 	TIM3->CR1 = TIM_CR1_OPM;
 	#if (ESC == PWM)

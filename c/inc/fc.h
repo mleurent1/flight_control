@@ -29,7 +29,6 @@ extern volatile bool flag_vbat;
 extern volatile bool flag_rf;
 extern volatile bool flag_host;
 extern volatile bool flag_time;
-extern volatile bool flag_rf_host_read;
 extern volatile bool flag_rf_rxtx_done;
 
 extern host_buffer_rx_t host_buffer_rx;

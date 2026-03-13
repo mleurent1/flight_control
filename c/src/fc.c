@@ -49,7 +49,6 @@ volatile bool flag_vbat = false;
 volatile bool flag_rf = false;
 volatile bool flag_host = false;
 volatile bool flag_time = false;
-volatile bool flag_rf_host_read = false;
 volatile bool flag_rf_rxtx_done = false;
 
 host_buffer_rx_t host_buffer_rx;
@@ -199,6 +198,10 @@ int main(void)
 	// while (sma_busy) {} // Commented: use waiting time in case VTX is not powered on USB
 	wait_ms(100); // Maximum response time
 	if (!sma_process_resp()) sma_error_count++;
+#endif
+
+#ifdef RF
+	sx1276_init();
 #endif
 
 	en_sensor_irq();

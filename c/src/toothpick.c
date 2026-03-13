@@ -93,7 +93,7 @@ void set_motors(uint16_t * motor_raw, bool * motor_telemetry)
 
 	// Disable master timer
 	TIM2->CR1 = 0;
-	
+
 	dshot_encode(&motor_raw[0], motor2_dshot, motor_telemetry[0]);
 	dshot_encode(&motor_raw[1], motor1_dshot, motor_telemetry[1]);
 	dshot_encode(&motor_raw[2], motor3_dshot, motor_telemetry[2]);
@@ -221,9 +221,8 @@ __attribute__((section(".RamFunc"))) void SysTick_Handler()
 __attribute__((section(".RamFunc"))) void EXTI1_IRQHandler()
 {
 	EXTI->PR = EXTI_PR_PR1; // Clear pending request
-	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && (!sensor_busy)) {
+	if ((REG_CTRL__SENSOR_HOST_CTRL == 0) && (!sensor_busy))
 		sensor_read_samples();
-	}
 }
 
 /* DMA IRQ of sensor Rx SPI ----------------------*/
@@ -439,8 +438,8 @@ uint8_t board_init()
 	// B14: OSD (MAX7456) SPI2_MISO (AF5)
 	// B15: OSD (MAX7456) SPI2_MOSI (AF5)
 
-	// C13: Blue LED
-	// C14: Green LED
+	// C13: Blue LED, external pull-up
+	// C14: Green LED, external pull-up
 
 	/* USB ----------------------------------------*/
 
@@ -617,8 +616,8 @@ uint8_t board_init()
 
 	/* LED -----------------------*/
 
-	// C13: Blue LED, need open-drain
-	// C14: Green LED, need open-drain
+	// C13: Blue LED, external pull-up => need open-drain
+	// C14: Green LED, external pull-up => need open-drain
 	GPIOC->MODER |= GPIO_MODER_MODER13_0 | GPIO_MODER_MODER14_0;
 	GPIOC->OTYPER |= GPIO_OTYPER_OT_13 | GPIO_OTYPER_OT_14;
 	GPIOC->BSRR = GPIO_BSRR_BS_13 | GPIO_BSRR_BS_14;

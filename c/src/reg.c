@@ -20,7 +20,7 @@ float regf[NB_REG];
 const reg_properties_t reg_properties[NB_REG] = 
 {
 	{1, 1, 0, 40}, // VERSION
-	{1, 0, 0, 256}, // STATUS
+	{1, 0, 0, 512}, // STATUS
 	{0, 0, 0, 0}, // CTRL
 	{0, 0, 0, 0}, // MOTOR_TEST
 	{1, 0, 0, 0}, // ERROR
@@ -286,13 +286,11 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			flash_erase();
 			break;
 		}
-		case 7: { // SPI read to RF
-			flag_rf_host_read = 1;
-			rf_read(addr,1);
+		case 7: { // RF transaction
+			rf_transfer(&host_buffer_rx->data.u8[1], host_buffer_tx.u8, host_buffer_rx->addr, host_buffer_rx->data.u8[0]);
 			break;
 		}
-		case 8: { // SPI write to RF
-			rf_write(addr, &host_buffer_rx->data.u8[3], 1);
+		case 8: { // RFU
 			break;
 		}
 		case 9: { // OSD transaction
