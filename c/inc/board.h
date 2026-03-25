@@ -16,6 +16,8 @@ extern volatile bool radio_busy;
 extern volatile bool osd_busy;
 extern volatile bool sma_busy;
 extern volatile bool rf_busy;
+extern volatile bool msp_busy;
+extern volatile bool runcam_busy;
 
 /* Public functions -----------------*/
 
@@ -34,7 +36,8 @@ void osd_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t
 void sma_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in);
 void rf_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in);
 void rf_reset_pin(bool en);
-void runcam_send(uint8_t * data, uint8_t size);
+void msp_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in);
+void runcam_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in);
 void set_leds(uint8_t * grb);
 
 #endif

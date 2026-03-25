@@ -23,9 +23,6 @@ volatile uint8_t spi2_rx_nbytes;
 #if (ESC == DSHOT)
 	volatile uint8_t dshot[17*4];
 #endif
-volatile bool dshot_busy = false;
-volatile DMA_Channel_TypeDef dma_cfg_dshot;
-volatile DMA_Channel_TypeDef dma_cfg_osd;
 volatile uint8_t* uart1_tx_data;
 volatile uint8_t* uart1_rx_data;
 // Initialize uart1 variables to 0 to avoid unwanted transfer at startup 
@@ -34,7 +31,9 @@ volatile uint8_t uart1_rx_nbytes = 0;
 volatile uint8_t uart1_byte_cnt = 0;
 volatile uint8_t uart2_rx_nbytes;
 volatile uint8_t uart3_tx_buffer[128]; // OSD telemetry is 2 lines of 30 x 16-bit characters + 0xFF terminator
-volatile uint8_t uart3_rx_nbytes;
+volatile uint8_t* uart3_rx_data;
+volatile uint8_t uart3_rx_nbytes = 0;
+volatile uint8_t uart3_byte_cnt = 0;
 #ifdef LED
 	volatile uint8_t led_buffer[24*LED+1];
 #endif
@@ -93,33 +92,29 @@ void set_motors(uint16_t * motor_raw, bool * motor_telemetry)
 	uint8_t motor3_dshot[16];
 	uint8_t motor4_dshot[16];
 
-	if (!osd_busy) {
-		TIM3->CR1 = 0; // Disable timer
+	TIM3->CR1 = 0; // Disable timer
 
-		// NB: motor 1 is on CH2 and motor 2 is on CH1
-		dshot_encode(&motor_raw[0], motor2_dshot, motor_telemetry[0]);
-		dshot_encode(&motor_raw[1], motor1_dshot, motor_telemetry[1]);
-		dshot_encode(&motor_raw[2], motor3_dshot, motor_telemetry[2]);
-		dshot_encode(&motor_raw[3], motor4_dshot, motor_telemetry[3]);
-		for (i=0; i<16; i++) {
-			dshot[i*4+0] = motor1_dshot[i];
-			dshot[i*4+1] = motor2_dshot[i];
-			dshot[i*4+2] = motor3_dshot[i];
-			dshot[i*4+3] = motor4_dshot[i];
-		}
-
-		// Configure DMA
-		TIM3->DIER = 0; // DMA requests must be disabled before configuring DMA, otherwise there are glitches 
-		DMA1_Channel3->CCR = 0;
-		*DMA1_Channel3 = dma_cfg_dshot;
-		DMA1_Channel3->CCR |= DMA_CCR_EN;
-		
-		//TIM3->CNT = TIM3->ARR; // Reset timer just before an update event (overflow)
-		TIM3->DIER = TIM_DIER_UDE; // Enable Update DMA requests
-		TIM3->CR1 = TIM_CR1_CEN; // Enable timer
-
-		dshot_busy = true;
+	// NB: motor 1 is on CH2 and motor 2 is on CH1
+	dshot_encode(&motor_raw[0], motor2_dshot, motor_telemetry[0]);
+	dshot_encode(&motor_raw[1], motor1_dshot, motor_telemetry[1]);
+	dshot_encode(&motor_raw[2], motor3_dshot, motor_telemetry[2]);
+	dshot_encode(&motor_raw[3], motor4_dshot, motor_telemetry[3]);
+	for (i=0; i<16; i++) {
+		dshot[i*4+0] = motor1_dshot[i];
+		dshot[i*4+1] = motor2_dshot[i];
+		dshot[i*4+2] = motor3_dshot[i];
+		dshot[i*4+3] = motor4_dshot[i];
 	}
+
+	// Configure DMA
+	TIM3->DIER = 0; // DMA requests must be disabled before configuring DMA, otherwise there are glitches 
+	DMA1_Channel3->CCR &= ~DMA_CCR_EN;
+	DMA1_Channel3->CNDTR = 17*4;
+	DMA1_Channel3->CCR |= DMA_CCR_EN;
+	
+	//TIM3->CNT = TIM3->ARR; // Reset timer just before an update event (overflow)
+	TIM3->DIER = TIM_DIER_UDE; // Enable Update DMA requests
+	TIM3->CR1 = TIM_CR1_CEN; // Enable timer
 #else
 	TIM3->CCR1 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[1];
 	TIM3->CCR2 = SERVO_MAX*2 + 1 - SERVO_MIN*2 - (uint32_t)motor_raw[0];
@@ -161,48 +156,61 @@ void trig_vbat_meas(void)
 	ADC2->CR |= ADC_CR_JADSTART;
 }
 
-__attribute__((section(".RamFunc"))) void osd_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
-{
-	uart3_tx_buffer[0] = size_out;
-	memcpy((uint8_t*)&uart3_tx_buffer[1], data_out, size_out);
-	uart3_rx_nbytes = size_in; // Record transfer size
-
-	DMA1_Channel2->CCR &= ~DMA_CCR_EN;
-	DMA1_Channel2->CMAR = (uint32_t)uart3_tx_buffer;
-	DMA1_Channel2->CNDTR = size_out + 1;
-	DMA1_Channel2->CCR |= DMA_CCR_EN;
-
-	dma_cfg_osd.CMAR = (uint32_t)data_in;
-	dma_cfg_osd.CNDTR = size_in;
-
-	if (!dshot_busy) {
-		TIM3->DIER = 0; // Disable concurrent timer update DMA requests for DSHOT
-		DMA1_Channel3->CCR = 0; 
-		*DMA1_Channel3 = dma_cfg_osd;
-		DMA1_Channel3->CCR |= DMA_CCR_EN; 
-		USART3->CR1 |= USART_CR1_TE | USART_CR1_RE;
-
-		osd_busy = true;
-	}
-}
-
-void sma_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
+void uart1_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
 {
 	uart1_tx_data = data_out;
 	uart1_rx_data = data_in;
 	uart1_tx_nbytes = size_out;
 	uart1_rx_nbytes = size_in;
-	USART1->CR1 &= ~(USART_CR1_RE | USART_CR1_RXNEIE); // Disable any pending Rx
-	USART1->CR1 |= USART_CR1_TE | USART_CR1_TXEIE; // Enable UART Tx and Tx empty IRQ
+
+	if (size_in > 0)
+		USART1->CR1 |= USART_CR1_RE | USART_CR1_RXNEIE; // Enable UART Rx and Rx not empty IRQ
+	if (size_out > 0)
+		USART1->CR1 |= USART_CR1_TE | USART_CR1_TXEIE; // Enable UART Tx and Tx empty IRQ
+}
+
+__attribute__((section(".RamFunc"))) void uart3_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
+{
+	uart3_rx_data = data_in;
+	uart3_rx_nbytes = size_in;
+
+	if (size_in > 0)
+		USART3->CR1 |= USART_CR1_RE | USART_CR1_RXNEIE; // Enable UART Rx and Rx not empty IRQ
+
+	if (size_out > 0) {
+		DMA1_Channel2->CCR &= ~DMA_CCR_EN;
+		DMA1_Channel2->CMAR = (uint32_t)data_out;
+		DMA1_Channel2->CNDTR = size_out;
+		DMA1_Channel2->CCR |= DMA_CCR_EN;
+		USART3->CR1 |= USART_CR1_TE;
+	}
+}
+
+__attribute__((section(".RamFunc"))) void osd_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
+{
+	uart3_tx_buffer[0] = size_out;
+	memcpy((uint8_t*)&uart3_tx_buffer[1], data_out, size_out);
+	
+	uart3_transfer((uint8_t*)uart3_tx_buffer, data_in, size_out+1, size_in);
+	osd_busy = true;
+}
+
+void sma_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
+{
+	uart1_transfer(data_out, data_in, size_out, size_in);
 	sma_busy = true;
 }
 
-void runcam_send(uint8_t* data, uint8_t size)
+void msp_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
 {
-	uart1_tx_data = data;
-	uart1_tx_nbytes = size;
-	USART1->CR1 |= USART_CR1_TE | USART_CR1_TXEIE; // Enable UART Tx and Tx empty IRQ
-	sma_busy = true; // Uses SMA busy flag as RUNCAM uses same UART ressource
+	uart3_transfer(data_out, data_in, size_out, size_in);
+	msp_busy = true;
+}
+
+void runcam_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
+{
+	uart1_transfer(data_out, data_in, size_out, size_in);
+	runcam_busy = true;
 }
 
 #ifdef LED
@@ -244,7 +252,7 @@ void set_leds(uint8_t * grb)
 __attribute__((section(".RamFunc"))) void SysTick_Handler()
 {
 	t_ms++;
-	flag_time = 1;
+	flag_time = true;
 }
 
 /* Sensor ready IRQ ---------------------------*/
@@ -327,27 +335,45 @@ void USB_LP_CAN_RX0_IRQHandler()
 	HAL_PCD_IRQHandler(&PCD_handler);
 }
 
-/* DMA IRQ of OSD Rx UART ----------------------*/
+/* OSD UART IRQ -----------------------------------*/
 
-__attribute__((section(".RamFunc"))) void DMA1_Channel3_IRQHandler()
+__attribute__((section(".RamFunc"))) void USART3_IRQHandler()
 {
-	DMA1->IFCR = DMA_IFCR_CTCIF3; // Clear transfer complete IRQ
+	// Transfer complete
+	if (USART3->ISR & USART_ISR_TC) {
+		USART3->ICR = USART_ICR_TCCF; // Clear Transfer complete flag
 
-	if (osd_busy) {
-		USART3->CR1 &= ~(USART_CR1_TE | USART_CR1_RE);
-		if (osd_next_nbytes_to_send == 0)
+		USART3->CR1 &= ~USART_CR1_TE; // Disable Tx
+		
+		if (uart3_rx_nbytes == 0) {
 			osd_busy = false;
-
-		if (REG_CTRL__OSD_HOST_CTRL == 1) {
-			host_send((uint8_t*)DMA1_Channel3->CMAR, uart3_rx_nbytes);
-		}
-		else if (osd_next_nbytes_to_send > 0) {
-			osd_transfer(osd_next_data_to_send, (uint8_t*)DMA1_Channel3->CMAR, osd_next_nbytes_to_send, osd_next_nbytes_to_send);
-			osd_next_nbytes_to_send = 0;
+			msp_busy = false;
 		}
 	}
-	else {
-		dshot_busy = false;
+
+	// Rx not empty
+	if (USART3->ISR & USART_ISR_RXNE) {
+		uart3_rx_data[uart3_byte_cnt++] = USART3->RDR; // A read from data register will clear Rx not empty flag
+
+		if (uart3_byte_cnt == uart3_rx_nbytes) {
+			USART3->CR1 &= ~(USART_CR1_RE | USART_CR1_RXNEIE); // Disable Rx and Rx not empty IRQ
+			uart3_byte_cnt = 0;
+
+			if ((REG_CTRL__OSD_HOST_CTRL == 1) || (REG_CTRL__MSP_HOST_CTRL == 1)) {
+				host_send((uint8_t*)uart3_rx_data, uart3_rx_nbytes);
+			}
+			else if (osd_next_nbytes_to_send > 0) {
+				// Set Rx transaction size to 0 to avoid triggering UART IRQ, since Rx data in the following transaction is not used
+				osd_transfer(osd_next_data_to_send, (uint8_t*)uart3_rx_data, osd_next_nbytes_to_send, 0); 
+				osd_next_nbytes_to_send = 0;
+			}
+			else if (msp_busy) {
+				flag_msp = true;
+			}
+
+			osd_busy = false;
+			msp_busy = false;
+		}
 	}
 }
 
@@ -357,15 +383,15 @@ __attribute__((section(".RamFunc"))) void USART1_IRQHandler()
 {
 	// Transfer complete
 	if (USART1->ISR & USART_ISR_TC) {
-		USART1->TDR = 0; // Will clear Transfer complete flag, and also remaining Tx empty flag
+		USART1->ICR = USART_ICR_TCCF; // Clear Transfer complete flag
 
 		USART1->CR1 &= ~USART_CR1_TE; // Disable Tx
 		uart1_byte_cnt = 0;
 		
-		if (uart1_rx_nbytes > 0) 
-			USART1->CR1 |= USART_CR1_RE | USART_CR1_RXNEIE; // Enable Rx and Rx not empty IRQ
-		else
+		if (uart1_rx_nbytes == 0) {
 			sma_busy = false;
+			runcam_busy = false;
+		}
 	}
 	// Tx empty
 	else if (USART1->ISR & USART_ISR_TXE) {
@@ -382,8 +408,11 @@ __attribute__((section(".RamFunc"))) void USART1_IRQHandler()
 		if (uart1_byte_cnt == uart1_rx_nbytes) {
 			USART1->CR1 &= ~(USART_CR1_RE | USART_CR1_RXNEIE); // Disable Rx and Rx not empty IRQ
 			uart1_byte_cnt = 0;
+
 			sma_busy = false;
-			if (REG_CTRL__SMA_HOST_CTRL == 1)
+			runcam_busy = false;
+
+			if ((REG_CTRL__SMA_HOST_CTRL == 1) || (REG_CTRL__RUNCAM_HOST_CTRL == 1))
 				host_send((uint8_t*)uart1_rx_data, uart1_rx_nbytes);
 		}
 	}
@@ -472,10 +501,10 @@ uint8_t board_init()
 
 	// B10: USART3_TX (AF7)
 	// B11: USART3_RX (AF7)
-	// B12: Gyro (MPU600) SPI2_NSS  (AF5)
-	// B13: Gyro (MPU600) SPI2_SCK  (AF5)
-	// B14: Gyro (MPU600) SPI2_MISO (AF5)
-	// B15: Gyro (MPU600) SPI2_MOSI (AF5)
+	// B12: Gyro (MPU6000) SPI2_NSS  (AF5)
+	// B13: Gyro (MPU6000) SPI2_SCK  (AF5)
+	// B14: Gyro (MPU6000) SPI2_MISO (AF5)
+	// B15: Gyro (MPU6000) SPI2_MOSI (AF5)
 
 	/* USB ----------------------------------------*/
 
@@ -587,12 +616,9 @@ uint8_t board_init()
 	dshot[16*4+3] = 0;
 
 	// DMA1 channel 3: TIM3_UP
-	dma_cfg_dshot.CCR = (3 << DMA_CCR_PL_Pos) | DMA_CCR_MINC | DMA_CCR_DIR | (1 << DMA_CCR_PSIZE_Pos) | DMA_CCR_TCIE; // TIM3 CCRx register is 16-bit
-	dma_cfg_dshot.CMAR = (uint32_t)dshot;
-	dma_cfg_dshot.CPAR = (uint32_t)&(TIM3->DMAR);
-	dma_cfg_dshot.CNDTR = 17*4; 
-	NVIC_EnableIRQ(DMA1_Channel3_IRQn);
-	NVIC_SetPriority(DMA1_Channel3_IRQn,0);
+	DMA1_Channel3->CCR = (3 << DMA_CCR_PL_Pos) | DMA_CCR_MINC | DMA_CCR_DIR | (1 << DMA_CCR_PSIZE_Pos); // TIM3 CCRx register is 16-bit
+	DMA1_Channel3->CMAR = (uint32_t)dshot;
+	DMA1_Channel3->CPAR = (uint32_t)&(TIM3->DMAR);
 
 #else // One-pulse mode for OneShot125 or PWM
 
@@ -684,7 +710,7 @@ uint8_t board_init()
 
 	/* OSD ----------------------------------------*/
 
-#ifdef OSD
+#if defined(OSD) || defined(MSP)
 
 	// B10: USART3_TX (AF7), pull-up for IDLE
 	// B11: USART3_RX (AF7), pull-up for IDLE
@@ -694,21 +720,19 @@ uint8_t board_init()
 
 	// UART config
 	RCC->APB1ENR |= RCC_APB1ENR_USART3EN;
+#ifdef MSP
+	USART3->BRR = 417; // 48MHz/115200bps
+#else
 	USART3->BRR = 48; // 48MHz/1Mbps
-	USART3->CR1 = USART_CR1_UE;
-	USART3->CR3 = USART_CR3_DMAT | USART_CR3_DMAR;
+#endif
+	USART3->CR3 = USART_CR3_DMAT;
+	USART3->CR1 = USART_CR1_UE | USART_CR1_TCIE;
+	NVIC_EnableIRQ(USART3_IRQn);
+	NVIC_SetPriority(USART3_IRQn,0);
 
 	// DMA1 channel 2: USART3_TX
 	DMA1_Channel2->CCR = (0 << DMA_CCR_PL_Pos) | DMA_CCR_MINC | DMA_CCR_DIR;
 	DMA1_Channel2->CPAR = (uint32_t)&(USART3->TDR);
-
-	// DMA1 channel 3: USART3_RX
-	dma_cfg_osd.CCR = (0 << DMA_CCR_PL_Pos) | DMA_CCR_MINC | DMA_CCR_TCIE;
-	dma_cfg_osd.CPAR = (uint32_t)&(USART3->RDR);
-#if (ESC == ONESHOT)
-	NVIC_EnableIRQ(DMA1_Channel3_IRQn);
-	NVIC_SetPriority(DMA1_Channel3_IRQn,0);
-#endif
 
 #endif
 
@@ -716,7 +740,7 @@ uint8_t board_init()
 
 #ifdef SMART_AUDIO
 
-	// B6: UASRT1_TX (AF7), pull-down to set audio line to GND
+	// B6: USART1_TX (AF7), pull-down to set audio line to GND
 	GPIOB->MODER |= GPIO_MODER_MODER6_1;
 	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR6_1;
 	GPIOB->AFR[0] |= (7 << GPIO_AFRL_AFRL6_Pos);
@@ -736,10 +760,11 @@ uint8_t board_init()
 
 #ifdef RUNCAM
 
-	// B6: UASRT1_TX (AF7), pull-up for IDLE
-	GPIOB->MODER |= GPIO_MODER_MODER6_1;
-	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR6_0;
-	GPIOB->AFR[0] |= (7 << GPIO_AFRL_AFRL6_Pos);
+	// B6 : UASRT1_TX (AF7), pull-up for IDLE
+	// B7 : USART1_RX (AF7), pull-up for IDLE
+	GPIOB->MODER |= GPIO_MODER_MODER6_1 | GPIO_MODER_MODER7_1;
+	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR6_0 | GPIO_PUPDR_PUPDR7_0;
+	GPIOB->AFR[0] |= (7 << GPIO_AFRL_AFRL6_Pos) | (7 << GPIO_AFRL_AFRL7_Pos);
 
 	// UART config
 	RCC->APB2ENR |= RCC_APB2ENR_USART1EN;

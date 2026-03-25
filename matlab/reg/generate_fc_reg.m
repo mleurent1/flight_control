@@ -5,7 +5,9 @@ define_fc_reg
 
 f = fopen('../../c/inc/reg_def.h','w');
 
-fprintf(f,'#define NB_REG %d\n\n', length(reg));
+fprintf(f,'#define NB_REG %d\n', length(reg));
+
+fprintf(f,'\n');
 
 for n = 1:length(reg)
 	if length(reg(n).subf) == 1
@@ -26,11 +28,9 @@ for n = 1:length(reg)
 	fprintf(f,'#define REG_%s_Addr %d\n', reg(n).name, n-1);
 end
 
-fclose(f);
+fprintf(f,'\n');
 
-f = fopen('reg.c','w');
-
-fprintf(f,'const reg_properties_t reg_properties[NB_REG] = \n{\n');
+fprintf(f,'#define REG_PROPERTIES_INIT { \\\n');
 
 % bools = {'false','true'};
 bools = {'0','1'};
@@ -61,9 +61,9 @@ for n = 1:length(reg)
 		end
 	end
 	if n < length(reg)
-		fprintf(f,'\t{%s, %s, %s, %d}, // %s\n', bools{reg(n).read_only+1}, bools{reg(n).flash+1}, bools{float+1}, default, reg(n).name);
+		fprintf(f,'\t{%s, %s, %s, %d}, \\\n', bools{reg(n).read_only+1}, bools{reg(n).flash+1}, bools{float+1}, default);
 	else
-		fprintf(f,'\t{%s, %s, %s, %d} // %s\n};\n', bools{reg(n).read_only+1}, bools{reg(n).flash+1}, bools{float+1}, default, reg(n).name);
+		fprintf(f,'\t{%s, %s, %s, %d} \\\n};\n', bools{reg(n).read_only+1}, bools{reg(n).flash+1}, bools{float+1}, default);
 	end
 end
 

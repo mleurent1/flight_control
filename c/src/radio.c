@@ -13,7 +13,7 @@
 
 /* Private macros --------------------------------------*/
 
-/* Global variables -----------------------*/
+/* Private variables -----------------------*/
 
 uint8_t rf_data_to_send[6+1]; // +1: SPI address
 uint8_t rf_data_received[6+1]; // +1: SPI dummy byte

@@ -75,6 +75,26 @@ classdef fc_reg
 				obj.write(1, uint32(w));
 			end
 		end
+		function y = STATUS__MSP_BUSY(obj,x)
+			r = double(obj.read(1));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 262144), -18)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 18), 262144) + bitand(r, 4294705151);
+				obj.write(1, uint32(w));
+			end
+		end
+		function y = STATUS__RUNCAM_BUSY(obj,x)
+			r = double(obj.read(1));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 524288), -19)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 19), 524288) + bitand(r, 4294443007);
+				obj.write(1, uint32(w));
+			end
+		end
 		function y = CTRL(obj,x)
 			if nargin < 2
 				y = obj.read(2);
@@ -149,6 +169,26 @@ classdef fc_reg
 				y = z(1);
 			else
 				w = bitand(bitshift(double(x), 6), 64) + bitand(r, 4294967231);
+				obj.write(2, uint32(w));
+			end
+		end
+		function y = CTRL__MSP_HOST_CTRL(obj,x)
+			r = double(obj.read(2));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 128), -7)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 7), 128) + bitand(r, 4294967167);
+				obj.write(2, uint32(w));
+			end
+		end
+		function y = CTRL__RUNCAM_HOST_CTRL(obj,x)
+			r = double(obj.read(2));
+			if nargin < 2
+				z = typecast(uint32(bitshift(bitand(r, 256), -8)),'uint8');
+				y = z(1);
+			else
+				w = bitand(bitshift(double(x), 8), 256) + bitand(r, 4294967039);
 				obj.write(2, uint32(w));
 			end
 		end
@@ -887,6 +927,8 @@ classdef fc_reg
 			'STATUS__VERSION_MINOR', [1,0,0,2],...
 			'STATUS__RADIO_BUSY', [1,0,0,2],...
 			'STATUS__SMA_BUSY', [1,0,0,2],...
+			'STATUS__MSP_BUSY', [1,0,0,2],...
+			'STATUS__RUNCAM_BUSY', [1,0,0,2],...
 			'CTRL', [2,0,0,1],...
 			'CTRL__SENSOR_HOST_CTRL', [2,0,0,2],...
 			'CTRL__OSD_HOST_CTRL', [2,0,0,2],...
@@ -895,6 +937,8 @@ classdef fc_reg
 			'CTRL__SENSOR_CAL', [2,0,0,2],...
 			'CTRL__DEBUG', [2,0,0,2],...
 			'CTRL__RF_HOST_CTRL', [2,0,0,2],...
+			'CTRL__MSP_HOST_CTRL', [2,0,0,2],...
+			'CTRL__RUNCAM_HOST_CTRL', [2,0,0,2],...
 			'MOTOR_TEST', [3,0,0,1],...
 			'MOTOR_TEST__VALUE', [3,0,0,2],...
 			'MOTOR_TEST__SELECT', [3,0,0,2],...

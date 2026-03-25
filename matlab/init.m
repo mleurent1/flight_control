@@ -32,3 +32,6 @@ fopen(ser);
 % ftdi('clock',1e6);
 %
 % sx1272_start;
+
+if fc.VERSION ~= 40, warning('Wrong version'); end
+fprintf('Version: %d.%d\n', fc.VERSION, fc.STATUS__VERSION_MINOR);

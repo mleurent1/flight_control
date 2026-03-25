@@ -15,6 +15,12 @@
 #define REG_STATUS__SMA_BUSY (uint8_t)((reg[1] & 131072U) >> 17)
 #define REG_STATUS__SMA_BUSY_Msk 131072U
 #define REG_STATUS__SMA_BUSY_Pos 17U
+#define REG_STATUS__MSP_BUSY (uint8_t)((reg[1] & 262144U) >> 18)
+#define REG_STATUS__MSP_BUSY_Msk 262144U
+#define REG_STATUS__MSP_BUSY_Pos 18U
+#define REG_STATUS__RUNCAM_BUSY (uint8_t)((reg[1] & 524288U) >> 19)
+#define REG_STATUS__RUNCAM_BUSY_Msk 524288U
+#define REG_STATUS__RUNCAM_BUSY_Pos 19U
 #define REG_STATUS_Addr 1
 #define REG_CTRL reg[2]
 #define REG_CTRL__SENSOR_HOST_CTRL (uint8_t)((reg[2] & 1U) >> 0)
@@ -38,6 +44,12 @@
 #define REG_CTRL__RF_HOST_CTRL (uint8_t)((reg[2] & 64U) >> 6)
 #define REG_CTRL__RF_HOST_CTRL_Msk 64U
 #define REG_CTRL__RF_HOST_CTRL_Pos 6U
+#define REG_CTRL__MSP_HOST_CTRL (uint8_t)((reg[2] & 128U) >> 7)
+#define REG_CTRL__MSP_HOST_CTRL_Msk 128U
+#define REG_CTRL__MSP_HOST_CTRL_Pos 7U
+#define REG_CTRL__RUNCAM_HOST_CTRL (uint8_t)((reg[2] & 256U) >> 8)
+#define REG_CTRL__RUNCAM_HOST_CTRL_Msk 256U
+#define REG_CTRL__RUNCAM_HOST_CTRL_Pos 8U
 #define REG_CTRL_Addr 2
 #define REG_MOTOR_TEST reg[3]
 #define REG_MOTOR_TEST__VALUE (uint16_t)((reg[3] & 65535U) >> 0)
@@ -252,3 +264,51 @@
 #define REG_DEBUG_INT_Addr 43
 #define REG_DEBUG_FLOAT regf[44]
 #define REG_DEBUG_FLOAT_Addr 44
+
+#define REG_PROPERTIES_INIT { \
+	{1, 1, 0, 40}, \
+	{1, 0, 0, 768}, \
+	{0, 0, 0, 0}, \
+	{0, 0, 0, 0}, \
+	{1, 0, 0, 0}, \
+	{0, 1, 1, 1080452710}, \
+	{0, 1, 0, 6558600}, \
+	{0, 1, 0, 6555600}, \
+	{0, 1, 1, 1073741824}, \
+	{0, 1, 1, 1073741824}, \
+	{0, 1, 0, 1782784048}, \
+	{0, 1, 0, 757187100}, \
+	{0, 1, 1, 1073741824}, \
+	{0, 1, 1, 1000593162}, \
+	{0, 1, 1, 0}, \
+	{0, 1, 1, 1073741824}, \
+	{0, 1, 1, 1000593162}, \
+	{0, 1, 1, 0}, \
+	{0, 1, 1, 1082130432}, \
+	{0, 1, 1, 1008981770}, \
+	{0, 1, 1, 0}, \
+	{0, 1, 1, 1084227584}, \
+	{0, 1, 1, 0}, \
+	{0, 1, 1, 1140457472}, \
+	{0, 1, 1, 1084227584}, \
+	{0, 1, 1, 0}, \
+	{0, 1, 1, 1140457472}, \
+	{1, 1, 0, 0}, \
+	{1, 1, 0, 0}, \
+	{1, 1, 0, 0}, \
+	{1, 1, 0, 0}, \
+	{0, 1, 0, 107479212}, \
+	{0, 1, 0, 53740512}, \
+	{0, 1, 0, 53740512}, \
+	{0, 1, 0, 53740512}, \
+	{0, 1, 0, 107479212}, \
+	{0, 1, 0, 1}, \
+	{0, 1, 0, 1}, \
+	{0, 0, 0, 0}, \
+	{0, 1, 1, 1006895490}, \
+	{0, 1, 1, 1022363278}, \
+	{0, 0, 0, 0}, \
+	{0, 0, 0, 0}, \
+	{0, 0, 0, 0}, \
+	{0, 0, 1, 0} \
+};

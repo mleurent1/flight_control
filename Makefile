@@ -17,7 +17,7 @@ ifeq ($(DRONE),warpquad)
    FC_FLAGS = -DM1_CCW -DESC=$(ONESHOT) -DVBAT -DOSD -DSMART_AUDIO -DBEEPER
 else ifeq ($(DRONE),alien6)
    BOARD = cyclone
-   FC_FLAGS = -DM1_CCW -DESC=$(DSHOT) -DDSHOT_RATE=600 -DVBAT -DIBAT -DVBAT_USE_PPM -DOSD -DSMART_AUDIO #-DRUNCAM -DBEEPER -DLED=4
+   FC_FLAGS = -DESC=$(DSHOT) -DDSHOT_RATE=600 -DVBAT -DIBAT -DVBAT_USE_PPM -DMSP #-DOSD -DSMART_AUDIO -DRUNCAM -DBEEPER -DLED=4
 else ifeq ($(DRONE),micro)
    BOARD = toothpick
    FC_FLAGS = -DDUAL_LED_STATUS -DESC=$(DSHOT) -DDSHOT_RATE=300 -DVBAT -DIBAT -DOSD -DSMART_AUDIO
@@ -28,7 +28,7 @@ endif
 
 # Source list
 USB_OBJ = usb.o usbd_cdc_if.o usbd_cdc.o usbd_conf.o usbd_core.o usbd_ctlreq.o usbd_desc.o usbd_ioreq.o
-FC_OBJ = fc.o board.o $(BOARD).o sensor.o radio.o reg.o utils.o osd.o smart_audio.o
+FC_OBJ = fc.o board.o $(BOARD).o sensor.o radio.o reg.o utils.o osd.o smart_audio.o msp.o
 
 # STM32 sources, flags and link files
 ifeq ($(BOARD),nucleo)

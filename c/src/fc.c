@@ -16,6 +16,7 @@
 #include <string.h> // memcpy()
 #include "osd.h" // osd_menu()
 #include "smart_audio.h" // sma_send_cmd()
+#include "msp.h" // msp_osd_config()
 
 /* Private defines ------------------------------------*/
 
@@ -46,6 +47,7 @@ volatile uint8_t sma_error_count = 0;
 volatile bool flag_sensor = false;
 volatile bool flag_radio = false;
 volatile bool flag_vbat = false;
+volatile bool flag_msp = false;
 volatile bool flag_rf = false;
 volatile bool flag_host = false;
 volatile bool flag_time = false;
@@ -74,6 +76,7 @@ int main(void)
 	bool flag_acro_z = false;
 	bool flag_sensor_timeout = false;
 	bool flag_radio_timeout = false;
+	bool flag_msp_connected = false;
 	bool warning;
 
 	struct radio_s radio;
@@ -168,7 +171,7 @@ int main(void)
 	i_roll  = REG_I_ROLL;
 	d_roll  = REG_D_ROLL;
 
-	wait(settle_time); // Wait for regulators to settle
+	wait(settle_time);
 
 	mpu_init();
 
@@ -190,7 +193,11 @@ int main(void)
 	osd_init();
 #endif
 
-#ifdef SMART_AUDIO
+#ifdef MSP
+	msp_transfer(host_buffer_tx.u8, host_buffer_tx.u8, 0, 6); // Dummy Rx to wait for first command
+#endif
+
+#ifdef SMART_AUDIO_
 	// Repeat the first command because the first response has wrong sync+header
 	sma_send_cmd(SMA_GET_SETTINGS, 0);
 	wait_ms(150); // Minimum time between 2 commands
@@ -206,6 +213,7 @@ int main(void)
 
 	en_sensor_irq();
 
+	t_status_prev = t_ms;
 	t_proc_0 = get_t_us();
 
 	/* Loop ----------------------------------------------------------------------------
@@ -240,7 +248,7 @@ int main(void)
 				else
 					flag_acro = 0;
 
-			#ifdef OSD
+			#if defined(OSD) || defined(MSP)
 				// OSD menu navigation from stick moves
 				if (!flag_armed)
 					osd_menu(&radio);
@@ -434,6 +442,17 @@ int main(void)
 			imah += ibat_smoothed / 3600.0f;
 		}
 
+		/* Process MSP command ----------------------------------------------------------*/
+
+		if (flag_msp)
+		{
+			flag_msp = false; // reset flag
+
+			msp_osd_config();
+
+			flag_msp_connected = true;
+		}
+
 		/* Flight controller status: LED, beeper, timeout and debug output -----------------------------------------------*/
 
 		if (flag_time)
@@ -520,9 +539,22 @@ int main(void)
 				if (flag_radio_connected)
 					flag_radio_timeout = 1;
 
-			#ifdef OSD
 				// OSD telemetry
+			#ifdef OSD
 				osd_telemetry(vbat_cell, ibat_smoothed, imah, t_s, t_min, radio.rssi, radio.snr);
+			#else
+			#ifdef MSP
+				if (flag_msp_connected) {
+					if ((status_cnt & 0x03) == 0)
+						msp_status(flag_armed);
+					else if ((status_cnt & 0x03) == 1)
+						msp_analog(vbat_smoothed, ibat_smoothed, imah, radio.rssi);
+					else if ((status_cnt & 0x03) == 2)
+						msp_battery_state(vbat_smoothed, ibat_smoothed, imah);
+					else if ((status_cnt & 0x03) == 3)
+						msp_name();
+				}
+			#endif
 			#endif
 
 			#ifdef LED

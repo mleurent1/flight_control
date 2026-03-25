@@ -17,54 +17,7 @@
 
 uint32_t reg[NB_REG];
 float regf[NB_REG];
-const reg_properties_t reg_properties[NB_REG] = 
-{
-	{1, 1, 0, 40}, // VERSION
-	{1, 0, 0, 512}, // STATUS
-	{0, 0, 0, 0}, // CTRL
-	{0, 0, 0, 0}, // MOTOR_TEST
-	{1, 0, 0, 0}, // ERROR
-	{0, 1, 1, 1080452710}, // VBAT_MIN
-	{0, 1, 0, 6558600}, // TIME_CONSTANT
-	{0, 1, 0, 6555600}, // TIME_CONSTANT_2
-	{0, 1, 1, 1073741824}, // EXPO_PITCH_ROLL
-	{0, 1, 1, 1073741824}, // EXPO_YAW
-	{0, 1, 0, 1782784048}, // MOTOR
-	{0, 1, 0, 757187100}, // RATE
-	{0, 1, 1, 1073741824}, // P_PITCH
-	{0, 1, 1, 1000593162}, // I_PITCH
-	{0, 1, 1, 0}, // D_PITCH
-	{0, 1, 1, 1073741824}, // P_ROLL
-	{0, 1, 1, 1000593162}, // I_ROLL
-	{0, 1, 1, 0}, // D_ROLL
-	{0, 1, 1, 1082130432}, // P_YAW
-	{0, 1, 1, 1008981770}, // I_YAW
-	{0, 1, 1, 0}, // D_YAW
-	{0, 1, 1, 1084227584}, // P_PITCH_ANGLE
-	{0, 1, 1, 0}, // I_PITCH_ANGLE
-	{0, 1, 1, 1140457472}, // D_PITCH_ANGLE
-	{0, 1, 1, 1084227584}, // P_ROLL_ANGLE
-	{0, 1, 1, 0}, // I_ROLL_ANGLE
-	{0, 1, 1, 1140457472}, // D_ROLL_ANGLE
-	{1, 1, 0, 0}, // GYRO_DC_XY
-	{1, 1, 0, 0}, // GYRO_DC_Z
-	{1, 1, 0, 0}, // ACCEL_DC_XY
-	{1, 1, 0, 0}, // ACCEL_DC_Z
-	{0, 1, 0, 107479212}, // THROTTLE
-	{0, 1, 0, 53740512}, // AILERON
-	{0, 1, 0, 53740512}, // ELEVATOR
-	{0, 1, 0, 53740512}, // RUDDER
-	{0, 1, 0, 107479212}, // AUX
-	{0, 1, 0, 1}, // MPU_CFG
-	{0, 1, 0, 1}, // MOTOR_PERIOD
-	{0, 0, 0, 0}, // VTX
-	{0, 1, 1, 1006895490}, // VBAT_SCALE
-	{0, 1, 1, 1022363278}, // IBAT_SCALE
-	{0, 0, 0, 0}, // RADIO_TEST
-	{0, 0, 0, 0}, // RADIO_TEST_2
-	{0, 0, 0, 0}, // DEBUG_INT
-	{0, 0, 1, 0} // DEBUG_FLOAT
-};
+const reg_properties_t reg_properties[NB_REG] = REG_PROPERTIES_INIT;
 
 // Place Registers at 48kB in flash
 #define REG_FLASH_ADDR 0x0800C000
@@ -176,12 +129,8 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 					REG_ERROR = ((uint32_t)sma_error_count << 24) | ((uint32_t)rf_error_count << 16) | ((uint32_t)radio_error_count << 8) | (uint32_t)sensor_error_count;
 				}
 				else if (addr == REG_STATUS_Addr) {
-					REG_STATUS &= ~REG_STATUS__RADIO_BUSY_Msk;
-					if (radio_busy)
-						REG_STATUS |= 1 << REG_STATUS__RADIO_BUSY_Pos;
-					REG_STATUS &= ~REG_STATUS__SMA_BUSY_Msk;
-					if (sma_busy)
-						REG_STATUS |= 1 << REG_STATUS__SMA_BUSY_Pos;
+					REG_STATUS &= ~(REG_STATUS__RADIO_BUSY_Msk | REG_STATUS__SMA_BUSY_Msk | REG_STATUS__MSP_BUSY_Msk | REG_STATUS__RUNCAM_BUSY_Msk);
+					REG_STATUS |= (radio_busy << REG_STATUS__RADIO_BUSY_Pos) | (sma_busy << REG_STATUS__SMA_BUSY_Pos) | (msp_busy << REG_STATUS__MSP_BUSY_Pos) | (runcam_busy << REG_STATUS__RUNCAM_BUSY_Pos);
 				}
 				else if (addr == REG_DEBUG_INT_Addr) {
 					/* REG_DEBUG_INT = Put your debug value here */
@@ -290,7 +239,8 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 			rf_transfer(&host_buffer_rx->data.u8[1], host_buffer_tx.u8, host_buffer_rx->addr, host_buffer_rx->data.u8[0]);
 			break;
 		}
-		case 8: { // RFU
+		case 8: { // MSP transaction
+			msp_transfer(&host_buffer_rx->data.u8[1], host_buffer_tx.u8, host_buffer_rx->addr, host_buffer_rx->data.u8[0]);
 			break;
 		}
 		case 9: { // OSD transaction
@@ -299,6 +249,10 @@ void reg_access(host_buffer_rx_t * host_buffer_rx)
 		}
 		case 10: { // Smart Audio transaction
 			sma_transfer(&host_buffer_rx->data.u8[1], host_buffer_tx.u8, host_buffer_rx->addr, host_buffer_rx->data.u8[0]);
+			break;
+		}
+		case 11: { // Runcam transaction
+			runcam_transfer(&host_buffer_rx->data.u8[1], host_buffer_tx.u8, host_buffer_rx->addr, host_buffer_rx->data.u8[0]);
 			break;
 		}
 	}

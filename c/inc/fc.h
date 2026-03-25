@@ -26,6 +26,7 @@ extern volatile uint8_t sma_error_count;
 extern volatile bool flag_sensor;
 extern volatile bool flag_radio;
 extern volatile bool flag_vbat;
+extern volatile bool flag_msp;
 extern volatile bool flag_rf;
 extern volatile bool flag_host;
 extern volatile bool flag_time;

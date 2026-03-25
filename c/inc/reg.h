@@ -8,6 +8,9 @@
 
 /* Public defines -----------------*/
 
+#define HOST_BUF_LEN_RX 16 // in 32-bit words
+#define HOST_BUF_LEN_TX 32 // in 32-bit words
+
 /* Public types -----------------*/
 
 typedef struct
@@ -22,21 +25,21 @@ typedef struct {
 	uint8_t instr;
 	uint8_t addr;
 	union {
-		uint8_t u8[4*16];
-		uint16_t u16[2*16];
-		uint32_t u32[1*16];
-		float f[1*16];
-	} data __attribute__((packed));
+		uint8_t   u8[HOST_BUF_LEN_RX*4];
+		uint16_t u16[HOST_BUF_LEN_RX*2];
+		uint32_t u32[HOST_BUF_LEN_RX];
+		float      f[HOST_BUF_LEN_RX];
+	} data;
 } __attribute__((packed)) host_buffer_rx_t;
 
 typedef union {
-	uint8_t u8[4*32];
-	int8_t i8[4*32];
-	uint16_t u16[2*32];
-	int16_t i16[2*32];
-	uint32_t u32[1*32];
-	int32_t i32[1*32];
-	float f[1*32];
+	uint8_t   u8[HOST_BUF_LEN_TX*4];
+	int8_t    i8[HOST_BUF_LEN_TX*4];
+	uint16_t u16[HOST_BUF_LEN_TX*2];
+	int16_t  i16[HOST_BUF_LEN_TX*2];
+	uint32_t u32[HOST_BUF_LEN_TX];
+	int32_t  i32[HOST_BUF_LEN_TX];
+	float      f[HOST_BUF_LEN_TX];
 } host_buffer_tx_t;
 
 /* Exported variables -----------------*/

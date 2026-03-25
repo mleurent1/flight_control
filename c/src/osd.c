@@ -1,18 +1,15 @@
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h> // memcpy()
 
 #include "osd.h"
 #include "max7456_reg.h"
 #include "board.h" // osd_send()
-#ifdef STM32F4
-	#include "stm32f4xx.h" // __WFI()
-#else
-	#include "stm32f3xx.h" // __WFI()
-#endif
 #include "radio.h" // struct radio_s
 #include "reg.h" // reg_save()
 #include "utils.h" // crc8()
 #include "smart_audio.h" // sma_send_cmd()
+#include "msp.h" // msp_name_str
 
 /* Private defines --------------------------------------*/
 
@@ -24,6 +21,17 @@
 
 /* Private types --------------------------------------*/
 
+#ifdef MSP
+
+enum state_e {TELEMETRY,
+	MENU_ENTER, MENU, MENU_UP, MENU_DOWN, MENU_RIGHT, MENU_EXIT,
+	REG, REG_UP, REG_DOWN, REG_EXIT,
+	SAVED, SAVED_EXIT};
+
+enum menu_e {P_PITCH_ROLL=0, I_PITCH_ROLL, D_PITCH_ROLL, P_YAW, I_YAW, RATE, EXPO, MOTOR_START, MOTOR_ARMED, MOTOR_RANGE, SAVE_REG};
+
+#else
+
 enum state_e {TELEMETRY,
 	MENU_ENTER, MENU, MENU_UP, MENU_DOWN, MENU_RIGHT, MENU_EXIT,
 	REG, REG_UP, REG_DOWN, REG_EXIT,
@@ -31,11 +39,42 @@ enum state_e {TELEMETRY,
 	RUNCAM_MENU, RUNCAM_LEFT, RUNCAM_RIGHT, RUNCAM_UP, RUNCAM_DOWN, RUNCAM_ENTER, RUNCAM_EXIT};
 
 enum menu_e {P_PITCH_ROLL=0, I_PITCH_ROLL, D_PITCH_ROLL, P_YAW, I_YAW, RATE, EXPO, MOTOR_START, MOTOR_ARMED, MOTOR_RANGE,
-	VTX_CHANNEL, VTX_POWER, SAVE_REG, RUNCAM};
+	VTX_CHANNEL, VTX_POWER, SAVE_REG, RUNCAM_IF};
+
+#endif
 
 enum runcam_cmd_e {LEFT, RIGHT, UP, DOWN, ENTER, RELEASE, OPEN, CLOSE};
 
 /* Private variables -----------------------*/
+
+#ifdef MSP
+
+#ifdef IBAT
+	uint8_t telem_str[] = "00.00V 000.0A 0000mAh 00:00  -000dBm -00dB";
+#else
+	uint8_t telem_str[] = "00.00V 00:00 -000dBm -00dB";
+#endif
+uint8_t menu_str[15][12] = {
+	"P PITCH ROLL",
+	"I PITCH ROLL",
+	"D PITCH ROLL",
+	"P YAW       ",
+	"I YAW       ",
+	"RATE        ",
+	"EXPO        ",
+	"MOTOR START ",
+	"MOTOR ARMED ",
+	"MOTOR RANGE ",
+	"VTX CHANNEL ",
+	"VTX POWER   ",
+	"SAVE REG    ",
+	"SAVE VTX    ",
+	"RUNCAM      ",
+};
+uint8_t saved_str[12]   = "SAVED       ";
+uint8_t reg_val_str[12] = "0000.000    ";
+
+#else
 
 #ifdef IBAT
 	uint16_t telem_str[43] = {10, 10, 65, 10, 10, 32,  0, 10, 10, 10, 65, 10, 11,  0, 10, 10, 10, 10, 49, 11, 44,  0, 10, 10, 68, 10, 10,  0,  0, 73, 10, 10, 10, 40, 12, 49,  0, 73, 10, 10, 40, 12, 255}; // 00.00V 000.0A 0000mAh 00:00  -000dBm -00dB
@@ -112,6 +151,8 @@ uint16_t vtx_str[48][16] = {
 uint16_t saved_str[16] = {29, 11, 32, 15, 14,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}; // SAVED
 uint16_t reg_val_str[16] = {10, 10, 10, 10, 65, 10, 10, 10,  0,  0,  0,  0,  0,  0,  0, 255}; // 0000.000
 
+#endif
+
 uint8_t osd_data_to_send[2];
 uint8_t osd_data_received[sizeof(telem_str)];
 uint8_t* osd_next_data_to_send;
@@ -149,6 +190,31 @@ void osd_write_str(uint8_t* str, uint8_t size)
 	osd_transfer(osd_data_to_send, osd_data_received, 2, 2);
 }
 
+#ifdef MSP
+
+void float_to_str(float num, uint8_t* str_int, uint8_t* str_frac, uint8_t int_size, uint8_t frac_size)
+{
+	uint8_t dec_int[4], dec_frac[3];
+	bool nonzero = false;
+	uint8_t i,j;
+
+	float_to_dec(num, dec_int, dec_frac);
+
+	for (i=0; i<int_size; i++) {
+		j = 4-int_size+i; // Take LSBs
+		if (dec_int[j] > 0)
+			nonzero = true;
+		if ((dec_int[j] == 0) && !nonzero && (i < int_size-1))
+			str_int[i] = ' ';
+		else
+			str_int[i] = dec_int[j] + 48;
+	}
+	for (i=0; i<frac_size; i++)
+		str_frac[i] = dec_frac[i] + 48;
+}
+
+#else
+
 void float_to_str(float num, uint16_t* str_int, uint16_t* str_frac, uint8_t int_size, uint8_t frac_size)
 {
 	uint8_t dec_int[4], dec_frac[3];
@@ -173,6 +239,8 @@ void float_to_str(float num, uint16_t* str_int, uint16_t* str_frac, uint8_t int_
 			str_frac[i] = dec_frac[i];
 	}
 }
+
+#endif
 
 void runcam_send_cmd(enum runcam_cmd_e runcam_cmd)
 {
@@ -230,7 +298,7 @@ void runcam_send_cmd(enum runcam_cmd_e runcam_cmd)
 		}
 	}
 	buf[len] = crc8(buf, len);
-	runcam_send(buf, len + 1);
+	runcam_transfer(buf, buf, len + 1, 0);
 }
 
 /* Public Functions -----------------------*/
@@ -282,7 +350,11 @@ void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_mi
 			float_to_str(-(float)snr, &telem_str[22], &telem_str[22], 2, 0);
 		}
 	#endif
+	#ifdef MSP
+		memcpy(msp_name_str, telem_str, sizeof(msp_name_str)); // Unfortunately sizeof(telem_str) > sizeof(msp_name_str), function not used anyway
+	#else
 		osd_write_str((uint8_t*)telem_str, sizeof(telem_str)-1); // -1: avoid 0 after last byte 255
+	#endif
 	}
 }
 
@@ -292,8 +364,10 @@ void osd_menu(struct radio_s * radio)
 	float incr_f;
 	int32_t rate;
 	int32_t motor_start, motor_armed, motor_range;
+#ifdef OSD
 	int32_t vtx_chan, vtx_pwr;
 	float vtx_pwr_mw;
+#endif
 
 	// State machine
 	switch (state_prev) {
@@ -332,8 +406,10 @@ void osd_menu(struct radio_s * radio)
 			if (radio->roll < 0.33f) {
 				if (menu_idx < SAVE_REG)
 					state = REG;
-				else if (menu_idx == RUNCAM)
+			#ifdef OSD
+				else if (menu_idx == RUNCAM_IF)
 					state = RUNCAM_MENU;
+			#endif
 				else // if ((menu_idx == SAVE_REG) || (menu_idx == SAVE_VTX))
 					state = SAVED;
 			}
@@ -378,6 +454,7 @@ void osd_menu(struct radio_s * radio)
 				state = MENU;
 			break;
 		}
+	#ifdef OSD
 		case RUNCAM_MENU : {
 			if (radio->pitch > 0.66f)
 				state = RUNCAM_UP;
@@ -423,7 +500,7 @@ void osd_menu(struct radio_s * radio)
 				state = MENU;
 			break;
 		}
-
+	#endif
 		default : {
 			break;
 		}
@@ -445,6 +522,16 @@ void osd_menu(struct radio_s * radio)
 	}
 
 	// Display menu
+#ifdef MSP
+	if ( ((state_prev == TELEMETRY) && (state == MENU_ENTER))
+		|| ((state_prev == MENU) && ((state == MENU_UP) || (state == MENU_DOWN)))
+		|| ((state_prev == REG) && (state == REG_EXIT))
+		|| ((state_prev == SAVED) && (state == SAVED_EXIT)) ) {
+		memcpy(msp_name_str, menu_str[menu_idx], sizeof(menu_str[0]));
+	} else if ((state_prev == MENU) && (state == MENU_EXIT)) {
+		memset(msp_name_str, 0, sizeof(msp_name_str));
+	}
+#else
 	if ((state_prev == TELEMETRY) && (state == MENU_ENTER)) {
 		while (osd_busy) {}
 		osd_write(MAX7456_DMAH, DISP_ADDR_MENU >> 8);
@@ -462,6 +549,7 @@ void osd_menu(struct radio_s * radio)
 		osd_write(MAX7456_DMAL, disp_addr_telem & 0xFF);
 		osd_write(MAX7456_DMM, MAX7456_DMM__CLR_DISPLAY_MEM);
 	}
+#endif
 
 	// Update register
 	if ((state_prev == REG) && ((state == REG_UP) || (state == REG_DOWN))) {
@@ -472,10 +560,14 @@ void osd_menu(struct radio_s * radio)
 			incr_f = 0.001f;
 		else // expo
 			incr_f = 0.01f;
+	#ifdef MSP
+		incr_int = 5;
+	#else
 		if ((menu_idx == VTX_CHANNEL) || (menu_idx == VTX_POWER)) // VTX
 			incr_int = 1;
 		else
 			incr_int = 5;
+	#endif
 
 		// Increment direction
 		if (state == REG_DOWN) {
@@ -536,6 +628,7 @@ void osd_menu(struct radio_s * radio)
 				REG_MOTOR |= (uint32_t)motor_range << REG_MOTOR__RANGE_Pos;
 				break;
 			}
+		#ifdef OSD
 			case VTX_CHANNEL : {
 				if ((REG_VTX__CHAN == 47) && (incr_int > 0))
 					vtx_chan = 0;
@@ -558,6 +651,7 @@ void osd_menu(struct radio_s * radio)
 				REG_VTX |= (uint32_t)vtx_pwr << REG_VTX__PWR_Pos;
 				break;
 			}
+		#endif
 			default : {
 				break;
 			}
@@ -608,6 +702,7 @@ void osd_menu(struct radio_s * radio)
 				float_to_str((float)REG_MOTOR__RANGE, &reg_val_str[0], &reg_val_str[5], 4, 3);
 				break;
 			}
+		#ifdef OSD
 			case VTX_POWER : {
 				if (REG_VTX__PWR == 0)
 					vtx_pwr_mw = 25.0f;
@@ -619,20 +714,29 @@ void osd_menu(struct radio_s * radio)
 					vtx_pwr_mw = 800.0f;
 				float_to_str(vtx_pwr_mw, &reg_val_str[0], &reg_val_str[5], 4, 3);
 			}
+		#endif
 			default : {
 				break;
 			}
 		}
+	#ifdef MSP
+		memcpy(msp_name_str, reg_val_str, sizeof(reg_val_str));
+	#else
 		if (menu_idx == VTX_CHANNEL)
 			osd_write_str((uint8_t*)vtx_str[REG_VTX__CHAN], sizeof(vtx_str[0])-1); // -1: avoid 0 after last byte 255
 		else
 			osd_write_str((uint8_t*)reg_val_str, sizeof(reg_val_str)-1); // -1: avoid 0 after last byte 255
+	#endif
 	}
 
 	// Save register
 	if ((state_prev == MENU) && (menu_idx == SAVE_REG) && (state == MENU_RIGHT)) {
 		reg_save();
+	#ifdef MSP
+		memcpy(msp_name_str, saved_str, sizeof(saved_str));
+	#else
 		osd_write_str((uint8_t*)saved_str, sizeof(saved_str)-1); // -1: avoid 0 after last byte 255
+	#endif
 	}
 
 #ifdef SMART_AUDIO
@@ -647,7 +751,7 @@ void osd_menu(struct radio_s * radio)
 
 	// Runcam
 #ifdef RUNCAM
-	if ((state_prev == MENU) && (state == MENU_RIGHT) && (menu_idx == RUNCAM)) {
+	if ((state_prev == MENU) && (state == MENU_RIGHT) && (menu_idx == RUNCAM_IF)) {
 		osd_write(MAX7456_DMM, MAX7456_DMM__CLR_DISPLAY_MEM);
 		runcam_send_cmd(OPEN);
 	} else if (state_prev == RUNCAM_MENU) {
