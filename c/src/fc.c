@@ -52,6 +52,7 @@ volatile bool flag_rf = false;
 volatile bool flag_host = false;
 volatile bool flag_time = false;
 volatile bool flag_rf_rxtx_done = false;
+volatile bool flag_msp_connected = false;
 
 host_buffer_rx_t host_buffer_rx;
 host_buffer_tx_t host_buffer_tx;
@@ -76,7 +77,6 @@ int main(void)
 	bool flag_acro_z = false;
 	bool flag_sensor_timeout = false;
 	bool flag_radio_timeout = false;
-	bool flag_msp_connected = false;
 	bool warning;
 
 	struct radio_s radio;
@@ -141,6 +141,7 @@ int main(void)
 	uint16_t t_proc_max = 0;
 #ifdef LED
 	uint8_t grb[3];
+	uint8_t grb_prev[3] = {0,0,0};
 #endif
 
 	/* Init -----------------------------------------------------*/
@@ -192,12 +193,11 @@ int main(void)
 #ifdef OSD
 	osd_init();
 #endif
-
-#ifdef MSP
+#ifdef MSP_OSD
 	msp_transfer(host_buffer_tx.u8, host_buffer_tx.u8, 0, 6); // Dummy Rx to wait for first command
 #endif
 
-#ifdef SMART_AUDIO_
+#ifdef SMART_AUDIO
 	// Repeat the first command because the first response has wrong sync+header
 	sma_send_cmd(SMA_GET_SETTINGS, 0);
 	wait_ms(150); // Minimum time between 2 commands
@@ -248,11 +248,11 @@ int main(void)
 				else
 					flag_acro = 0;
 
-			#if defined(OSD) || defined(MSP)
+#if defined(OSD) || defined(MSP_OSD)
 				// OSD menu navigation from stick moves
 				if (!flag_armed)
 					osd_menu(&radio);
-			#endif
+#endif
 				
 				// Exponential
 				radio_expo(&radio, flag_acro);
@@ -385,17 +385,17 @@ int main(void)
 			/*------ Motor command ------*/
 
 			// Motor matrix
-		#ifdef M1_CCW
+#ifdef M1_CCW
 			motor[0] = radio.throttle * (float)REG_MOTOR__RANGE + roll + pitch - yaw;
 			motor[1] = radio.throttle * (float)REG_MOTOR__RANGE + roll - pitch + yaw;
 			motor[2] = radio.throttle * (float)REG_MOTOR__RANGE - roll - pitch - yaw;
 			motor[3] = radio.throttle * (float)REG_MOTOR__RANGE - roll + pitch + yaw;
-		#else
+#else
 			motor[0] = radio.throttle * (float)REG_MOTOR__RANGE + roll + pitch + yaw;
 			motor[1] = radio.throttle * (float)REG_MOTOR__RANGE + roll - pitch - yaw;
 			motor[2] = radio.throttle * (float)REG_MOTOR__RANGE - roll - pitch + yaw;
 			motor[3] = radio.throttle * (float)REG_MOTOR__RANGE - roll + pitch - yaw;
-		#endif
+#endif
 
 			// Offset and clip motor value
 			for (i=0; i<4; i++) {
@@ -472,10 +472,10 @@ int main(void)
 				}
 			}
 			
-		#ifdef VBAT
+#ifdef VBAT
 			// Measure Vbat every ms
 			trig_vbat_meas();
-		#endif
+#endif
 
 			if ((t_ms - t_status_prev) >= STATUS_PERIOD) {
 
@@ -507,7 +507,7 @@ int main(void)
 
 				// LED double blinks when timeout on sensor/radio samples, or vbat too low
 				warning = flag_sensor_timeout || flag_radio_timeout || ((vbat_cell < REG_VBAT_MIN) && (nb_cells > 0));
-			#ifdef DUAL_LED_STATUS
+#ifdef DUAL_LED_STATUS
 				if (warning) {
 					toggle_led(false);
 					if ((status_cnt & 0x03) == 0) toggle_led2(true);
@@ -516,18 +516,18 @@ int main(void)
 					if ((status_cnt & 0x03) == 0) toggle_led(true);
 					toggle_led2(false);
 				}
-			#else
+#else
 				if (warning) {
 					toggle_led(true);
 				}
 				else {
 					if ((status_cnt & 0x03) == 0) toggle_led(true);
 				}
-			#endif
+#endif
 				
 
 				// Beep when requested by user, or timeout on sensor/radio samples, or vbat too low
-				if ((radio.aux[2] > 0.5f) || warning) {
+				if ((radio.aux[3] > 0.5f) || warning) {
 					if ((status_cnt & 0x03) == 0) toggle_beeper(true);
 				}
 				else {
@@ -539,43 +539,33 @@ int main(void)
 				if (flag_radio_connected)
 					flag_radio_timeout = 1;
 
+#if defined(OSD) || defined(MSP_OSD)
 				// OSD telemetry
-			#ifdef OSD
-				osd_telemetry(vbat_cell, ibat_smoothed, imah, t_s, t_min, radio.rssi, radio.snr);
-			#else
-			#ifdef MSP
-				if (flag_msp_connected) {
-					if ((status_cnt & 0x03) == 0)
-						msp_status(flag_armed);
-					else if ((status_cnt & 0x03) == 1)
-						msp_analog(vbat_smoothed, ibat_smoothed, imah, radio.rssi);
-					else if ((status_cnt & 0x03) == 2)
-						msp_battery_state(vbat_smoothed, ibat_smoothed, imah);
-					else if ((status_cnt & 0x03) == 3)
-						msp_name();
-				}
-			#endif
-			#endif
+				osd_telemetry(vbat, vbat_cell, ibat_smoothed, imah, t_s, t_min, radio.rssi, radio.snr, flag_armed, flag_acro);
+#endif
 
-			#ifdef LED
+#ifdef LED
 				// Change LED color
-				if (radio.aux[3] < 0.5f) {
-					grb[0] = (uint8_t)((0.5f-radio.aux[3])*510.0f);
-					grb[1] = (uint8_t)(radio.aux[3]*510.0f);
+				if (radio.aux[2] < 0.5f) {
+					grb[0] = (uint8_t)((0.5f-radio.aux[2])*510.0f);
+					grb[1] = (uint8_t)(radio.aux[2]*510.0f);
 					grb[2] = 0;
 				}
 				else {
 					grb[0] = 0;
-					grb[1] = (uint8_t)((1.0f-radio.aux[3])*510.0f);
-					grb[2] = (uint8_t)((radio.aux[3]-0.5f)*510.0f);
+					grb[1] = (uint8_t)((1.0f-radio.aux[2])*510.0f);
+					grb[2] = (uint8_t)((radio.aux[2]-0.5f)*510.0f);
 				}
 				if (warning && ((status_cnt & 0x01) == 0)) { // Toggle when warning
 					grb[0] = 0;
 					grb[1] = 0;
 					grb[2] = 1;
 				};
-				set_leds(grb);
-			#endif
+				// Program LED only when there is a color change
+				if ((grb[0] != grb_prev[0]) || (grb[1] != grb_prev[1]) || (grb[2] != grb_prev[2]))
+					set_leds(grb);
+				memcpy(grb_prev, grb, 3);
+#endif
 
 				// Send data to host
 				if (REG_CTRL__DEBUG) {

@@ -9,52 +9,50 @@
 #include "reg.h" // reg_save()
 #include "utils.h" // crc8()
 #include "smart_audio.h" // sma_send_cmd()
-#include "msp.h" // msp_name_str
+#include "msp.h" // msp_name()
+#include "fc.h" // flag_msp_connected
 
 /* Private defines --------------------------------------*/
 
-#define DISP_ADDR_MENU (9*30+5)
-#define DISP_ADDR_TELEMETRY_NTSC (10*30+1) // Last row index is 12
-#define DISP_ADDR_TELEMETRY_PAL (13*30+1) // Last row index is 15
+#define DISP_ADDR_NTSC (10*30+1) // Last row index is 12
+#define DISP_ADDR_PAL  (13*30+1) // Last row index is 15
 
 /* Private macros ------------------------------------------*/
 
 /* Private types --------------------------------------*/
 
-#ifdef MSP
-
 enum state_e {TELEMETRY,
 	MENU_ENTER, MENU, MENU_UP, MENU_DOWN, MENU_RIGHT, MENU_EXIT,
 	REG, REG_UP, REG_DOWN, REG_EXIT,
+#ifdef RUNCAM
+	RUNCAM_MENU, RUNCAM_LEFT, RUNCAM_RIGHT, RUNCAM_UP, RUNCAM_DOWN, RUNCAM_ENTER, RUNCAM_EXIT,
+#endif
 	SAVED, SAVED_EXIT};
 
-enum menu_e {P_PITCH_ROLL=0, I_PITCH_ROLL, D_PITCH_ROLL, P_YAW, I_YAW, RATE, EXPO, MOTOR_START, MOTOR_ARMED, MOTOR_RANGE, SAVE_REG};
-
-#else
-
-enum state_e {TELEMETRY,
-	MENU_ENTER, MENU, MENU_UP, MENU_DOWN, MENU_RIGHT, MENU_EXIT,
-	REG, REG_UP, REG_DOWN, REG_EXIT,
-	SAVED, SAVED_EXIT,
-	RUNCAM_MENU, RUNCAM_LEFT, RUNCAM_RIGHT, RUNCAM_UP, RUNCAM_DOWN, RUNCAM_ENTER, RUNCAM_EXIT};
-
 enum menu_e {P_PITCH_ROLL=0, I_PITCH_ROLL, D_PITCH_ROLL, P_YAW, I_YAW, RATE, EXPO, MOTOR_START, MOTOR_ARMED, MOTOR_RANGE,
-	VTX_CHANNEL, VTX_POWER, SAVE_REG, RUNCAM_IF};
-
+#ifdef OSD
+	VTX_CHANNEL, VTX_POWER,
 #endif
+#ifdef RUNCAM
+	RUNCAM_IF,
+#endif
+	SAVE_REG};
 
 enum runcam_cmd_e {LEFT, RIGHT, UP, DOWN, ENTER, RELEASE, OPEN, CLOSE};
 
 /* Private variables -----------------------*/
 
-#ifdef MSP
-
-#ifdef IBAT
-	uint8_t telem_str[] = "00.00V 000.0A 0000mAh 00:00  -000dBm -00dB";
+#ifdef MSP_OSD
+uint8_t telem_str[12] = "-000dBm-00dB";
 #else
-	uint8_t telem_str[] = "00.00V 00:00 -000dBm -00dB";
+#ifdef IBAT
+uint8_t telem_str[] = "00.00V 000.0A 0000mAh 00:00  -000dBm -00dB";
+#else
+uint8_t telem_str[] = "00.00V 00:00 -000dBm -00dB";
 #endif
-uint8_t menu_str[15][12] = {
+#endif
+
+uint8_t menu_str[][12] = {
 	"P PITCH ROLL",
 	"I PITCH ROLL",
 	"D PITCH ROLL",
@@ -65,99 +63,81 @@ uint8_t menu_str[15][12] = {
 	"MOTOR START ",
 	"MOTOR ARMED ",
 	"MOTOR RANGE ",
+#ifdef OSD
 	"VTX CHANNEL ",
 	"VTX POWER   ",
-	"SAVE REG    ",
-	"SAVE VTX    ",
+#endif
+#ifdef RUNCAM
 	"RUNCAM      ",
+#endif
+	"SAVE REG    "
 };
+
 uint8_t saved_str[12]   = "SAVED       ";
 uint8_t reg_val_str[12] = "0000.000    ";
 
-#else
-
-#ifdef IBAT
-	uint16_t telem_str[43] = {10, 10, 65, 10, 10, 32,  0, 10, 10, 10, 65, 10, 11,  0, 10, 10, 10, 10, 49, 11, 44,  0, 10, 10, 68, 10, 10,  0,  0, 73, 10, 10, 10, 40, 12, 49,  0, 73, 10, 10, 40, 12, 255}; // 00.00V 000.0A 0000mAh 00:00  -000dBm -00dB
-#else
-	uint16_t telem_str[27] = {10, 10, 65, 10, 10, 32,  0, 10, 10, 68, 10, 10,  0, 73, 10, 10, 10, 40, 12, 49,  0, 73, 10, 10, 40, 12, 255}; // 00.00V 00:00 -000dBm -00dB
-#endif
-uint16_t menu_str[15][16] = {
-	{26,  0, 26, 19, 30, 13, 18,  0, 28, 25, 22, 22,  0,  0,  0, 255}, // P PITCH ROLL
-	{19,  0, 26, 19, 30, 13, 18,  0, 28, 25, 22, 22,  0,  0,  0, 255}, // I PITCH ROLL
-	{14,  0, 26, 19, 30, 13, 18,  0, 28, 25, 22, 22,  0,  0,  0, 255}, // D PITCH ROLL
-	{26,  0, 35, 11, 33,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}, // P YAW
-	{19,  0, 35, 11, 33,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}, // I YAW
-	{28, 11, 30, 15,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}, // RATE
-	{15, 34, 26, 25,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}, // EXPO
-	{23, 25, 30, 25, 28,  0, 29, 30, 11, 28, 30,  0,  0,  0,  0, 255}, // MOTOR START
-	{23, 25, 30, 25, 28,  0, 11, 28, 23, 15, 14,  0,  0,  0,  0, 255}, // MOTOR ARMED
-	{23, 25, 30, 25, 28,  0, 28, 11, 24, 17, 15,  0,  0,  0,  0, 255}, // MOTOR RANGE
-	{32, 30, 34,  0, 13, 18, 11, 24, 24, 15, 22,  0,  0,  0,  0, 255}, // VTX CHANNEL
-	{32, 30, 34,  0, 26, 25, 33, 15, 28,  0,  0,  0,  0,  0,  0, 255}, // VTX POWER
-	{29, 11, 32, 15,  0, 28, 15, 17,  0,  0,  0,  0,  0,  0,  0, 255}, // SAVE REG
-	{29, 11, 32, 15,  0, 32, 30, 34,  0,  0,  0,  0,  0,  0,  0, 255}, // SAVE VTX
-	{28, 31, 24, 13, 11, 23,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}  // RUNCAM
+uint8_t vtx_str[][12] = {
+	"BANDA 1 5865",
+	"BANDA 2 5845",
+	"BANDA 3 5825",
+	"BANDA 4 5805",
+	"BANDA 5 5785",
+	"BANDA 6 5765",
+	"BANDA 7 5745",
+	"BANDA 8 5725",
+	"BANDB 1 5733",
+	"BANDB 2 5752",
+	"BANDB 3 5771",
+	"BANDB 4 5790",
+	"BANDB 5 5809",
+	"BANDB 6 5828",
+	"BANDB 7 5847",
+	"BANDB 8 5866",
+	"BANDE 1 5705",
+	"BANDE 2 5685",
+	"BANDE 3 5665",
+	"BANDE 4 5645",
+	"BANDE 5 5885",
+	"BANDE 6 5905",
+	"BANDE 7 5925",
+	"BANDE 8 5945",
+	"AIRWV 1 5740",
+	"AIRWV 2 5760",
+	"AIRWV 3 5780",
+	"AIRWV 4 5800",
+	"AIRWV 5 5820",
+	"AIRWV 6 5840",
+	"AIRWV 7 5860",
+	"AIRWV 8 5880",
+	"RACE  1 5658",
+	"RACE  2 5695",
+	"RACE  3 5732",
+	"RACE  4 5769",
+	"RACE  5 5806",
+	"RACE  6 5843",
+	"RACE  7 5880",
+	"RACE  8 5917",
+	"LRACE 1 5621",
+	"LRACE 2 5584",
+	"LRACE 3 5547",
+	"LRACE 4 5510",
+	"LRACE 5 5473",
+	"LRACE 6 5436",
+	"LRACE 7 5399",
+	"LRACE 8 5362",
 };
-uint16_t vtx_str[48][16] = {
-	{12, 11, 24, 14,  0, 11,  0,  0,  0,  1,  0,  5,  8,  6,  5, 255}, // BAND A   1 5865
-	{12, 11, 24, 14,  0, 11,  0,  0,  0,  2,  0,  5,  8,  4,  5, 255}, // BAND A   2 5845
-	{12, 11, 24, 14,  0, 11,  0,  0,  0,  3,  0,  5,  8,  2,  5, 255}, // BAND A   3 5825
-	{12, 11, 24, 14,  0, 11,  0,  0,  0,  4,  0,  5,  8, 10,  5, 255}, // BAND A   4 5805
-	{12, 11, 24, 14,  0, 11,  0,  0,  0,  5,  0,  5,  7,  8,  5, 255}, // BAND A   5 5785
-	{12, 11, 24, 14,  0, 11,  0,  0,  0,  6,  0,  5,  7,  6,  5, 255}, // BAND A   6 5765
-	{12, 11, 24, 14,  0, 11,  0,  0,  0,  7,  0,  5,  7,  4,  5, 255}, // BAND A   7 5745
-	{12, 11, 24, 14,  0, 11,  0,  0,  0,  8,  0,  5,  7,  2,  5, 255}, // BAND A   8 5725
-	{12, 11, 24, 14,  0, 12,  0,  0,  0,  1,  0,  5,  7,  3,  3, 255}, // BAND B   1 5733
-	{12, 11, 24, 14,  0, 12,  0,  0,  0,  2,  0,  5,  7,  5,  2, 255}, // BAND B   2 5752
-	{12, 11, 24, 14,  0, 12,  0,  0,  0,  3,  0,  5,  7,  7,  1, 255}, // BAND B   3 5771
-	{12, 11, 24, 14,  0, 12,  0,  0,  0,  4,  0,  5,  7,  9, 10, 255}, // BAND B   4 5790
-	{12, 11, 24, 14,  0, 12,  0,  0,  0,  5,  0,  5,  8, 10,  9, 255}, // BAND B   5 5809
-	{12, 11, 24, 14,  0, 12,  0,  0,  0,  6,  0,  5,  8,  2,  8, 255}, // BAND B   6 5828
-	{12, 11, 24, 14,  0, 12,  0,  0,  0,  7,  0,  5,  8,  4,  7, 255}, // BAND B   7 5847
-	{12, 11, 24, 14,  0, 12,  0,  0,  0,  8,  0,  5,  8,  6,  6, 255}, // BAND B   8 5866
-	{12, 11, 24, 14,  0, 15,  0,  0,  0,  1,  0,  5,  7, 10,  5, 255}, // BAND E   1 5705
-	{12, 11, 24, 14,  0, 15,  0,  0,  0,  2,  0,  5,  6,  8,  5, 255}, // BAND E   2 5685
-	{12, 11, 24, 14,  0, 15,  0,  0,  0,  3,  0,  5,  6,  6,  5, 255}, // BAND E   3 5665
-	{12, 11, 24, 14,  0, 15,  0,  0,  0,  4,  0,  5,  6,  4,  5, 255}, // BAND E   4 5645
-	{12, 11, 24, 14,  0, 15,  0,  0,  0,  5,  0,  5,  8,  8,  5, 255}, // BAND E   5 5885
-	{12, 11, 24, 14,  0, 15,  0,  0,  0,  6,  0,  5,  9, 10,  5, 255}, // BAND E   6 5905
-	{12, 11, 24, 14,  0, 15,  0,  0,  0,  7,  0,  5,  9,  2,  5, 255}, // BAND E   7 5925
-	{12, 11, 24, 14,  0, 15,  0,  0,  0,  8,  0,  5,  9,  4,  5, 255}, // BAND E   8 5945
-	{11, 19, 28, 33, 11, 32, 15,  0,  0,  1,  0,  5,  7,  4, 10, 255}, // AIRWAVE  1 5740
-	{11, 19, 28, 33, 11, 32, 15,  0,  0,  2,  0,  5,  7,  6, 10, 255}, // AIRWAVE  2 5760
-	{11, 19, 28, 33, 11, 32, 15,  0,  0,  3,  0,  5,  7,  8, 10, 255}, // AIRWAVE  3 5780
-	{11, 19, 28, 33, 11, 32, 15,  0,  0,  4,  0,  5,  8, 10, 10, 255}, // AIRWAVE  4 5800
-	{11, 19, 28, 33, 11, 32, 15,  0,  0,  5,  0,  5,  8,  2, 10, 255}, // AIRWAVE  5 5820
-	{11, 19, 28, 33, 11, 32, 15,  0,  0,  6,  0,  5,  8,  4, 10, 255}, // AIRWAVE  6 5840
-	{11, 19, 28, 33, 11, 32, 15,  0,  0,  7,  0,  5,  8,  6, 10, 255}, // AIRWAVE  7 5860
-	{11, 19, 28, 33, 11, 32, 15,  0,  0,  8,  0,  5,  8,  8, 10, 255}, // AIRWAVE  8 5880
-	{28, 11, 13, 15,  0,  0,  0,  0,  0,  1,  0,  5,  6,  5,  8, 255}, // RACE     1 5658
-	{28, 11, 13, 15,  0,  0,  0,  0,  0,  2,  0,  5,  6,  9,  5, 255}, // RACE     2 5695
-	{28, 11, 13, 15,  0,  0,  0,  0,  0,  3,  0,  5,  7,  3,  2, 255}, // RACE     3 5732
-	{28, 11, 13, 15,  0,  0,  0,  0,  0,  4,  0,  5,  7,  6,  9, 255}, // RACE     4 5769
-	{28, 11, 13, 15,  0,  0,  0,  0,  0,  5,  0,  5,  8, 10,  6, 255}, // RACE     5 5806
-	{28, 11, 13, 15,  0,  0,  0,  0,  0,  6,  0,  5,  8,  4,  3, 255}, // RACE     6 5843
-	{28, 11, 13, 15,  0,  0,  0,  0,  0,  7,  0,  5,  8,  8, 10, 255}, // RACE     7 5880
-	{28, 11, 13, 15,  0,  0,  0,  0,  0,  8,  0,  5,  9,  1,  7, 255}, // RACE     8 5917
-	{22, 25, 33,  0, 28, 11, 13, 15,  0,  1,  0,  5,  6,  2,  1, 255}, // LOW RACE 1 5621
-	{22, 25, 33,  0, 28, 11, 13, 15,  0,  2,  0,  5,  5,  8,  4, 255}, // LOW RACE 2 5584
-	{22, 25, 33,  0, 28, 11, 13, 15,  0,  3,  0,  5,  5,  4,  7, 255}, // LOW RACE 3 5547
-	{22, 25, 33,  0, 28, 11, 13, 15,  0,  4,  0,  5,  5,  1, 10, 255}, // LOW RACE 4 5510
-	{22, 25, 33,  0, 28, 11, 13, 15,  0,  5,  0,  5,  4,  7,  3, 255}, // LOW RACE 5 5473
-	{22, 25, 33,  0, 28, 11, 13, 15,  0,  6,  0,  5,  4,  3,  6, 255}, // LOW RACE 6 5436
-	{22, 25, 33,  0, 28, 11, 13, 15,  0,  7,  0,  5,  3,  9,  9, 255}, // LOW RACE 7 5399
-	{22, 25, 33,  0, 28, 11, 13, 15,  0,  8,  0,  5,  3,  6,  2, 255}  // LOW RACE 8 5362
-};
-uint16_t saved_str[16] = {29, 11, 32, 15, 14,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255}; // SAVED
-uint16_t reg_val_str[16] = {10, 10, 10, 10, 65, 10, 10, 10,  0,  0,  0,  0,  0,  0,  0, 255}; // 0000.000
 
-#endif
+// 16-bit strings
+uint16_t menu_str_16[sizeof(menu_str)/sizeof(menu_str[0])][sizeof(menu_str[0])+1];
+uint16_t saved_str_16[12+1];
+uint16_t reg_val_str_16[12+1];
+uint16_t telem_str_16[sizeof(telem_str)+1];
+uint16_t vtx_str_16[sizeof(vtx_str)/sizeof(vtx_str[0])][sizeof(vtx_str[0])+1];
 
 uint8_t osd_data_to_send[2];
 uint8_t osd_data_received[sizeof(telem_str)];
 uint8_t* osd_next_data_to_send;
 uint8_t osd_next_nbytes_to_send = 0;
-uint16_t disp_addr_telem;
 enum state_e state = TELEMETRY;
 enum state_e state_prev = TELEMETRY;
 uint8_t menu_idx = 0;
@@ -190,8 +170,6 @@ void osd_write_str(uint8_t* str, uint8_t size)
 	osd_transfer(osd_data_to_send, osd_data_received, 2, 2);
 }
 
-#ifdef MSP
-
 void float_to_str(float num, uint8_t* str_int, uint8_t* str_frac, uint8_t int_size, uint8_t frac_size)
 {
 	uint8_t dec_int[4], dec_frac[3];
@@ -212,35 +190,6 @@ void float_to_str(float num, uint8_t* str_int, uint8_t* str_frac, uint8_t int_si
 	for (i=0; i<frac_size; i++)
 		str_frac[i] = dec_frac[i] + 48;
 }
-
-#else
-
-void float_to_str(float num, uint16_t* str_int, uint16_t* str_frac, uint8_t int_size, uint8_t frac_size)
-{
-	uint8_t dec_int[4], dec_frac[3];
-	bool nonzero = false;
-	uint8_t i,j;
-
-	float_to_dec(num, dec_int, dec_frac);
-
-	for (i=0; i<int_size; i++) {
-		j = 4-int_size+i; // Take LSBs
-		if (dec_int[j] > 0)
-			nonzero = true;
-		if ((dec_int[j] == 0) && (nonzero || (i == int_size-1)))
-			str_int[i] = 10;
-		else
-			str_int[i] = dec_int[j];
-	}
-	for (i=0; i<frac_size; i++) {
-		if (dec_frac[i] == 0)
-			str_frac[i] = 10;
-		else
-			str_frac[i] = dec_frac[i];
-	}
-}
-
-#endif
 
 void runcam_send_cmd(enum runcam_cmd_e runcam_cmd)
 {
@@ -305,29 +254,98 @@ void runcam_send_cmd(enum runcam_cmd_e runcam_cmd)
 
 void osd_init(void)
 {
+	uint8_t i,j;
 	uint8_t r;
+
+	// Convert 8-bit strings into 16-bit strings because MAX7456 burst mode needs 16-bit per character
+	// Add 255 terminator to stop auto-increment mode
+	for (i = 0; i < sizeof(saved_str); i++)
+		saved_str_16[i] = saved_str[i];
+	saved_str_16[i] = 255;
+
+	for (i = 0; i < sizeof(reg_val_str); i++)
+		reg_val_str_16[i] = reg_val_str[i];
+	reg_val_str_16[sizeof(reg_val_str)] = 255;
+
+	for (i = 0; i < sizeof(telem_str); i++)
+		telem_str_16[i] = telem_str[i];
+	telem_str_16[sizeof(telem_str)] = 255;
+
+	for (i = 0; i < sizeof(menu_str)/sizeof(menu_str[0]); i++) {
+		for (j = 0; j < sizeof(menu_str[0]); j++)
+			menu_str_16[i][j] = menu_str[i][j];
+		menu_str_16[i][j] = 255;
+	}
+	for (i = 0; i < sizeof(vtx_str)/sizeof(vtx_str[0]); i++) {
+		for (j = 0; j < sizeof(vtx_str[0]); j++)
+			vtx_str_16[i][j] = vtx_str[i][j];
+		vtx_str_16[i][j] = 255;
+	}
+
 	r = osd_read(MAX7456_OSDBL);
 	osd_write(MAX7456_OSDBL, r & ~MAX7456_OSDBL__AUTO_OSDBL_DISABLE);
 	r = osd_read(MAX7456_STAT);
 	if (r & MAX7456_STAT__PAL_DETECTED) {
 		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN | MAX7456_VM0__PAL_NOT_NTSC);
-		disp_addr_telem = DISP_ADDR_TELEMETRY_PAL;
+		osd_write(MAX7456_DMAH, DISP_ADDR_PAL >> 8);
+		osd_write(MAX7456_DMAL, DISP_ADDR_PAL & 0xFF);
 	}
 	else {
 		osd_write(MAX7456_VM0, MAX7456_VM0__OSD_EN);
-		disp_addr_telem = DISP_ADDR_TELEMETRY_NTSC;
+		osd_write(MAX7456_DMAH, DISP_ADDR_NTSC >> 8);
+		osd_write(MAX7456_DMAL, DISP_ADDR_NTSC & 0xFF);
 	}
 	osd_write(MAX7456_HOS, 40);
 	osd_write(MAX7456_VOS, 22);
-	osd_write(MAX7456_DMAH, disp_addr_telem >> 8);
-	osd_write(MAX7456_DMAL, disp_addr_telem & 0xFF);
 }
 
-void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_min, uint8_t rssi, int8_t snr)
+#ifdef MSP_OSD
+
+void osd_telemetry(float vbat, float vbat_cell, float ibat, float imah, uint8_t t_s, uint8_t t_min,
+	uint8_t rssi, int8_t snr, bool armed, bool acro)
+{
+#ifdef OSD_FLIGHT_MODE
+	#define MSP_NB_MESSAGES 5
+#else
+	#define MSP_NB_MESSAGES 4
+#endif
+	static uint8_t cnt = 0;
+
+	if ((state == TELEMETRY) && (REG_CTRL__MSP_HOST_CTRL == 0) && (!msp_busy) && flag_msp_connected) {
+		if (cnt == MSP_NB_MESSAGES-1)
+			cnt = 0;
+		else
+			cnt++;
+
+		if (cnt == 0)
+			msp_status(armed, acro);
+		else if (cnt == 1)
+			msp_analog(vbat, ibat, imah, rssi);
+		else if (cnt == 2)
+			msp_battery_state(vbat, ibat, imah);
+		else if (cnt == 3) {
+			float_to_str((float)rssi, &telem_str[1], &telem_str[1], 3, 0);
+			if (snr >= 0) {
+				float_to_str((float)snr, &telem_str[8], &telem_str[8], 2, 0);
+				telem_str[7] = ' ';
+			} else {
+				float_to_str(-(float)snr, &telem_str[8], &telem_str[8], 2, 0);
+			}
+			msp_name(telem_str);
+		}
+		else
+			msp_status_ex(armed, acro);
+	}
+}
+
+#else
+
+void osd_telemetry(float vbat, float vbat_cell, float ibat, float imah, uint8_t t_s, uint8_t t_min,
+	uint8_t rssi, int8_t snr, bool armed, bool acro)
 {
 	if ((state == TELEMETRY) && (REG_CTRL__OSD_HOST_CTRL == 0) && (!osd_busy)) {
-		float_to_str(vbat, &telem_str[0], &telem_str[3], 2, 2);
-	#ifdef IBAT
+		float_to_str(vbat_cell, &telem_str[0], &telem_str[3], 2, 2);
+#ifdef IBAT
 		float_to_str(ibat, &telem_str[7], &telem_str[11], 3, 1);
 		float_to_str(imah, &telem_str[14], &telem_str[14], 4, 0);
 		float_to_str((float)t_min, &telem_str[22], &telem_str[22], 2, 0);
@@ -339,7 +357,7 @@ void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_mi
 		} else {
 			float_to_str(-(float)snr, &telem_str[38], &telem_str[38], 2, 0);
 		}
-	#else
+#else
 		float_to_str((float)t_min, &telem_str[7], &telem_str[7], 2, 0);
 		float_to_str((float)t_s, &telem_str[10], &telem_str[10], 2, 0);
 		float_to_str((float)rssi, &telem_str[14], &telem_str[14], 3, 0);
@@ -349,14 +367,15 @@ void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_mi
 		} else {
 			float_to_str(-(float)snr, &telem_str[22], &telem_str[22], 2, 0);
 		}
-	#endif
-	#ifdef MSP
-		memcpy(msp_name_str, telem_str, sizeof(msp_name_str)); // Unfortunately sizeof(telem_str) > sizeof(msp_name_str), function not used anyway
-	#else
-		osd_write_str((uint8_t*)telem_str, sizeof(telem_str)-1); // -1: avoid 0 after last byte 255
-	#endif
+#endif
+		// Convert 8-bit strings into 16-bit strings because MAX7456 burst mode needs 16-bit per character
+		for (uint8_t i = 0; i < sizeof(telem_str); i++)
+			telem_str_16[i] = telem_str[i];
+		osd_write_str((uint8_t*)telem_str_16, sizeof(telem_str_16)-1); // -1: avoid 0 after last byte 255
 	}
 }
+
+#endif
 
 void osd_menu(struct radio_s * radio)
 {
@@ -406,11 +425,11 @@ void osd_menu(struct radio_s * radio)
 			if (radio->roll < 0.33f) {
 				if (menu_idx < SAVE_REG)
 					state = REG;
-			#ifdef OSD
+#ifdef RUNCAM
 				else if (menu_idx == RUNCAM_IF)
 					state = RUNCAM_MENU;
-			#endif
-				else // if ((menu_idx == SAVE_REG) || (menu_idx == SAVE_VTX))
+#endif
+				else // if (menu_idx == SAVE_REG)
 					state = SAVED;
 			}
 			break;
@@ -454,7 +473,7 @@ void osd_menu(struct radio_s * radio)
 				state = MENU;
 			break;
 		}
-	#ifdef OSD
+#ifdef RUNCAM
 		case RUNCAM_MENU : {
 			if (radio->pitch > 0.66f)
 				state = RUNCAM_UP;
@@ -500,7 +519,7 @@ void osd_menu(struct radio_s * radio)
 				state = MENU;
 			break;
 		}
-	#endif
+#endif
 		default : {
 			break;
 		}
@@ -522,34 +541,30 @@ void osd_menu(struct radio_s * radio)
 	}
 
 	// Display menu
-#ifdef MSP
-	if ( ((state_prev == TELEMETRY) && (state == MENU_ENTER))
-		|| ((state_prev == MENU) && ((state == MENU_UP) || (state == MENU_DOWN)))
-		|| ((state_prev == REG) && (state == REG_EXIT))
-		|| ((state_prev == SAVED) && (state == SAVED_EXIT)) ) {
-		memcpy(msp_name_str, menu_str[menu_idx], sizeof(menu_str[0]));
-	} else if ((state_prev == MENU) && (state == MENU_EXIT)) {
-		memset(msp_name_str, 0, sizeof(msp_name_str));
-	}
+	if ((state_prev == TELEMETRY) && (state == MENU_ENTER))
+	{
+#ifdef MSP_OSD
+		while (msp_busy) {} // Wait for end of telemetry transaction
+		msp_name(menu_str[menu_idx]);
 #else
-	if ((state_prev == TELEMETRY) && (state == MENU_ENTER)) {
-		while (osd_busy) {}
-		osd_write(MAX7456_DMAH, DISP_ADDR_MENU >> 8);
-		osd_write(MAX7456_DMAL, DISP_ADDR_MENU & 0xFF);
-		osd_write(MAX7456_DMM, MAX7456_DMM__CLR_DISPLAY_MEM);
-		osd_write_str((uint8_t*)menu_str[menu_idx], sizeof(menu_str[0])-1); // -1: avoid 0 after last byte 255
-	} else if ( ((state_prev == MENU) && ((state == MENU_UP) || (state == MENU_DOWN)))
-		|| ((state_prev == REG) && (state == REG_EXIT))
-		|| ((state_prev == SAVED) && (state == SAVED_EXIT))
-		|| ((state_prev == RUNCAM_MENU) && (state == RUNCAM_EXIT)) ) {
-		osd_write_str((uint8_t*)menu_str[menu_idx], sizeof(menu_str[0])-1); // -1: avoid 0 after last byte 255
-	} else if ((state_prev == MENU) && (state == MENU_EXIT)) {
-		while (osd_busy) {}
-		osd_write(MAX7456_DMAH, disp_addr_telem >> 8);
-		osd_write(MAX7456_DMAL, disp_addr_telem & 0xFF);
-		osd_write(MAX7456_DMM, MAX7456_DMM__CLR_DISPLAY_MEM);
-	}
+		while (osd_busy) {} // Wait for end of telemetry transaction
+		osd_write(MAX7456_DMM, MAX7456_DMM__CLR_DISPLAY_MEM); // Clear display since telemetry string is longer than menu string
+		osd_write_str((uint8_t*)menu_str_16[menu_idx], sizeof(menu_str_16[0])-1); // -1: avoid 0 after last byte 255
 #endif
+	}
+	else if ( ((state_prev == MENU) && ((state == MENU_UP) || (state == MENU_DOWN)))
+		|| ((state_prev == REG) && (state == REG_EXIT))
+#ifdef RUNCAM
+		|| ((state_prev == RUNCAM_MENU) && (state == RUNCAM_EXIT))
+#endif
+		|| ((state_prev == SAVED) && (state == SAVED_EXIT)) )
+	{
+#ifdef MSP_OSD
+		msp_name(menu_str[menu_idx]);
+#else		
+		osd_write_str((uint8_t*)menu_str_16[menu_idx], sizeof(menu_str_16[0])-1); // -1: avoid 0 after last byte 255
+#endif
+	}
 
 	// Update register
 	if ((state_prev == REG) && ((state == REG_UP) || (state == REG_DOWN))) {
@@ -560,14 +575,11 @@ void osd_menu(struct radio_s * radio)
 			incr_f = 0.001f;
 		else // expo
 			incr_f = 0.01f;
-	#ifdef MSP
 		incr_int = 5;
-	#else
+#ifdef OSD
 		if ((menu_idx == VTX_CHANNEL) || (menu_idx == VTX_POWER)) // VTX
 			incr_int = 1;
-		else
-			incr_int = 5;
-	#endif
+#endif
 
 		// Increment direction
 		if (state == REG_DOWN) {
@@ -602,7 +614,8 @@ void osd_menu(struct radio_s * radio)
 			}
 			case RATE : {
 				rate = (int32_t)REG_RATE__PITCH_ROLL + incr_int;
-				REG_RATE = (rate << REG_RATE__PITCH_ROLL_Pos) | (rate << REG_RATE__YAW_Pos);
+				REG_RATE &= ~(REG_RATE__PITCH_ROLL_Msk	| REG_RATE__YAW_Msk);
+				REG_RATE |= (rate << REG_RATE__PITCH_ROLL_Pos) | (rate << REG_RATE__YAW_Pos);
 				break;
 			}
 			case EXPO : {
@@ -628,7 +641,7 @@ void osd_menu(struct radio_s * radio)
 				REG_MOTOR |= (uint32_t)motor_range << REG_MOTOR__RANGE_Pos;
 				break;
 			}
-		#ifdef OSD
+#ifdef OSD
 			case VTX_CHANNEL : {
 				if ((REG_VTX__CHAN == 47) && (incr_int > 0))
 					vtx_chan = 0;
@@ -651,7 +664,7 @@ void osd_menu(struct radio_s * radio)
 				REG_VTX |= (uint32_t)vtx_pwr << REG_VTX__PWR_Pos;
 				break;
 			}
-		#endif
+#endif
 			default : {
 				break;
 			}
@@ -702,7 +715,7 @@ void osd_menu(struct radio_s * radio)
 				float_to_str((float)REG_MOTOR__RANGE, &reg_val_str[0], &reg_val_str[5], 4, 3);
 				break;
 			}
-		#ifdef OSD
+#ifdef OSD
 			case VTX_POWER : {
 				if (REG_VTX__PWR == 0)
 					vtx_pwr_mw = 25.0f;
@@ -714,29 +727,33 @@ void osd_menu(struct radio_s * radio)
 					vtx_pwr_mw = 800.0f;
 				float_to_str(vtx_pwr_mw, &reg_val_str[0], &reg_val_str[5], 4, 3);
 			}
-		#endif
+#endif
 			default : {
 				break;
 			}
 		}
-	#ifdef MSP
-		memcpy(msp_name_str, reg_val_str, sizeof(reg_val_str));
-	#else
+#ifdef MSP_OSD
+		msp_name(reg_val_str);
+#else
 		if (menu_idx == VTX_CHANNEL)
-			osd_write_str((uint8_t*)vtx_str[REG_VTX__CHAN], sizeof(vtx_str[0])-1); // -1: avoid 0 after last byte 255
-		else
-			osd_write_str((uint8_t*)reg_val_str, sizeof(reg_val_str)-1); // -1: avoid 0 after last byte 255
-	#endif
+			osd_write_str((uint8_t*)vtx_str_16[REG_VTX__CHAN], sizeof(vtx_str_16[0])-1); // -1: avoid 0 after last byte 255
+		else {
+			// Convert 8-bit strings into 16-bit strings because MAX7456 burst mode needs 16-bit per character
+			for (uint8_t i = 0; i < sizeof(reg_val_str); i++)
+				reg_val_str_16[i] = reg_val_str[i];
+			osd_write_str((uint8_t*)reg_val_str_16, sizeof(reg_val_str_16)-1); // -1: avoid 0 after last byte 255
+		}
+#endif
 	}
 
 	// Save register
 	if ((state_prev == MENU) && (menu_idx == SAVE_REG) && (state == MENU_RIGHT)) {
 		reg_save();
-	#ifdef MSP
-		memcpy(msp_name_str, saved_str, sizeof(saved_str));
-	#else
-		osd_write_str((uint8_t*)saved_str, sizeof(saved_str)-1); // -1: avoid 0 after last byte 255
-	#endif
+#ifdef MSP_OSD
+		msp_name(saved_str);
+#else
+		osd_write_str((uint8_t*)saved_str_16, sizeof(saved_str_16)-1); // -1: avoid 0 after last byte 255
+#endif
 	}
 
 #ifdef SMART_AUDIO

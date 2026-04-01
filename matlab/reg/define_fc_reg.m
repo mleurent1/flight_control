@@ -5,14 +5,14 @@ n = n + 1;
 reg(n).name = 'VERSION';
 reg(n).read_only = 1;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VERSION',7,0,'uint8',40};
+reg(n).subf{1} = {'VERSION',7,0,'uint8',41};
 
 n = n + 1;
 reg(n).name = 'STATUS';
 reg(n).read_only = 1;
 reg(n).flash = 0;
 reg(n).subf{1} = {'STATUS',7,0,'uint8',0};
-reg(n).subf{2} = {'VERSION_MINOR',15,8,'uint8',3};
+reg(n).subf{2} = {'VERSION_MINOR',15,8,'uint8',0};
 reg(n).subf{3} = {'RADIO_BUSY',16,16,'uint8',0};
 reg(n).subf{4} = {'SMA_BUSY',17,17,'uint8',0};
 reg(n).subf{5} = {'MSP_BUSY',18,18,'uint8',0};
@@ -272,7 +272,7 @@ n = n + 1;
 reg(n).name = 'VBAT_SCALE';
 reg(n).read_only = 0;
 reg(n).flash = 1;
-reg(n).subf{1} = {'VBAT_SCALE',31,0,'single',0.008057};
+reg(n).subf{1} = {'VBAT_SCALE',31,0,'single',0.0098};
 
 n = n + 1;
 reg(n).name = 'IBAT_SCALE';

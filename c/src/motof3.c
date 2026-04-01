@@ -23,7 +23,7 @@ volatile uint8_t* i2c2_tx_data;
 volatile uint8_t i2c2_rx_nbytes;
 volatile uint8_t i2c2_byte_cnt = 0;
 #if (ESC == DSHOT)
-	volatile uint8_t dshot[17*4];
+volatile uint8_t dshot[17*4];
 #endif
 volatile uint8_t* uart1_tx_data;
 volatile uint8_t* uart1_rx_data;
@@ -31,13 +31,14 @@ volatile uint8_t* uart1_rx_data;
 volatile uint8_t uart1_tx_nbytes = 0; 
 volatile uint8_t uart1_rx_nbytes = 0; 
 volatile uint8_t uart1_byte_cnt = 0;
-volatile uint8_t uart2_rx_nbytes;
+volatile uint8_t uart2_rx_nbytes = 0;
 volatile uint8_t uart3_tx_buffer[128]; // OSD telemetry is 2 lines of 30 x 16-bit characters + 0xFF terminator
 volatile uint8_t* uart3_rx_data;
+volatile uint8_t uart3_tx_nbytes = 0;
 volatile uint8_t uart3_rx_nbytes = 0;
 volatile uint8_t uart3_byte_cnt = 0;
 #ifdef LED
-	volatile uint8_t led_buffer[24*LED+1];
+volatile uint8_t led_buffer[24*LED+1];
 #endif
 
 /* Private functions ------------------------------------------------*/
@@ -73,6 +74,13 @@ void radio_recv(uint8_t* data, uint8_t size)
 	DMA1_Channel6->CCR &= ~DMA_CCR_EN; // Disable DMA channel in order to configure it
 	DMA1_Channel6->CMAR = (uint32_t)data;
 	DMA1_Channel6->CNDTR = size;
+
+	// Clear Rx Not empty flag
+	if (USART2->ISR & USART_ISR_RXNE) {
+		USART2->CR3 = 0;
+		USART2->RDR;
+		USART2->CR3 = USART_CR3_DMAR;
+	}
 
 	// Enable DMA channel and UART Rx
 	DMA1_Channel6->CCR |= DMA_CCR_EN;
@@ -170,6 +178,7 @@ void uart1_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8
 __attribute__((section(".RamFunc"))) void uart3_transfer(uint8_t* data_out, uint8_t* data_in, uint8_t size_out, uint8_t size_in)
 {
 	uart3_rx_data = data_in;
+	uart3_tx_nbytes = size_out;
 	uart3_rx_nbytes = size_in;
 
 	if (size_in > 0)
@@ -218,7 +227,6 @@ void set_leds(uint8_t * grb)
 	uint16_t i;
 
 	TIM8->CR1 = 0; // disable timer
-	DMA2->IFCR = DMA_IFCR_CGIF5; // Clear all DMA flags
 
 	for (i=0; i<8; i++) {
 		led_buffer[ 0+i] = (grb[0] & (1 << (7-i))) ? 38 : 19;
@@ -236,7 +244,7 @@ void set_leds(uint8_t * grb)
 	DMA2_Channel5->CNDTR = 24*LED+1;
 	DMA2_Channel5->CCR |= DMA_CCR_EN;
 
-	TIM8->CNT = 40;
+	//TIM8->CNT = TIM8->ARR; // Reset timer just before an update event (overflow)
 	TIM8->DIER = TIM_DIER_CC2DE; // Enable compare DMA requests
 	TIM8->CR1 = TIM_CR1_CEN; // Enable timer
 }
@@ -369,7 +377,11 @@ __attribute__((section(".RamFunc"))) void USART3_IRQHandler()
 		USART3->CR1 &= ~USART_CR1_TE; // Disable Tx
 		
 		if (uart3_rx_nbytes == 0) {
-			osd_busy = false;
+			if (osd_busy) {
+				// Trig timer to simulate Rx transaction and clear osd_busy (uart3_rx_nbytes always equal to uart3_tx_nbytes-1)
+				TIM7->ARR = uart3_tx_nbytes * 10; // 10bits per byte at 1Mbps, timer in us, margin of 1 byte
+				TIM7->CR1 |= TIM_CR1_CEN;
+			}
 			msp_busy = false;
 		}
 	}
@@ -398,6 +410,14 @@ __attribute__((section(".RamFunc"))) void USART3_IRQHandler()
 			msp_busy = false;
 		}
 	}
+}
+
+/* Timer IRQ of OSD busy -----------------------*/
+
+void __attribute__((section(".RamFunc"))) TIM7_IRQHandler()
+{
+	TIM7->SR = 0; // Clear IRQ
+	osd_busy = false;
 }
 
 /* Smart Audio UART IRQ -----------------------------------*/
@@ -576,6 +596,7 @@ uint8_t board_init()
 	// B3 : USART2_TX (AF7), pull-up for IDLE
 	// B4 : USART2_RX (AF7), pull-up for IDLE
 	GPIOB->MODER |= GPIO_MODER_MODER3_1 | GPIO_MODER_MODER4_1;
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR13;
 	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR3_0 | GPIO_PUPDR_PUPDR4_0;
 	GPIOB->AFR[0] |= (7 << GPIO_AFRL_AFRL3_Pos) | (7 << GPIO_AFRL_AFRL4_Pos);
 
@@ -588,7 +609,7 @@ uint8_t board_init()
 	NVIC_SetPriority(USART2_IRQn,0);
 
 	// DMA1 channel 6: USART2_RX
-	DMA1_Channel6->CCR = (0 << DMA_CCR_PL_Pos) | DMA_CCR_MINC | DMA_CCR_TCIE;// | DMA_CCR_TEIE; // TODO: see if error handling is needed
+	DMA1_Channel6->CCR = (0 << DMA_CCR_PL_Pos) | DMA_CCR_MINC | DMA_CCR_TCIE;
 	DMA1_Channel6->CPAR = (uint32_t)&(USART2->RDR);
 	NVIC_EnableIRQ(DMA1_Channel6_IRQn);
 	NVIC_SetPriority(DMA1_Channel6_IRQn,0);
@@ -613,11 +634,11 @@ uint8_t board_init()
 
 #if (ESC == DSHOT) // DMA driven timer for DShot600, 48Mhz: 0:30, 1:60, T:80
 
-	#if (DSHOT_RATE == 300)
-		TIM3->PSC = 1;
-	#else // DSHOT_RATE == 600
-		TIM3->PSC = 0;
-	#endif
+#if (DSHOT_RATE == 300)
+	TIM3->PSC = 1;
+#else // DSHOT_RATE == 600
+	TIM3->PSC = 0;
+#endif
 	TIM3->ARR = 80;
 	TIM3->DIER = TIM_DIER_UDE;
 	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E; // Enable outputs
@@ -639,11 +660,11 @@ uint8_t board_init()
 #else // One-pulse mode for OneShot125 or PWM
 
 	TIM3->CR1 = TIM_CR1_OPM;
-	#if (ESC == PWM)
-		TIM3->PSC = 24-1;
-	#else
-		TIM3->PSC = 3-1;
-	#endif
+#if (ESC == PWM)
+	TIM3->PSC = 24-1;
+#else
+	TIM3->PSC = 3-1;
+#endif
 	TIM3->ARR = SERVO_MAX*2 + 1;
 	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E | TIM_CCER_CC3E | TIM_CCER_CC4E; // Enable outputs
 	TIM3->CCMR1 = (7 << TIM_CCMR1_OC1M_Pos) | (7 << TIM_CCMR1_OC2M_Pos); // 7: PWM mode 2 (active when CNT >= CCR)
@@ -726,17 +747,18 @@ uint8_t board_init()
 
 	/* OSD ----------------------------------------*/
 
-#if defined(OSD) || defined(MSP)
+#if defined(OSD) || defined(MSP_OSD)
 
 	// B10: USART3_TX (AF7), pull-up for IDLE
 	// B11: USART3_RX (AF7), pull-up for IDLE
 	GPIOB->MODER |= GPIO_MODER_MODER10_1 | GPIO_MODER_MODER11_1;
-	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR10_0 | GPIO_PUPDR_PUPDR11_0;
+	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR10;
+	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR10_0 | GPIO_PUPDR_PUPDR11_0;	
 	GPIOB->AFR[1] |= (7 << GPIO_AFRH_AFRH2_Pos) | (7 << GPIO_AFRH_AFRH3_Pos);
 
 	// UART config
 	RCC->APB1ENR |= RCC_APB1ENR_USART3EN;
-#ifdef MSP
+#ifdef MSP_OSD
 	USART3->BRR = 417; // 48MHz/115200bps
 #else
 	USART3->BRR = 48; // 48MHz/1Mbps
@@ -749,6 +771,18 @@ uint8_t board_init()
 	// DMA1 channel 2: USART3_TX
 	DMA1_Channel2->CCR = (0 << DMA_CCR_PL_Pos) | DMA_CCR_MINC | DMA_CCR_DIR;
 	DMA1_Channel2->CPAR = (uint32_t)&(USART3->TDR);
+
+#ifdef OSD
+	// Timer to simulate OSD Rx transactiion and clear osd_busy
+	// Indeed, Rx transaction size is set to 0 for the next data transder to avoid triggering UART IRQ usessly,
+	// but we need to wait for the end of the real transfer (always an Rx response from the external OSD module)
+	RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;
+	TIM7->PSC = 48-1; // 1us
+	TIM7->CR1 = TIM_CR1_OPM;
+	TIM7->DIER = TIM_DIER_UIE;
+	NVIC_EnableIRQ(TIM7_IRQn);
+	NVIC_SetPriority(TIM7_IRQn,0);
+#endif
 
 #endif
 
@@ -797,7 +831,7 @@ uint8_t board_init()
 
 #ifdef LED
 
-	// B8 : LED, to TIM8_CH2, AF10
+	// B8 : SLED, TIM8_CH2 (AF10)
 	GPIOB->MODER |= GPIO_MODER_MODER8_1;
 	GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR8;
 	GPIOB->AFR[1] |= (10 << GPIO_AFRH_AFRH0_Pos);
@@ -808,13 +842,13 @@ uint8_t board_init()
 	// DMA driven timer for WS2812B LED protocol, 48Mhz: 0:19, 1:38, T:60
 	TIM8->PSC = 0;
 	TIM8->ARR = 60;
-	//TIM8->DIER = TIM_DIER_CC2DE; // Managed in led function
-	TIM8->CCER = TIM_CCER_CC2E;
-	TIM8->CCMR1 = (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE;
+	TIM8->DIER = TIM_DIER_CC2DE; // Enable compare DMA requests
+	TIM8->CCER = TIM_CCER_CC2E; // Enable output
+	TIM8->CCMR1 = (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE; // 6: PWM mode 1 (active when CNT < CCR) + Preload enabled
 	TIM8->BDTR = TIM_BDTR_MOE; // output enable
 
 	// DMA TIM8_CH2
-	DMA2_Channel5->CCR = DMA_CCR_MINC | DMA_CCR_DIR | DMA_CCR_PSIZE_0;
+	DMA2_Channel5->CCR = (0 << DMA_CCR_PL_Pos) | (1 << DMA_CCR_PSIZE_Pos) | DMA_CCR_MINC | DMA_CCR_DIR;
 	DMA2_Channel5->CMAR = (uint32_t)led_buffer;
 	DMA2_Channel5->CPAR = (uint32_t)&(TIM8->CCR2);
 

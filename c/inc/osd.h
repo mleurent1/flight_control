@@ -7,6 +7,8 @@
 
 /* Public defines -----------------*/
 
+//#define OSD_FLIGHT_MODE
+
 /* Public types -----------------*/
 
 /* Exported variables -----------------*/
@@ -19,6 +21,7 @@ extern uint8_t osd_data_received[];
 
 void osd_init(void);
 void osd_menu(struct radio_s * radio);
-void osd_telemetry(float vbat, float ibat, float imah, uint8_t t_s, uint8_t t_min, uint8_t rssi, int8_t snr);
+void osd_telemetry(float vbat, float vbat_cell, float ibat, float imah, uint8_t t_s, uint8_t t_min,
+	uint8_t rssi, int8_t snr, bool armed, bool acro);
 
 #endif

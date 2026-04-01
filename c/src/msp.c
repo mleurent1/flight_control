@@ -5,6 +5,7 @@
 #include "msp.h"
 #include "board.h" // msp_busy
 #include "fc.h" // host_buffer_tx
+#include "osd.h" // OSD_FLIGHT_MODE
 
 /*
 The DJI Air Unit polls the FC for the following MSP messages at around 4Hz.
@@ -56,11 +57,12 @@ Note: messages are polled in ascending hex id order.
 // Multiple MSP and special commands (230-255)
 #define MSP_RTC                         247  // out message: Get the RTC clock
 
-/* Private macros --------------------------------------*/
-
 #define MSP_OSD_START 2048
 #define MSP_OSD_STEP_X 1
 #define MSP_OSD_STEP_Y 32
+
+/* Private macros --------------------------------------*/
+
 #define MSP_OSD_POS(x,y) (MSP_OSD_START + (x)*MSP_OSD_STEP_X + (y)*MSP_OSD_STEP_Y)
 
 /* Private types --------------------------------------*/
@@ -96,88 +98,18 @@ typedef enum {
     OSD_ROLL_ANGLE,
     OSD_MAIN_BATT_USAGE,
     OSD_DISARMED,
-    OSD_HOME_DIR,
-    OSD_HOME_DIST,
-    OSD_NUMERICAL_HEADING,
-    OSD_NUMERICAL_VARIO,
-    OSD_COMPASS_BAR,
-    OSD_ESC_TMP,
-    OSD_ESC_RPM,
-    OSD_REMAINING_TIME_ESTIMATE,
-    OSD_RTC_DATETIME,
-    OSD_ADJUSTMENT_RANGE,
-    OSD_CORE_TEMPERATURE,
-    OSD_ANTI_GRAVITY,
-    OSD_G_FORCE,
-    OSD_MOTOR_DIAG,
-    OSD_LOG_STATUS,
-    OSD_FLIP_ARROW,
-    OSD_LINK_QUALITY,
-    OSD_FLIGHT_DIST,
-    OSD_STICK_OVERLAY_LEFT,
-    OSD_STICK_OVERLAY_RIGHT,
-    OSD_DISPLAY_NAME,
-    OSD_ESC_RPM_FREQ,
-    OSD_RATE_PROFILE_NAME,
-    OSD_PID_PROFILE_NAME,
-    OSD_PROFILE_NAME,
-    OSD_RSSI_DBM_VALUE,
-    OSD_RC_CHANNELS,
-    OSD_CAMERA_FRAME,
     OSD_ITEM_COUNT // MUST BE LAST
 } osd_items_e;
 
 typedef enum {
-    OSD_STAT_RTC_DATE_TIME,
-    OSD_STAT_TIMER_1,
-    OSD_STAT_TIMER_2,
-    OSD_STAT_MAX_SPEED,
-    OSD_STAT_MAX_DISTANCE,
-    OSD_STAT_MIN_BATTERY,
-    OSD_STAT_END_BATTERY,
-    OSD_STAT_BATTERY,
-    OSD_STAT_MIN_RSSI,
-    OSD_STAT_MAX_CURRENT,
-    OSD_STAT_USED_MAH,
-    OSD_STAT_MAX_ALTITUDE,
-    OSD_STAT_BLACKBOX,
-    OSD_STAT_BLACKBOX_NUMBER,
-    OSD_STAT_MAX_G_FORCE,
-    OSD_STAT_MAX_ESC_TEMP,
-    OSD_STAT_MAX_ESC_RPM,
-    OSD_STAT_MIN_LINK_QUALITY,
-    OSD_STAT_FLIGHT_DISTANCE,
-    OSD_STAT_MAX_FFT,
-    OSD_STAT_TOTAL_FLIGHTS,
-    OSD_STAT_TOTAL_TIME,
-    OSD_STAT_TOTAL_DIST,
-    OSD_STAT_MIN_RSSI_DBM,
     OSD_STAT_COUNT // MUST BE LAST
 } osd_stats_e;
 
 typedef enum {
-    OSD_TIMER_1,
-    OSD_TIMER_2,
-    OSD_TIMER_COUNT
+    OSD_TIMER_COUNT // MUST BE LAST
 } osd_timer_e;
 
 typedef enum {
-    OSD_WARNING_ARMING_DISABLE,
-    OSD_WARNING_BATTERY_NOT_FULL,
-    OSD_WARNING_BATTERY_WARNING,
-    OSD_WARNING_BATTERY_CRITICAL,
-    OSD_WARNING_VISUAL_BEEPER,
-    OSD_WARNING_CRASH_FLIP,
-    OSD_WARNING_ESC_FAIL,
-    OSD_WARNING_CORE_TEMPERATURE,
-    OSD_WARNING_RC_SMOOTHING,
-    OSD_WARNING_FAIL_SAFE,
-    OSD_WARNING_LAUNCH_CONTROL,
-    OSD_WARNING_GPS_RESCUE_UNAVAILABLE,
-    OSD_WARNING_GPS_RESCUE_DISABLED,
-    OSD_WARNING_RSSI,
-    OSD_WARNING_LINK_QUALITY,
-    OSD_WARNING_RSSI_DBM,
     OSD_WARNING_COUNT // MUST BE LAST
 } osd_warnings_flags_e;
 
@@ -206,9 +138,9 @@ typedef struct msp_osd_config_s {
 	uint16_t alt_alarm;
 	uint16_t items_position[OSD_ITEM_COUNT];
 	uint8_t stats_items_count;
-	uint16_t stats_items[24] ;
+	uint16_t stats_items[OSD_STAT_COUNT] ;
 	uint8_t timers_count;
-	uint16_t timers[2];
+	uint16_t timers[OSD_TIMER_COUNT];
 	uint16_t enabled_warnings_old;
 	uint8_t warnings_count_new;
 	uint32_t enabled_warnings_new;
@@ -247,7 +179,6 @@ typedef struct msp_frame_s {
 /* Private variables -----------------------*/
 
 msp_frame_t msp_frame;
-uint8_t msp_name_str[12] = "TOTO IS BACK";
 
 /* Private Functions -----------------------*/
 
@@ -273,21 +204,30 @@ void msp_send(uint8_t cmd, uint8_t size)
 
 /* Public Functions -----------------------*/
 
-void msp_name(void)
+void msp_name(uint8_t* str)
 {
-	memcpy(msp_frame.payload, msp_name_str, sizeof(msp_name_str));
-	msp_send(MSP_NAME, sizeof(msp_name_str));
+	memcpy(msp_frame.payload, str, 12);
+	msp_send(MSP_NAME, 12);
 }
 
-void msp_status(bool armed)
+void msp_status(bool armed, bool acro)
 {
 	msp_status_t* status = (msp_status_t*)msp_frame.payload;
 
 	memset(msp_frame.payload, 0, sizeof(msp_status_t));
-	status->arming_disable_flags_count = 1;
-	status->arming_disable_flags = !armed;
+	status->flight_mode_flags = armed | (!acro << 1); // acro flag only works in MSP_STATUS_EX
 
 	msp_send(MSP_STATUS, sizeof(msp_status_t));
+}
+
+void msp_status_ex(bool armed, bool acro)
+{
+	msp_status_t* status = (msp_status_t*)msp_frame.payload;
+
+	memset(msp_frame.payload, 0, sizeof(msp_status_t));
+	status->flight_mode_flags = armed | (!acro << 1); // armed flag not working in MSP_STATUS_EX
+
+	msp_send(MSP_STATUS_EX, sizeof(msp_status_t));
 }
 
 void msp_osd_config(void)
@@ -295,36 +235,22 @@ void msp_osd_config(void)
 	msp_osd_config_t* osd_config = (msp_osd_config_t*)msp_frame.payload;
 
 	memset(msp_frame.payload, 0, sizeof(msp_osd_config_t));
+	osd_config->flags = 1; // OSD_FLAGS_OSD_FEATURE
 	osd_config->video_system = 3; // VIDEO_SYSTEM_HD
 	osd_config->units = 1; // OSD_UNIT_METRIC
-	// Alarms
-	osd_config->rssi_alarm = 0;
-	osd_config->capacity_alarm = 0;
-	osd_config->alt_alarm = 0;
-	// Reuse old timer alarm (U16) as OSD_ITEM_COUNT
 	osd_config->item_count = OSD_ITEM_COUNT;
 	// Element position and visibility
-	osd_config->items_position[OSD_DISARMED] = MSP_OSD_POS(0,1);
-	osd_config->items_position[OSD_MAH_DRAWN] = MSP_OSD_POS(0,2);
+#ifdef OSD_FLIGHT_MODE
+	osd_config->items_position[OSD_FLYMODE] = MSP_OSD_POS(0,0); // Uncomment when enbaling MSP_STATUS_EX message
+#endif
+	osd_config->items_position[OSD_DISARMED] = MSP_OSD_POS(12,10);
 	osd_config->items_position[OSD_CRAFT_NAME] = MSP_OSD_POS(15,11);
-	osd_config->items_position[OSD_CURRENT_DRAW] = MSP_OSD_POS(10,12);
 	osd_config->items_position[OSD_AVG_CELL_VOLTAGE] = MSP_OSD_POS(13,12);
-	osd_config->items_position[OSD_RSSI_VALUE] = MSP_OSD_POS(18,12);
-	// Post flight statistics
-	osd_config->stats_items_count = OSD_STAT_COUNT; // stats items count
-	// Timers
-	osd_config->timers_count = OSD_TIMER_COUNT; // timers
-	// Enabled warnings
-	// API < 1.41
-	// Send low word first for backwards compatibility
-	osd_config->enabled_warnings_old = 0;
-	// API >= 1.41
-	// Send the warnings count and 32bit enabled warnings flags.
-	// Add currently active OSD profile (0 indicates OSD profiles not available).
-	// Add OSD stick overlay mode (0 indicates OSD stick overlay not available).
-	osd_config->warnings_count_new = OSD_WARNING_COUNT;
-	osd_config->enabled_warnings_new = 0;
-	// If the feature is not available there is only 1 profile and it's always selected
+#ifdef IBAT
+	osd_config->items_position[OSD_CURRENT_DRAW] = MSP_OSD_POS(10,12);
+	osd_config->items_position[OSD_MAH_DRAWN] = MSP_OSD_POS(16,12);
+#endif
+	// DJI OSD expects 1 OSD profile
 	osd_config->available_profiles = 1;
 	osd_config->selected_profile = 1;
 
@@ -337,7 +263,7 @@ void msp_analog(float vbat, float ibat, float imah, uint8_t rssi)
 	
 	analog->voltage_dv = (uint8_t)(vbat*10.0f);
 	analog->mah = (uint16_t)imah;
-	analog->rssi = rssi;
+	analog->rssi = (uint16_t)rssi * (1023/120);
 	analog->current_ca = (int16_t)(ibat*100.0f);
 	analog->voltage_cv = (uint16_t)(vbat*100.0f);
 

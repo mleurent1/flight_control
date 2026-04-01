@@ -18,9 +18,9 @@
 
 volatile uint8_t spi1_rx_nbytes;
 #if (ESC == DSHOT)
-	// Bit size must be the same as timer register, because MSIZE = PSIZE = register bit size
-	volatile uint16_t dshot[17*4];
-	volatile uint16_t dshot2[17*4];
+// Bit size must be the same as timer register, because MSIZE = PSIZE = register bit size
+volatile uint16_t dshot[17*4];
+volatile uint16_t dshot2[17*4];
 #endif
 volatile uint8_t spi2_rx_nbytes;
 volatile uint8_t uart1_rx_nbytes; 
@@ -531,21 +531,21 @@ uint8_t board_init()
 
 	// Use TIM2 as master timer to control TIM3 and TIM4 and use its TIM2_UP DMA requests (whose DMA streams are not using USART2_TX request)
 	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
-	#if (DSHOT_RATE == 300)
-		TIM2->PSC = 2;
-	#else // DSHOT_RATE == 600
-		TIM2->PSC = 1; // TIM2 is running at 96MHz instead of 48MHz
-	#endif
+#if (DSHOT_RATE == 300)
+	TIM2->PSC = 2;
+#else // DSHOT_RATE == 600
+	TIM2->PSC = 1; // TIM2 is running at 96MHz instead of 48MHz
+#endif
 	TIM2->ARR = 80;
 	//TIM2->DIER = TIM_DIER_UDE; // Managed in motor function
 	TIM2->CR2 = (1 << TIM_CR2_MMS_Pos); // TRGO = CEN
 
 	// TIM3 config
-	#if (DSHOT_RATE == 300)
-		TIM3->PSC = 2;
-	#else // DSHOT_RATE == 600
-		TIM3->PSC = 1; // TIM3 is running at 96MHz instead of 48MHz
-	#endif
+#if (DSHOT_RATE == 300)
+	TIM3->PSC = 2;
+#else // DSHOT_RATE == 600
+	TIM3->PSC = 1; // TIM3 is running at 96MHz instead of 48MHz
+#endif
 	TIM3->ARR = 80;
 	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E; // Enable outputs
 	TIM3->CCMR1 = (6 << TIM_CCMR1_OC1M_Pos) | TIM_CCMR1_OC1PE | (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE; // 6: PWM mode 1 (active when CNT < CCR) + Preload enabled
@@ -566,11 +566,11 @@ uint8_t board_init()
 	DMA1_Stream1->FCR = DMA_SxFCR_DMDIS | (3 << DMA_SxFCR_FTH_Pos); // Use FIFO with threshold of 4
 	
 	// TIM4 config
-	#if (DSHOT_RATE == 300)
-		TIM4->PSC = 2;
-	#else // DSHOT_RATE == 600
-		TIM4->PSC = 1; // TIM4 is running at 96MHz instead of 48MHz
-	#endif
+#if (DSHOT_RATE == 300)
+	TIM4->PSC = 2;
+#else // DSHOT_RATE == 600
+	TIM4->PSC = 1; // TIM4 is running at 96MHz instead of 48MHz
+#endif
 	TIM4->ARR = 80;
 	TIM4->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E; // Enable outputs
 	TIM4->CCMR1 = (6 << TIM_CCMR1_OC1M_Pos) | TIM_CCMR1_OC1PE | (6 << TIM_CCMR1_OC2M_Pos) | TIM_CCMR1_OC2PE; // 6: PWM mode 1 (active when CNT < CCR) + Preload enabled
@@ -593,21 +593,21 @@ uint8_t board_init()
 #else // One-pulse mode for OneShot125 or PWM
 
 	TIM3->CR1 = TIM_CR1_OPM;
-	#if (ESC == PWM)
-		TIM3->PSC = 48-1;
-	#else
-		TIM3->PSC = 6-1;
-	#endif
+#if (ESC == PWM)
+	TIM3->PSC = 48-1;
+#else
+	TIM3->PSC = 6-1;
+#endif
 	TIM3->ARR = SERVO_MAX*2 + 1;
 	TIM3->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E; // Enable outputs
 	TIM3->CCMR1 = (7 << TIM_CCMR1_OC1M_Pos) | (7 << TIM_CCMR1_OC2M_Pos); // 7: PWM mode 2 (active when CNT >= CCR)
 
 	TIM4->CR1 = TIM_CR1_OPM;
-	#if (ESC == PWM)
-		TIM4->PSC = 48-1;
-	#else
-		TIM4->PSC = 6-1;
-	#endif
+#if (ESC == PWM)
+	TIM4->PSC = 48-1;
+#else
+	TIM4->PSC = 6-1;
+#endif
 	TIM4->ARR = SERVO_MAX*2 + 1;
 	TIM4->CCER = TIM_CCER_CC1E | TIM_CCER_CC2E; // Enable outputs
 	TIM4->CCMR1 = (7 << TIM_CCMR1_OC1M_Pos) | (7 << TIM_CCMR1_OC2M_Pos); // 7: PWM mode 2 (active when CNT >= CCR)

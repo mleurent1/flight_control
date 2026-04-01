@@ -31,6 +31,7 @@ extern volatile bool flag_rf;
 extern volatile bool flag_host;
 extern volatile bool flag_time;
 extern volatile bool flag_rf_rxtx_done;
+extern volatile bool flag_msp_connected;
 
 extern host_buffer_rx_t host_buffer_rx;
 extern host_buffer_tx_t host_buffer_tx;
